@@ -51,3 +51,26 @@ export function handleFirestoreError(
   console.error('Firestore Error:', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 }
+
+/**
+ * Sanitiza recursivamente un objeto o arreglo para eliminar campos con valor undefined,
+ * previniendo errores de Firestore "Unsupported field value: undefined".
+ */
+export function sanitizeFirestoreData<T>(obj: T): T {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(sanitizeFirestoreData) as unknown as T;
+  }
+  if (typeof obj === 'object' && obj.constructor === Object) {
+    const cleanObj: Record<string, any> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined) {
+        cleanObj[key] = sanitizeFirestoreData(value);
+      }
+    }
+    return cleanObj as T;
+  }
+  return obj;
+}

@@ -119,23 +119,41 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
         image: item.product.image,
       }));
 
-      await createMerchOrder({
+      const orderPayload: Parameters<typeof createMerchOrder>[0] = {
         userId: user.uid,
-        customerName: address.recipientName || user.displayName || 'Aficionado Venados',
+        customerName: address.recipientName?.trim() || user.displayName || 'Aficionado Venados',
         customerEmail: user.email || 'aficionado@venados.com',
-        customerPhone: address.phone,
         items: orderItems,
         subtotal,
         shippingCost,
         total,
         shippingType,
-        shippingAddress: shippingType === 'domicilio' ? address : undefined,
         carrier: shippingType === 'domicilio' ? 'DHL Express' : 'Recoger en Tienda Estadio',
         status: 'pendiente',
         paymentMethod,
         paymentStatus: 'pagado',
-        notes: shippingType === 'tienda' ? 'Recoger en tienda oficial Estadio Teodoro Mariscal' : undefined,
-      });
+      };
+
+      if (address.phone?.trim()) {
+        orderPayload.customerPhone = address.phone.trim();
+      }
+
+      if (shippingType === 'domicilio') {
+        orderPayload.shippingAddress = {
+          recipientName: address.recipientName?.trim() || user.displayName || 'Aficionado Venados',
+          street: address.street || '',
+          neighborhood: address.neighborhood || '',
+          city: address.city || 'Mazatlán',
+          state: address.state || 'Sinaloa',
+          zipCode: address.zipCode || '',
+          phone: address.phone || '',
+          ...(address.referenceNotes?.trim() ? { referenceNotes: address.referenceNotes.trim() } : {}),
+        };
+      } else {
+        orderPayload.notes = 'Recoger en tienda oficial Estadio Teodoro Mariscal';
+      }
+
+      await createMerchOrder(orderPayload);
 
       // Reducir stock de los productos adquiridos
       for (const item of cart) {

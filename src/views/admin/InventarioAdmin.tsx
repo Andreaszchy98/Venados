@@ -5,6 +5,8 @@ import {
   saveInventoryProduct,
   adjustProductStock,
   deleteInventoryProduct,
+  getProductCost,
+  setProductCost,
 } from '../../lib/inventory';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import {
@@ -25,12 +27,14 @@ import {
 
 export const InventarioAdmin: React.FC = () => {
   const [products, setProducts] = useState<InventoryProduct[]>([]);
+  const [costsMap, setCostsMap] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
   const [showLowStockOnly, setShowLowStockOnly] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Partial<InventoryProduct> | null>(null);
+  const [editingCostPrice, setEditingCostPrice] = useState<number>(0);
   const [saving, setSaving] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
 
@@ -39,6 +43,18 @@ export const InventarioAdmin: React.FC = () => {
     try {
       const data = await getInventoryProducts();
       setProducts(data);
+
+      // Cargar costos confidenciales desde la subcolección cost/data exclusiva de admin
+      const costsPromises = data.map(async (p) => {
+        const cost = await getProductCost(p.id);
+        return { id: p.id, cost: cost ?? 0 };
+      });
+      const results = await Promise.all(costsPromises);
+      const map: Record<string, number> = {};
+      results.forEach((r) => {
+        map[r.id] = r.cost;
+      });
+      setCostsMap(map);
     } catch (err) {
       console.error('Error fetching inventory:', err);
     } finally {
@@ -67,7 +83,6 @@ export const InventarioAdmin: React.FC = () => {
       name: '',
       category: 'Jerseys',
       price: 999,
-      costPrice: 450,
       stock: 20,
       minStockAlert: 5,
       sizes: ['S', 'M', 'L', 'XL'],
@@ -76,11 +91,14 @@ export const InventarioAdmin: React.FC = () => {
       supplier: 'Venados Store Oficial',
       active: true,
     });
+    setEditingCostPrice(450);
     setIsModalOpen(true);
   };
 
-  const handleOpenEditModal = (product: InventoryProduct) => {
+  const handleOpenEditModal = async (product: InventoryProduct) => {
     setEditingProduct({ ...product });
+    const currentCost = costsMap[product.id] ?? (await getProductCost(product.id)) ?? 0;
+    setEditingCostPrice(currentCost);
     setIsModalOpen(true);
   };
 
@@ -89,7 +107,15 @@ export const InventarioAdmin: React.FC = () => {
     if (!editingProduct || !editingProduct.name || !editingProduct.sku) return;
     setSaving(true);
     try {
-      await saveInventoryProduct(editingProduct as any);
+      const saved = await saveInventoryProduct({
+        ...editingProduct,
+        costPrice: editingCostPrice,
+      } as any);
+
+      if (saved?.id) {
+        setCostsMap((prev) => ({ ...prev, [saved.id]: editingCostPrice }));
+      }
+
       setIsModalOpen(false);
       setFeedbackMessage('Producto guardado correctamente en inventario.');
       fetchInventory();
@@ -278,7 +304,9 @@ export const InventarioAdmin: React.FC = () => {
                       <td className="py-3.5 px-4 font-mono font-semibold text-slate-600">{prod.sku}</td>
                       <td className="py-3.5 px-4 font-medium">{prod.category}</td>
                       <td className="py-3.5 px-4 font-black text-slate-900">${prod.price.toLocaleString('es-MX')}</td>
-                      <td className="py-3.5 px-4 text-slate-500">${prod.costPrice.toLocaleString('es-MX')}</td>
+                      <td className="py-3.5 px-4 text-slate-500 font-medium">
+                        {costsMap[prod.id] !== undefined ? `$${costsMap[prod.id].toLocaleString('es-MX')}` : '...'}
+                      </td>
                       <td className="py-3.5 px-4">
                         <div className="flex items-center justify-center gap-2">
                           <button
@@ -410,8 +438,8 @@ export const InventarioAdmin: React.FC = () => {
                     type="number"
                     required
                     min="0"
-                    value={editingProduct.costPrice || 0}
-                    onChange={(e) => setEditingProduct({ ...editingProduct, costPrice: Number(e.target.value) })}
+                    value={editingCostPrice}
+                    onChange={(e) => setEditingCostPrice(Number(e.target.value))}
                     className="w-full p-2 border border-slate-300 rounded-lg font-medium"
                   />
                 </div>

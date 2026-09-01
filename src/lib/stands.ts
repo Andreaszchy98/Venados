@@ -11,7 +11,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { StadiumStand, MenuItem } from '../types';
-import { handleFirestoreError, OperationType } from './errorHandler';
+import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
 
 const STANDS_COLLECTION = 'stands';
 const MENU_COLLECTION = 'menuItems';
@@ -259,7 +259,7 @@ export async function saveMenuItem(itemData: Partial<MenuItem> & { name: string;
   try {
     if (itemData.id) {
       const docRef = doc(db, MENU_COLLECTION, itemData.id);
-      await updateDoc(docRef, itemData);
+      await updateDoc(docRef, sanitizeFirestoreData(itemData));
       return itemData as MenuItem;
     } else {
       const docRef = doc(collection(db, MENU_COLLECTION));
@@ -275,7 +275,7 @@ export async function saveMenuItem(itemData: Partial<MenuItem> & { name: string;
         prepTimeMinutes: Number(itemData.prepTimeMinutes) || 5,
         createdAt: now,
       };
-      await setDoc(docRef, newItem);
+      await setDoc(docRef, sanitizeFirestoreData(newItem));
       return newItem;
     }
   } catch (err) {

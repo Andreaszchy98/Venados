@@ -70,7 +70,6 @@ export interface InventoryProduct {
   name: string;
   category: ProductCategory;
   price: number;
-  costPrice: number;
   stock: number;
   minStockAlert: number;
   sizes?: string[]; // Ej: ['S', 'M', 'L', 'XL'] o ['Ajustable', '7 1/4']
@@ -79,6 +78,12 @@ export interface InventoryProduct {
   supplier?: string;
   active: boolean;
   createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProductCost {
+  productId: string;
+  costPrice: number;
   updatedAt: string;
 }
 

@@ -11,7 +11,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { MerchOrder, MerchOrderStatus, CarrierCompany } from '../types';
-import { handleFirestoreError, OperationType } from './errorHandler';
+import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
 import { recordSaleTransaction } from './sales';
 
 const COLLECTION_NAME = 'merchOrders';
@@ -68,19 +68,24 @@ export async function createMerchOrder(orderData: Omit<MerchOrder, 'id' | 'creat
       createdAt: now,
       updatedAt: now,
     };
-    await setDoc(docRef, newOrder);
+    const cleanData = sanitizeFirestoreData(newOrder);
+    await setDoc(docRef, cleanData);
 
-    // Registrar en auditoría de ventas global
-    await recordSaleTransaction({
-      channel: 'tienda_merch',
-      referenceId: newOrder.id,
-      customerName: newOrder.customerName,
-      description: `Pedido Tienda: ${newOrder.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')}`,
-      amount: newOrder.total,
-      paymentMethod: newOrder.paymentMethod,
-      date: now,
-      status: 'completada',
-    });
+    // Intentar registrar en auditoría de ventas global
+    try {
+      await recordSaleTransaction({
+        channel: 'tienda_merch',
+        referenceId: newOrder.id,
+        customerName: newOrder.customerName,
+        description: `Pedido Tienda: ${newOrder.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')}`,
+        amount: newOrder.total,
+        paymentMethod: newOrder.paymentMethod,
+        date: now,
+        status: 'completada',
+      });
+    } catch {
+      // Ignorar si el usuario no tiene permisos directos para escribir en /sales
+    }
 
     return newOrder;
   } catch (err) {
@@ -103,7 +108,7 @@ export async function updateOrderStatus(
     if (carrier) updatePayload.carrier = carrier;
     if (trackingNumber) updatePayload.trackingNumber = trackingNumber;
 
-    await updateDoc(docRef, updatePayload);
+    await updateDoc(docRef, sanitizeFirestoreData(updatePayload));
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `${COLLECTION_NAME}/${orderId}`);
   }

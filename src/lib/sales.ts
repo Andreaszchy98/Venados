@@ -10,23 +10,24 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { SaleTransaction, SaleChannel } from '../types';
-import { handleFirestoreError, OperationType } from './errorHandler';
+import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
 
 const COLLECTION_NAME = 'sales';
 
 export async function recordSaleTransaction(
   sale: Omit<SaleTransaction, 'id'>
-): Promise<SaleTransaction> {
+): Promise<SaleTransaction | null> {
   try {
     const docRef = doc(collection(db, COLLECTION_NAME));
     const transaction: SaleTransaction = {
       ...sale,
       id: docRef.id,
     };
-    await setDoc(docRef, transaction);
+    await setDoc(docRef, sanitizeFirestoreData(transaction));
     return transaction;
   } catch (err) {
-    handleFirestoreError(err, OperationType.CREATE, COLLECTION_NAME);
+    console.warn('No se pudo registrar la venta en la colección de auditoría (permiso restringido a operadores):', err);
+    return null;
   }
 }
 

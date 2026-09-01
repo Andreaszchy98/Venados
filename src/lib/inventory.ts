@@ -11,18 +11,22 @@ import {
   orderBy,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { InventoryProduct } from '../types';
-import { handleFirestoreError, OperationType } from './errorHandler';
+import { InventoryProduct, ProductCost } from '../types';
+import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
 
 const COLLECTION_NAME = 'inventory';
 
-const INITIAL_VENADOS_PRODUCTS: Omit<InventoryProduct, 'id' | 'createdAt' | 'updatedAt'>[] = [
+interface InitialProductWithCost extends Omit<InventoryProduct, 'id' | 'createdAt' | 'updatedAt'> {
+  initialCost: number;
+}
+
+const INITIAL_VENADOS_PRODUCTS: InitialProductWithCost[] = [
   {
     sku: 'VEN-JER-ROJ-26',
     name: 'Jersey Oficial Venados de Mazatlán Rojo 2026',
     category: 'Jerseys',
     price: 1699,
-    costPrice: 850,
+    initialCost: 850,
     stock: 45,
     minStockAlert: 10,
     sizes: ['S', 'M', 'L', 'XL', '2XL'],
@@ -36,7 +40,7 @@ const INITIAL_VENADOS_PRODUCTS: Omit<InventoryProduct, 'id' | 'createdAt' | 'upd
     name: 'Jersey Alternativo Black Edition',
     category: 'Jerseys',
     price: 1799,
-    costPrice: 900,
+    initialCost: 900,
     stock: 28,
     minStockAlert: 8,
     sizes: ['M', 'L', 'XL'],
@@ -50,7 +54,7 @@ const INITIAL_VENADOS_PRODUCTS: Omit<InventoryProduct, 'id' | 'createdAt' | 'upd
     name: 'Gorra Oficial 59FIFTY Fitted Venados',
     category: 'Gorras',
     price: 949,
-    costPrice: 420,
+    initialCost: 420,
     stock: 62,
     minStockAlert: 15,
     sizes: ['7', '7 1/8', '7 1/4', '7 3/8', '7 1/2', '7 5/8'],
@@ -64,7 +68,7 @@ const INITIAL_VENADOS_PRODUCTS: Omit<InventoryProduct, 'id' | 'createdAt' | 'upd
     name: 'Gorra 9FORTY Snapback Ajustable',
     category: 'Gorras',
     price: 799,
-    costPrice: 350,
+    initialCost: 350,
     stock: 14,
     minStockAlert: 15, // Stock bajo
     sizes: ['Ajustable / Unitalla'],
@@ -78,7 +82,7 @@ const INITIAL_VENADOS_PRODUCTS: Omit<InventoryProduct, 'id' | 'createdAt' | 'upd
     name: 'Chamarra Rompevientos Mazatlán Béisbol',
     category: 'Sudaderas',
     price: 1450,
-    costPrice: 700,
+    initialCost: 700,
     stock: 18,
     minStockAlert: 5,
     sizes: ['M', 'L', 'XL'],
@@ -92,7 +96,7 @@ const INITIAL_VENADOS_PRODUCTS: Omit<InventoryProduct, 'id' | 'createdAt' | 'upd
     name: 'Pelota Oficial Rawlings LMP Venados',
     category: 'Coleccionables',
     price: 380,
-    costPrice: 150,
+    initialCost: 150,
     stock: 120,
     minStockAlert: 25,
     sizes: ['Oficial'],
@@ -106,7 +110,7 @@ const INITIAL_VENADOS_PRODUCTS: Omit<InventoryProduct, 'id' | 'createdAt' | 'upd
     name: 'Tarro Cervecero Estadio Teodoro Mariscal 1 Litro',
     category: 'Souvenirs',
     price: 249,
-    costPrice: 85,
+    initialCost: 85,
     stock: 5, // Alerta stock crítico
     minStockAlert: 20,
     sizes: ['1 Litro'],
@@ -127,12 +131,15 @@ export async function getInventoryProducts(): Promise<InventoryProduct[]> {
         return await seedInitialProducts();
       } catch (seedErr) {
         console.warn('No se pudo sembrar el inventario en Firestore (permiso restringido). Usando catálogo estático:', seedErr);
-        return INITIAL_VENADOS_PRODUCTS.map((p, idx) => ({
-          ...p,
-          id: `prod-init-${idx + 1}`,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        }));
+        return INITIAL_VENADOS_PRODUCTS.map((p, idx) => {
+          const { initialCost, ...rest } = p;
+          return {
+            ...rest,
+            id: `prod-init-${idx + 1}`,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+        });
       }
     }
 
@@ -145,20 +152,72 @@ export async function getInventoryProducts(): Promise<InventoryProduct[]> {
   }
 }
 
+/**
+ * Lee el costo confidencial de un producto desde la subcolección cost/data.
+ * Restringido por Firestore Rules exclusivamente para el rol admin.
+ */
+export async function getProductCost(productId: string): Promise<number | null> {
+  try {
+    const costDocRef = doc(db, COLLECTION_NAME, productId, 'cost', 'data');
+    const snap = await getDoc(costDocRef);
+    if (!snap.exists()) return null;
+    const data = snap.data();
+    return typeof data.costPrice === 'number' ? data.costPrice : null;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.GET, `${COLLECTION_NAME}/${productId}/cost/data`);
+    return null;
+  }
+}
+
+/**
+ * Guarda o actualiza el costo confidencial de un producto en la subcolección cost/data.
+ * Restringido por Firestore Rules exclusivamente para el rol admin.
+ */
+export async function setProductCost(productId: string, costPrice: number): Promise<void> {
+  try {
+    const costDocRef = doc(db, COLLECTION_NAME, productId, 'cost', 'data');
+    const costData: ProductCost = {
+      productId,
+      costPrice: Number(costPrice) || 0,
+      updatedAt: new Date().toISOString(),
+    };
+    await setDoc(costDocRef, sanitizeFirestoreData(costData));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `${COLLECTION_NAME}/${productId}/cost/data`);
+  }
+}
+
 // ⚠️ DATOS DE PRUEBA - eliminar antes de producción
 export async function seedInitialProducts(): Promise<InventoryProduct[]> {
   const seeded: InventoryProduct[] = [];
   const now = new Date().toISOString();
 
   for (const item of INITIAL_VENADOS_PRODUCTS) {
+    const { initialCost, ...productData } = item;
     const docRef = doc(collection(db, COLLECTION_NAME));
     const product: InventoryProduct = {
-      ...item,
+      ...productData,
       id: docRef.id,
       createdAt: now,
       updatedAt: now,
     };
-    await setDoc(docRef, product);
+    await setDoc(docRef, sanitizeFirestoreData(product));
+
+    // Sembrar costo confidencial en la subcolección cost/data
+    if (initialCost !== undefined) {
+      try {
+        const costDocRef = doc(db, COLLECTION_NAME, docRef.id, 'cost', 'data');
+        const costData: ProductCost = {
+          productId: docRef.id,
+          costPrice: initialCost,
+          updatedAt: now,
+        };
+        await setDoc(costDocRef, sanitizeFirestoreData(costData));
+      } catch (costErr) {
+        console.warn(`No se pudo sembrar el costo de ${docRef.id}:`, costErr);
+      }
+    }
+
     seeded.push(product);
   }
 
@@ -166,40 +225,56 @@ export async function seedInitialProducts(): Promise<InventoryProduct[]> {
 }
 
 export async function saveInventoryProduct(
-  productData: Partial<InventoryProduct> & { name: string; sku: string; price: number; stock: number }
+  productData: Partial<InventoryProduct> & {
+    name: string;
+    sku: string;
+    price: number;
+    stock: number;
+    costPrice?: number;
+  }
 ): Promise<InventoryProduct> {
   const now = new Date().toISOString();
+  const { costPrice, ...rootData } = productData;
+
   try {
-    if (productData.id) {
-      const docRef = doc(db, COLLECTION_NAME, productData.id);
+    let savedProduct: InventoryProduct;
+
+    if (rootData.id) {
+      const docRef = doc(db, COLLECTION_NAME, rootData.id);
       const updatePayload = {
-        ...productData,
+        ...rootData,
         updatedAt: now,
       };
-      await updateDoc(docRef, updatePayload);
-      return { ...productData, updatedAt: now } as InventoryProduct;
+      await updateDoc(docRef, sanitizeFirestoreData(updatePayload));
+      savedProduct = { ...rootData, updatedAt: now } as InventoryProduct;
     } else {
       const docRef = doc(collection(db, COLLECTION_NAME));
       const newProduct: InventoryProduct = {
         id: docRef.id,
-        sku: productData.sku,
-        name: productData.name,
-        category: (productData.category as any) || 'Jerseys',
-        price: Number(productData.price) || 0,
-        costPrice: Number(productData.costPrice) || 0,
-        stock: Number(productData.stock) || 0,
-        minStockAlert: Number(productData.minStockAlert) || 5,
-        sizes: productData.sizes || ['Unitalla'],
-        image: productData.image || 'https://images.unsplash.com/photo-1577210897949-1f56f943502f?w=600&auto=format&fit=crop&q=80',
-        description: productData.description || '',
-        supplier: productData.supplier || 'Venados Store',
-        active: productData.active !== undefined ? productData.active : true,
+        sku: rootData.sku,
+        name: rootData.name,
+        category: (rootData.category as any) || 'Jerseys',
+        price: Number(rootData.price) || 0,
+        stock: Number(rootData.stock) || 0,
+        minStockAlert: Number(rootData.minStockAlert) || 5,
+        sizes: rootData.sizes || ['Unitalla'],
+        image: rootData.image || 'https://images.unsplash.com/photo-1577210897949-1f56f943502f?w=600&auto=format&fit=crop&q=80',
+        description: rootData.description || '',
+        supplier: rootData.supplier || 'Venados Store',
+        active: rootData.active !== undefined ? rootData.active : true,
         createdAt: now,
         updatedAt: now,
       };
-      await setDoc(docRef, newProduct);
-      return newProduct;
+      await setDoc(docRef, sanitizeFirestoreData(newProduct));
+      savedProduct = newProduct;
     }
+
+    // Si viene costPrice en los datos, guardarlo por separado en la subcolección cost
+    if (costPrice !== undefined && savedProduct.id) {
+      await setProductCost(savedProduct.id, costPrice);
+    }
+
+    return savedProduct;
   } catch (err) {
     handleFirestoreError(
       err,

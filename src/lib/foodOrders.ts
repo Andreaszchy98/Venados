@@ -12,7 +12,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { FoodOrder, FoodOrderStatus } from '../types';
-import { handleFirestoreError, OperationType } from './errorHandler';
+import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
 import { recordSaleTransaction } from './sales';
 
 const COLLECTION_NAME = 'foodOrders';
@@ -43,19 +43,24 @@ export async function createFoodOrder(
       updatedAt: now,
     };
 
-    await setDoc(docRef, newOrder);
+    const cleanData = sanitizeFirestoreData(newOrder);
+    await setDoc(docRef, cleanData);
 
-    // Registrar en auditoría de ventas
-    await recordSaleTransaction({
-      channel: 'concesion_alimentos',
-      referenceId: newOrder.id,
-      customerName: newOrder.customerName,
-      description: `${newOrder.standName} (${newOrder.pickupCode}): ${newOrder.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')}`,
-      amount: newOrder.total,
-      paymentMethod: newOrder.paymentMethod || 'Tarjeta',
-      date: now,
-      status: 'completada',
-    });
+    // Intentar registrar en auditoría de ventas
+    try {
+      await recordSaleTransaction({
+        channel: 'concesion_alimentos',
+        referenceId: newOrder.id,
+        customerName: newOrder.customerName,
+        description: `${newOrder.standName} (${newOrder.pickupCode}): ${newOrder.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')}`,
+        amount: newOrder.total,
+        paymentMethod: newOrder.paymentMethod || 'Tarjeta',
+        date: now,
+        status: 'completada',
+      });
+    } catch {
+      // Ignorar si el usuario no tiene permisos directos para escribir en /sales
+    }
 
     return newOrder;
   } catch (err) {

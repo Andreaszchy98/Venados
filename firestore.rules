@@ -73,6 +73,9 @@ service cloud.firestore {
     match /inventory/{productId} {
       allow read: if isAuthenticated();
       allow create, update, delete: if isAdmin();
+      match /cost/{document} {
+        allow read, write: if isAdmin();
+      }
     }
 
     // 5. Pedidos de Mercancía y Logística
