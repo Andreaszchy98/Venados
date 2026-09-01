@@ -45,7 +45,7 @@ export const Header: React.FC<HeaderProps> = ({ user, onOpenAuth, onRoleChanged 
                 </span>
               </div>
               <span className="text-[11px] text-slate-400 block -mt-0.5">
-                Estadio Teodoro Mariscal
+                Estadio Teodoro Mariscal • Plataforma Integral
               </span>
             </div>
           </div>
@@ -54,24 +54,27 @@ export const Header: React.FC<HeaderProps> = ({ user, onOpenAuth, onRoleChanged 
           <div className="flex items-center gap-3">
             {user ? (
               <div className="flex items-center gap-3 sm:gap-4">
-                {/* Selector rápido de Rol para pruebas de MVP */}
+                {/* Selector rápido de Rol para alternar entre Aficionado, Admin, Concesionario y Taquilla */}
                 <div className="hidden sm:flex items-center gap-1.5 bg-slate-800/90 py-1 px-2.5 rounded-lg border border-slate-700 text-xs">
-                  <span className="text-slate-400 text-[11px]">Rol actual:</span>
+                  <span className="text-slate-400 text-[11px]">Cambiar vista:</span>
                   <select
                     value={user.role}
                     disabled={switchingRole}
                     onChange={(e) => handleRoleChange(e.target.value as UserRole)}
-                    className="bg-transparent text-white font-medium focus:outline-hidden cursor-pointer hover:text-red-300 transition-colors text-xs"
-                    title="Cambiar rol para probar otras vistas"
+                    className="bg-transparent text-white font-bold focus:outline-hidden cursor-pointer hover:text-red-300 transition-colors text-xs"
+                    title="Alternar rol para explorar todos los módulos del negocio"
                   >
                     <option value="aficionado" className="bg-slate-900 text-white">
-                      Aficionado
+                      Aficionado (Boletos, Tienda, Comida)
                     </option>
                     <option value="admin" className="bg-slate-900 text-white">
-                      Administrador
+                      Administrador (Ventas, Inventario, Envíos)
+                    </option>
+                    <option value="concesionario" className="bg-slate-900 text-white">
+                      Concesionario (Comanda en Vivo)
                     </option>
                     <option value="taquilla" className="bg-slate-900 text-white">
-                      Taquilla
+                      Taquilla (Control de Accesos)
                     </option>
                   </select>
                 </div>

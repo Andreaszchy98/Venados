@@ -2,61 +2,108 @@ import React, { useState } from 'react';
 import { UserProfile } from '../../types';
 import { MisBoletos } from './MisBoletos';
 import { MiMembresia } from './MiMembresia';
-import { Ticket, Award } from 'lucide-react';
+import { TiendaMerch } from './TiendaMerch';
+import { MenuStand } from './MenuStand';
+import { MisPedidos } from './MisPedidos';
+import {
+  Ticket,
+  Award,
+  ShoppingBag,
+  Utensils,
+  Clock,
+  Package,
+} from 'lucide-react';
 
 interface AficionadoViewProps {
   user: UserProfile;
 }
 
 export const AficionadoView: React.FC<AficionadoViewProps> = ({ user }) => {
-  const [activeTab, setActiveTab] = useState<'boletos' | 'membresia'>('boletos');
+  const [activeTab, setActiveTab] = useState<'boletos' | 'membresia' | 'tienda' | 'comida' | 'pedidos'>('boletos');
 
   return (
     <div className="space-y-6">
       {/* Saludo y selector de sección */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-2 border-b border-slate-200">
         <div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
             Hola, {user.displayName || 'Aficionado Venados'}
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Bienvenido al portal del aficionado de los Venados de Mazatlán
+            Portal oficial del aficionado de los Venados de Mazatlán
           </p>
         </div>
 
-        {/* Pestañas Aficionado */}
-        <div className="inline-flex rounded-xl bg-slate-200/80 p-1 border border-slate-200 text-xs font-semibold">
+        {/* Pestañas de Navegación del Aficionado */}
+        <div className="flex items-center gap-1.5 overflow-x-auto p-1 bg-slate-200/90 rounded-2xl border border-slate-300 text-xs font-semibold scrollbar-none">
           <button
             onClick={() => setActiveTab('boletos')}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+            className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition-all shrink-0 ${
               activeTab === 'boletos'
                 ? 'bg-white text-red-800 shadow-xs font-bold'
-                : 'text-slate-600 hover:text-slate-900'
+                : 'text-slate-700 hover:text-slate-900'
             }`}
           >
-            <Ticket className="w-4 h-4" />
+            <Ticket className="w-4 h-4 text-red-700" />
             Mis Boletos
           </button>
+
           <button
             onClick={() => setActiveTab('membresia')}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+            className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition-all shrink-0 ${
               activeTab === 'membresia'
                 ? 'bg-white text-red-800 shadow-xs font-bold'
-                : 'text-slate-600 hover:text-slate-900'
+                : 'text-slate-700 hover:text-slate-900'
             }`}
           >
-            <Award className="w-4 h-4" />
+            <Award className="w-4 h-4 text-amber-600" />
             Socio Venados
+          </button>
+
+          <button
+            onClick={() => setActiveTab('tienda')}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition-all shrink-0 ${
+              activeTab === 'tienda'
+                ? 'bg-white text-red-800 shadow-xs font-bold'
+                : 'text-slate-700 hover:text-slate-900'
+            }`}
+          >
+            <ShoppingBag className="w-4 h-4 text-red-700" />
+            Tienda Oficial
+          </button>
+
+          <button
+            onClick={() => setActiveTab('comida')}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition-all shrink-0 ${
+              activeTab === 'comida'
+                ? 'bg-white text-red-800 shadow-xs font-bold'
+                : 'text-slate-700 hover:text-slate-900'
+            }`}
+          >
+            <Utensils className="w-4 h-4 text-amber-700" />
+            Comida & Bebidas
+          </button>
+
+          <button
+            onClick={() => setActiveTab('pedidos')}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition-all shrink-0 ${
+              activeTab === 'pedidos'
+                ? 'bg-white text-red-800 shadow-xs font-bold'
+                : 'text-slate-700 hover:text-slate-900'
+            }`}
+          >
+            <Package className="w-4 h-4 text-slate-800" />
+            Mis Pedidos
           </button>
         </div>
       </div>
 
-      {/* Contenido de la vista */}
-      {activeTab === 'boletos' ? (
-        <MisBoletos user={user} />
-      ) : (
-        <MiMembresia user={user} />
-      )}
+      {/* Contenido de la vista según pestaña */}
+      {activeTab === 'boletos' && <MisBoletos user={user} />}
+      {activeTab === 'membresia' && <MiMembresia user={user} />}
+      {activeTab === 'tienda' && <TiendaMerch user={user} onOrderCompleted={() => setActiveTab('pedidos')} />}
+      {activeTab === 'comida' && <MenuStand user={user} onOrderSuccess={() => setActiveTab('pedidos')} />}
+      {activeTab === 'pedidos' && <MisPedidos user={user} />}
     </div>
   );
 };

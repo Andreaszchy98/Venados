@@ -2,14 +2,16 @@
   "entities": {
     "users": {
       "title": "users",
-      "description": "Perfiles de usuarios con asignación de roles (aficionado, admin, taquilla)",
+      "description": "Perfiles de usuarios con asignación de roles (aficionado, admin, taquilla, concesionario)",
       "type": "object",
       "properties": {
         "uid": { "type": "string" },
         "email": { "type": "string" },
         "displayName": { "type": "string" },
-        "role": { "type": "string", "enum": ["aficionado", "admin", "taquilla"] },
+        "role": { "type": "string", "enum": ["aficionado", "admin", "taquilla", "concesionario"] },
         "photoURL": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "standId": { "type": "string" },
         "createdAt": { "type": "string" },
         "updatedAt": { "type": "string" }
       },
@@ -17,7 +19,7 @@
     },
     "tickets": {
       "title": "tickets",
-      "description": "Boletos para partidos del estadio de béisbol",
+      "description": "Boletos para partidos del estadio de béisbol con código QR y validación de taquilla",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
@@ -51,7 +53,112 @@
         "createdAt": { "type": "string" }
       },
       "required": ["userId", "memberNumber", "tier", "status", "renewalDate"]
+    },
+    "inventory": {
+      "title": "inventory",
+      "description": "Control de stock de mercancía oficial de tienda y almacén de Venados",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "sku": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "price": { "type": "number" },
+        "costPrice": { "type": "number" },
+        "stock": { "type": "number" },
+        "minStockAlert": { "type": "number" },
+        "image": { "type": "string" },
+        "description": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["sku", "name", "price", "stock"]
+    },
+    "merchOrders": {
+      "title": "merchOrders",
+      "description": "Logística de despacho, paquetería y pedidos de tienda",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerEmail": { "type": "string" },
+        "total": { "type": "number" },
+        "shippingType": { "type": "string", "enum": ["domicilio", "tienda"] },
+        "carrier": { "type": "string" },
+        "trackingNumber": { "type": "string" },
+        "status": { "type": "string", "enum": ["pendiente", "empacado", "en_transito", "entregado", "cancelado"] },
+        "paymentMethod": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId", "customerName", "total", "status"]
+    },
+    "stands": {
+      "title": "stands",
+      "description": "Puestos y concesiones de alimentos y bebidas del estadio",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "location": { "type": "string" },
+        "categoryTag": { "type": "string" },
+        "active": { "type": "boolean" },
+        "estimatedWaitMinutes": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["name", "location", "active"]
+    },
+    "menuItems": {
+      "title": "menuItems",
+      "description": "Menú de platillos, bebidas y snacks por concesión",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "standId": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "category": { "type": "string" },
+        "available": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["standId", "name", "price", "available"]
+    },
+    "foodOrders": {
+      "title": "foodOrders",
+      "description": "Pedidos express de comida en estadio con código de retiro",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "standId": { "type": "string" },
+        "standName": { "type": "string" },
+        "userId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "pickupCode": { "type": "string" },
+        "total": { "type": "number" },
+        "status": { "type": "string", "enum": ["pendiente", "preparando", "listo", "entregado", "cancelado"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["standId", "userId", "pickupCode", "total", "status"]
+    },
+    "sales": {
+      "title": "sales",
+      "description": "Registro consolidado de ventas de boletos, mercancía y alimentos",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "channel": { "type": "string", "enum": ["boletos", "tienda_merch", "concesion_alimentos"] },
+        "referenceId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "description": { "type": "string" },
+        "amount": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "date": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["channel", "amount", "date", "status"]
     }
-  },
-  "firestoreRules": "rules_version = '2';\n\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    function isAuthenticated() {\n      return request.auth != null;\n    }\n    \n    function isOwner(userId) {\n      return isAuthenticated() && request.auth.uid == userId;\n    }\n    \n    function getUserData() {\n      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;\n    }\n    \n    function hasRole(role) {\n      return isAuthenticated() && getUserData().role == role;\n    }\n    \n    function isAdmin() {\n      return hasRole('admin');\n    }\n    \n    function isTaquilla() {\n      return hasRole('taquilla') || isAdmin();\n    }\n\n    match /users/{userId} {\n      allow read: if isAuthenticated();\n      allow create: if isAuthenticated() && request.auth.uid == userId;\n      allow update: if isOwner(userId) || isAdmin();\n      allow delete: if isAdmin();\n    }\n\n    match /tickets/{ticketId} {\n      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isTaquilla());\n      allow create: if isAuthenticated() && (request.resource.data.userId == request.auth.uid || isTaquilla());\n      allow update: if isTaquilla() || (isAuthenticated() && resource.data.userId == request.auth.uid);\n      allow delete: if isAdmin();\n    }\n\n    match /memberships/{membershipId} {\n      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin() || isTaquilla());\n      allow create: if isAuthenticated() && (request.resource.data.userId == request.auth.uid || isAdmin());\n      allow update: if isAdmin();\n      allow delete: if isAdmin();\n    }\n  }\n}"
+  }
 }

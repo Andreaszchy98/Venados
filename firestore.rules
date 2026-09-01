@@ -2,7 +2,7 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helpers
+    // Helpers de Autenticación y Roles
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -30,7 +30,11 @@ service cloud.firestore {
       return hasRole('taquilla') || isAdmin();
     }
 
-    // Colección de Usuarios
+    function isConcesionario() {
+      return hasRole('concesionario') || isAdmin();
+    }
+
+    // 1. Usuarios y Perfiles
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.auth.uid == userId;
@@ -38,7 +42,7 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Colección de Boletos (Tickets)
+    // 2. Boletos y Entradas
     match /tickets/{ticketId} {
       allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isTaquilla());
       allow create: if isAuthenticated() && (request.resource.data.userId == request.auth.uid || isTaquilla());
@@ -46,12 +50,53 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Colección de Membresías (Socio Venados)
+    // 3. Membresías (Socio Venados)
     match /memberships/{membershipId} {
       allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin() || isTaquilla());
       allow create: if isAuthenticated() && (request.resource.data.userId == request.auth.uid || isAdmin());
       allow update: if isAdmin();
       allow delete: if isAdmin();
+    }
+
+    // 4. Inventario de Tienda y Almacén
+    match /inventory/{productId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // 5. Pedidos de Mercancía y Logística
+    match /merchOrders/{orderId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated();
+      allow update: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
+    // 6. Concesiones / Puestos de Comida en Estadio
+    match /stands/{standId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isConcesionario() || isAdmin();
+    }
+
+    // 7. Menú de Alimentos y Bebidas
+    match /menuItems/{itemId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isConcesionario() || isAdmin();
+    }
+
+    // 8. Pedidos de Comida / Pickup Express
+    match /foodOrders/{orderId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isConcesionario());
+      allow create: if isAuthenticated();
+      allow update: if isConcesionario() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
+    // 9. Auditoría y Registro de Ventas
+    match /sales/{saleId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
     }
   }
 }
