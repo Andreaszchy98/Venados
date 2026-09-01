@@ -84,6 +84,7 @@ export async function getSalesMetrics(): Promise<{
   };
 }
 
+// ⚠️ DATOS DE PRUEBA - eliminar antes de producción
 export async function seedInitialSales(): Promise<SaleTransaction[]> {
   const now = new Date();
   const sampleSales: Omit<SaleTransaction, 'id'>[] = [

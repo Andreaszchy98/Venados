@@ -174,7 +174,16 @@ export async function getStadiumStands(): Promise<StadiumStand[]> {
   try {
     const snap = await getDocs(collection(db, STANDS_COLLECTION));
     if (snap.empty) {
-      return await seedInitialStandsAndMenu();
+      try {
+        return await seedInitialStandsAndMenu();
+      } catch (seedErr) {
+        console.warn('No se pudieron sembrar los puestos en Firestore (permiso restringido). Usando datos iniciales:', seedErr);
+        return INITIAL_STANDS.map((s, idx) => ({
+          ...s,
+          id: `stand-init-${idx + 1}`,
+          createdAt: new Date().toISOString(),
+        }));
+      }
     }
     return snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StadiumStand[];
   } catch (err) {
@@ -182,6 +191,7 @@ export async function getStadiumStands(): Promise<StadiumStand[]> {
   }
 }
 
+// ⚠️ DATOS DE PRUEBA - eliminar antes de producción
 export async function seedInitialStandsAndMenu(): Promise<StadiumStand[]> {
   const createdStands: StadiumStand[] = [];
   const now = new Date().toISOString();

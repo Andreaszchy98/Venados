@@ -109,6 +109,7 @@ export async function updateOrderStatus(
   }
 }
 
+// ⚠️ DATOS DE PRUEBA - eliminar antes de producción
 export async function seedInitialMerchOrders(): Promise<MerchOrder[]> {
   const now = new Date();
   const sampleOrders: Omit<MerchOrder, 'id'>[] = [

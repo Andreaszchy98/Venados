@@ -123,8 +123,17 @@ export async function getInventoryProducts(): Promise<InventoryProduct[]> {
     const snap = await getDocs(q);
 
     if (snap.empty) {
-      // Sembrar catálogo inicial de Venados si la colección está vacía
-      return await seedInitialProducts();
+      try {
+        return await seedInitialProducts();
+      } catch (seedErr) {
+        console.warn('No se pudo sembrar el inventario en Firestore (permiso restringido). Usando catálogo estático:', seedErr);
+        return INITIAL_VENADOS_PRODUCTS.map((p, idx) => ({
+          ...p,
+          id: `prod-init-${idx + 1}`,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }));
+      }
     }
 
     return snap.docs.map((d) => ({
@@ -136,6 +145,7 @@ export async function getInventoryProducts(): Promise<InventoryProduct[]> {
   }
 }
 
+// ⚠️ DATOS DE PRUEBA - eliminar antes de producción
 export async function seedInitialProducts(): Promise<InventoryProduct[]> {
   const seeded: InventoryProduct[] = [];
   const now = new Date().toISOString();
