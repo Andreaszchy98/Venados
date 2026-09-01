@@ -1,0 +1,57 @@
+{
+  "entities": {
+    "users": {
+      "title": "users",
+      "description": "Perfiles de usuarios con asignación de roles (aficionado, admin, taquilla)",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["aficionado", "admin", "taquilla"] },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "tickets": {
+      "title": "tickets",
+      "description": "Boletos para partidos del estadio de béisbol",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "matchTitle": { "type": "string" },
+        "matchDate": { "type": "string" },
+        "stadium": { "type": "string" },
+        "section": { "type": "string" },
+        "row": { "type": "string" },
+        "seat": { "type": "string" },
+        "price": { "type": "number" },
+        "status": { "type": "string", "enum": ["activo", "usado", "cancelado"] },
+        "qrId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "section", "row", "seat", "status", "qrId"]
+    },
+    "memberships": {
+      "title": "memberships",
+      "description": "Abonos y membresías de Socio Venados",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "memberNumber": { "type": "string" },
+        "tier": { "type": "string", "enum": ["General", "Oro", "Platino", "Diamante"] },
+        "status": { "type": "string", "enum": ["activa", "vencida", "suspendida"] },
+        "renewalDate": { "type": "string" },
+        "startDate": { "type": "string" },
+        "seatAssigned": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "memberNumber", "tier", "status", "renewalDate"]
+    }
+  },
+  "firestoreRules": "rules_version = '2';\n\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    function isAuthenticated() {\n      return request.auth != null;\n    }\n    \n    function isOwner(userId) {\n      return isAuthenticated() && request.auth.uid == userId;\n    }\n    \n    function getUserData() {\n      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;\n    }\n    \n    function hasRole(role) {\n      return isAuthenticated() && getUserData().role == role;\n    }\n    \n    function isAdmin() {\n      return hasRole('admin');\n    }\n    \n    function isTaquilla() {\n      return hasRole('taquilla') || isAdmin();\n    }\n\n    match /users/{userId} {\n      allow read: if isAuthenticated();\n      allow create: if isAuthenticated() && request.auth.uid == userId;\n      allow update: if isOwner(userId) || isAdmin();\n      allow delete: if isAdmin();\n    }\n\n    match /tickets/{ticketId} {\n      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isTaquilla());\n      allow create: if isAuthenticated() && (request.resource.data.userId == request.auth.uid || isTaquilla());\n      allow update: if isTaquilla() || (isAuthenticated() && resource.data.userId == request.auth.uid);\n      allow delete: if isAdmin();\n    }\n\n    match /memberships/{membershipId} {\n      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin() || isTaquilla());\n      allow create: if isAuthenticated() && (request.resource.data.userId == request.auth.uid || isAdmin());\n      allow update: if isAdmin();\n      allow delete: if isAdmin();\n    }\n  }\n}"
+}

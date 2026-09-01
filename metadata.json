@@ -1,0 +1,6 @@
+{
+  "name": "Venados App",
+  "description": "Plataforma multiservicio para estadio de béisbol con gestión de boletos, membresías y panel administrativo.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
