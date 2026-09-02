@@ -46,7 +46,7 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
     phone: user.phoneNumber || '',
     referenceNotes: '',
   });
-  const [paymentMethod, setPaymentMethod] = useState<'Tarjeta' | 'Transferencia SPEI' | 'MercadoPago' | 'Efectivo en Tienda'>('Tarjeta');
+  const [paymentMethod, setPaymentMethod] = useState<'Efectivo / Terminal física' | 'Tarjeta' | 'Transferencia SPEI' | 'MercadoPago' | 'Efectivo en Tienda'>('Efectivo / Terminal física');
   const [submittingOrder, setSubmittingOrder] = useState(false);
 
   const fetchProducts = async () => {
@@ -457,18 +457,123 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                     </div>
                   )}
 
-                  <div>
-                    <label className="block font-bold text-slate-800 mb-1">Método de Pago</label>
-                    <select
-                      value={paymentMethod}
-                      onChange={(e) => setPaymentMethod(e.target.value as any)}
-                      className="w-full p-2 border border-slate-300 rounded-lg bg-white text-xs font-medium"
-                    >
-                      <option value="Tarjeta">Tarjeta de Crédito / Débito (Visa, MC, Amex)</option>
-                      <option value="MercadoPago">Mercado Pago / Billetera Digital</option>
-                      <option value="Transferencia SPEI">Transferencia Bancaria SPEI</option>
-                      {shippingType === 'tienda' && <option value="Efectivo en Tienda">Efectivo al Recoger en Estadio</option>}
-                    </select>
+                  <div className="space-y-2">
+                    <label className="block font-bold text-slate-800 text-xs">
+                      Selecciona tu Método de Pago
+                    </label>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('Efectivo / Terminal física')}
+                        className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between ${
+                          paymentMethod === 'Efectivo / Terminal física'
+                            ? 'border-emerald-600 bg-emerald-50/70 shadow-xs'
+                            : 'border-slate-200 hover:border-slate-300 bg-white'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-base">💵</span>
+                          {paymentMethod === 'Efectivo / Terminal física' && (
+                            <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-extrabold text-[11px] text-slate-900 leading-tight">
+                            Efectivo / Terminal física
+                          </p>
+                          <p className="text-[10px] text-slate-500 mt-0.5">
+                            Paga en efectivo o con tarjeta en la terminal física al recibir o recoger
+                          </p>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('Tarjeta')}
+                        className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between ${
+                          paymentMethod === 'Tarjeta'
+                            ? 'border-red-700 bg-red-50/70 shadow-xs'
+                            : 'border-slate-200 hover:border-slate-300 bg-white'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-base">💳</span>
+                          {paymentMethod === 'Tarjeta' && (
+                            <span className="w-2 h-2 rounded-full bg-red-700"></span>
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-extrabold text-[11px] text-slate-900 leading-tight">
+                            Tarjeta en Línea
+                          </p>
+                          <p className="text-[10px] text-slate-500 mt-0.5">
+                            Visa, Mastercard, American Express
+                          </p>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('MercadoPago')}
+                        className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between ${
+                          paymentMethod === 'MercadoPago'
+                            ? 'border-sky-600 bg-sky-50/70 shadow-xs'
+                            : 'border-slate-200 hover:border-slate-300 bg-white'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-base">📱</span>
+                          {paymentMethod === 'MercadoPago' && (
+                            <span className="w-2 h-2 rounded-full bg-sky-600"></span>
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-extrabold text-[11px] text-slate-900 leading-tight">
+                            Mercado Pago
+                          </p>
+                          <p className="text-[10px] text-slate-500 mt-0.5">
+                            Saldo en cuenta, débito o crédito
+                          </p>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('Transferencia SPEI')}
+                        className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between ${
+                          paymentMethod === 'Transferencia SPEI'
+                            ? 'border-purple-700 bg-purple-50/70 shadow-xs'
+                            : 'border-slate-200 hover:border-slate-300 bg-white'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-base">🏦</span>
+                          {paymentMethod === 'Transferencia SPEI' && (
+                            <span className="w-2 h-2 rounded-full bg-purple-700"></span>
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-extrabold text-[11px] text-slate-900 leading-tight">
+                            Transferencia SPEI
+                          </p>
+                          <p className="text-[10px] text-slate-500 mt-0.5">
+                            CLABE interbancaria directa
+                          </p>
+                        </div>
+                      </button>
+                    </div>
+
+                    {paymentMethod === 'Efectivo / Terminal física' && (
+                      <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] text-emerald-900 font-medium flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0 animate-pulse"></span>
+                        <span>
+                          {shippingType === 'tienda'
+                            ? 'Pagas directamente en caja de la Tienda Oficial del Estadio al recoger tus artículos.'
+                            : 'El repartidor llevará terminal física inalámbrica o cambio en efectivo para tu entrega.'}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </form>
               ) : (

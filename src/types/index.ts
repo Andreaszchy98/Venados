@@ -3,7 +3,7 @@
  * Plataforma Integral de Negocio, Afición y Operaciones del Club Venados de Mazatlán
  */
 
-export type UserRole = 'aficionado' | 'admin' | 'taquilla' | 'concesionario';
+export type UserRole = 'aficionado' | 'admin' | 'taquilla' | 'concesionario' | 'runner';
 
 export interface UserProfile {
   uid: string;
@@ -13,6 +13,10 @@ export interface UserProfile {
   photoURL?: string | null;
   phoneNumber?: string | null;
   standId?: string; // Si el usuario es operador de un puesto de comida/concesionario
+  standName?: string; // Nombre del puesto asignado
+  zoneId?: string; // ID de la zona del estadio asignada al runner (ej: 'zona-a')
+  assignedZone?: string; // Para runner: ej: 'Zona A - Sombra Central', 'Palcos VIP', etc.
+  runnerStatus?: 'disponible' | 'en_entrega' | 'inactivo';
   createdAt: string;
   updatedAt?: string;
 }
@@ -130,7 +134,7 @@ export interface MerchOrder {
   carrier?: CarrierCompany;
   trackingNumber?: string;
   status: MerchOrderStatus;
-  paymentMethod: 'Tarjeta' | 'Transferencia SPEI' | 'MercadoPago' | 'Efectivo en Tienda';
+  paymentMethod: 'Tarjeta' | 'Transferencia SPEI' | 'MercadoPago' | 'Efectivo en Tienda' | 'Efectivo / Terminal física' | string;
   paymentStatus: 'pagado' | 'pendiente' | 'reembolsado';
   notes?: string;
   createdAt: string;
@@ -140,17 +144,25 @@ export interface MerchOrder {
 // ==========================================
 // 5. CONCESIONES & PICKUP EXPRESS (COMIDA & BEBIDAS)
 // ==========================================
+export type StandCategoryTag = 'Mariscos & Botaneros' | 'Tacos & Parrilla' | 'Hot Dogs & Snacks' | 'Cerveza & Coctelería' | 'Postres & Helados' | 'Souvenirs & Tiendita' | 'Café & Churros';
+
 export interface StadiumStand {
   id: string;
   name: string;
   location: string; // Ej: 'Zona Central Puerta 3', 'Bleachers Planta Alta'
-  categoryTag: 'Mariscos & Botaneros' | 'Tacos & Parrilla' | 'Hot Dogs & Snacks' | 'Cerveza & Coctelería' | 'Postres & Helados';
+  categoryTag: StandCategoryTag;
+  description?: string;
   ownerId?: string;
   ownerName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  commissionRate?: number; // % de comisión por ventas del estadio (ej: 15)
+  monthlyRent?: number; // Renta mensual o canon por concesión fija
   active: boolean;
   image: string;
   estimatedWaitMinutes: number;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export type MenuItemCategory = 'comida' | 'bebida' | 'cerveza' | 'snack' | 'combo';
@@ -168,7 +180,14 @@ export interface MenuItem {
   createdAt: string;
 }
 
-export type FoodOrderStatus = 'pendiente' | 'preparando' | 'listo' | 'entregado' | 'cancelado';
+export type OrderType = 'pickup' | 'in-seat';
+export type FoodOrderStatus = 'pendiente' | 'preparando' | 'listo' | 'en-camino' | 'entregado' | 'cancelado';
+
+export interface Zone {
+  id: string;
+  name: string; // Ej: "Zona A - Sombra Central"
+  sections: string[]; // Ej: ['100', '101', '102', '103']
+}
 
 export interface FoodOrderItem {
   itemId: string;
@@ -184,11 +203,18 @@ export interface FoodOrder {
   standName: string;
   userId: string;
   customerName: string;
+  orderType: OrderType;
   pickupCode: string; // Ej: 'V-482'
   items: FoodOrderItem[];
   total: number;
   status: FoodOrderStatus;
   paymentMethod: string;
+  // Solo para orderType === 'in-seat':
+  section?: string;
+  row?: string;
+  seat?: string;
+  zoneId?: string; // derivado de section al crear el pedido
+  runnerId?: string | null; // uid del runner que tomó el pedido
   statusHistory?: {
     status: FoodOrderStatus;
     timestamp: string;

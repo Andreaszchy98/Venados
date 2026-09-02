@@ -7,6 +7,7 @@ import {
   where,
   orderBy,
   limit,
+  onSnapshot,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { SaleTransaction, SaleChannel } from '../types';
@@ -26,9 +27,75 @@ export async function recordSaleTransaction(
     await setDoc(docRef, sanitizeFirestoreData(transaction));
     return transaction;
   } catch (err) {
-    console.warn('No se pudo registrar la venta en la colección de auditoría (permiso restringido a operadores):', err);
+    console.warn('No se pudo registrar la venta en la colección de auditoría:', err);
     return null;
   }
+}
+
+export function calculateMetricsFromTransactions(transactions: SaleTransaction[]) {
+  let totalGrossRevenue = 0;
+  let ticketsRevenue = 0;
+  let merchRevenue = 0;
+  let foodRevenue = 0;
+
+  for (const t of transactions) {
+    if (t.status === 'reembolsada') continue;
+    const amt = Number(t.amount) || 0;
+    totalGrossRevenue += amt;
+    if (t.channel === 'boletos') ticketsRevenue += amt;
+    else if (t.channel === 'tienda_merch') merchRevenue += amt;
+    else if (t.channel === 'concesion_alimentos') foodRevenue += amt;
+  }
+
+  return {
+    totalGrossRevenue,
+    ticketsRevenue,
+    merchRevenue,
+    foodRevenue,
+    totalTransactions: transactions.length,
+  };
+}
+
+/**
+ * Escucha transacciones de venta en tiempo real (onSnapshot).
+ * Si la colección está vacía en primer arranque, genera datos iniciales de auditoría.
+ */
+export function subscribeToSalesAuditLog(
+  onUpdate: (sales: SaleTransaction[]) => void,
+  onError?: (err: any) => void
+): () => void {
+  const q = query(collection(db, COLLECTION_NAME));
+
+  return onSnapshot(
+    q,
+    async (snapshot) => {
+      if (snapshot.empty) {
+        try {
+          const seeded = await seedInitialSales();
+          onUpdate(seeded);
+          return;
+        } catch (e) {
+          onUpdate([]);
+          return;
+        }
+      }
+
+      const sales = snapshot.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+      })) as SaleTransaction[];
+
+      const sorted = sales.sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
+
+      onUpdate(sorted);
+    },
+    (err) => {
+      console.error('Error escuchando auditoría de ventas en tiempo real:', err);
+      if (onError) onError(err);
+    }
+  );
 }
 
 export async function getAllSalesTransactions(): Promise<SaleTransaction[]> {
@@ -68,26 +135,7 @@ export async function getSalesMetrics(): Promise<{
   totalTransactions: number;
 }> {
   const transactions = await getAllSalesTransactions();
-  let totalGrossRevenue = 0;
-  let ticketsRevenue = 0;
-  let merchRevenue = 0;
-  let foodRevenue = 0;
-
-  for (const t of transactions) {
-    if (t.status === 'reembolsada') continue;
-    totalGrossRevenue += t.amount || 0;
-    if (t.channel === 'boletos') ticketsRevenue += t.amount || 0;
-    else if (t.channel === 'tienda_merch') merchRevenue += t.amount || 0;
-    else if (t.channel === 'concesion_alimentos') foodRevenue += t.amount || 0;
-  }
-
-  return {
-    totalGrossRevenue,
-    ticketsRevenue,
-    merchRevenue,
-    foodRevenue,
-    totalTransactions: transactions.length,
-  };
+  return calculateMetricsFromTransactions(transactions);
 }
 
 // ⚠️ DATOS DE PRUEBA - eliminar antes de producción

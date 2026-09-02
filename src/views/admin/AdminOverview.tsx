@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 
 interface AdminOverviewProps {
-  onNavigateTab: (tab: 'ventas' | 'inventario' | 'logistica') => void;
+  onNavigateTab: (tab: 'ventas' | 'inventario' | 'logistica' | 'personal' | 'negocios') => void;
 }
 
 export const AdminOverview: React.FC<AdminOverviewProps> = ({ onNavigateTab }) => {
@@ -194,6 +194,71 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ onNavigateTab }) =
               className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg flex items-center gap-1 shadow-xs transition-colors"
             >
               <span>Ver Envíos</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Módulo Negocios & Concesiones Estadio */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between space-y-4 hover:border-slate-300 transition-colors">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="p-2.5 rounded-xl bg-amber-50 text-amber-700">
+                <Store className="w-5 h-5" />
+              </div>
+              <span className="inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full">
+                {stats.activeStandsCount} activos
+              </span>
+            </div>
+            <h3 className="font-extrabold text-base text-slate-900">Negocios del Estadio</h3>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Administración de puestos, concesiones comerciales, cartas de menú, comisiones y ubicación en estadio.
+            </p>
+          </div>
+
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+            <div>
+              <span className="text-[11px] text-slate-400 block font-medium">Concesiones</span>
+              <span className="text-base font-black text-amber-900">Puestos y Menú</span>
+            </div>
+            <button
+              id="overview-goto-negocios"
+              onClick={() => onNavigateTab('negocios')}
+              className="px-3 py-1.5 bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold rounded-lg flex items-center gap-1 shadow-xs transition-colors"
+            >
+              <span>Administrar</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Módulo Personal & Roles (Concesionarios y Runners) */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between space-y-4 hover:border-slate-300 transition-colors">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-700">
+                <Users className="w-5 h-5" />
+              </div>
+              <span className="text-xs font-bold text-emerald-700 bg-emerald-100/60 px-2 py-0.5 rounded-full">
+                Operaciones
+              </span>
+            </div>
+            <h3 className="font-extrabold text-base text-slate-900">Personal & Roles</h3>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Declarar concesionarios de puestos, runners de estadio, taquilla y permisos de acceso.
+            </p>
+          </div>
+
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+            <div>
+              <span className="text-[11px] text-slate-400 block font-medium">Estadio & Ventas</span>
+              <span className="text-base font-black text-slate-900">Asignar Roles</span>
+            </div>
+            <button
+              onClick={() => onNavigateTab('personal')}
+              className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-lg flex items-center gap-1 shadow-xs transition-colors"
+            >
+              <span>Gestionar</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>

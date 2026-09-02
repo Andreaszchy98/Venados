@@ -1,7 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { StadiumStand, MenuItem, UserProfile, FoodOrderItem } from '../../types';
+import {
+  StadiumStand,
+  MenuItem,
+  UserProfile,
+  FoodOrderItem,
+  OrderType,
+  Ticket,
+  Zone,
+} from '../../types';
 import { getStadiumStands, getMenuItemsByStand } from '../../lib/stands';
 import { createFoodOrder } from '../../lib/foodOrders';
+import { subscribeUserTickets } from '../../lib/tickets';
+import { getZoneBySection, getZones } from '../../lib/zones';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import {
   Utensils,
@@ -11,11 +21,15 @@ import {
   Plus,
   Minus,
   CheckCircle2,
-  Coffee,
   Sparkles,
   ArrowRight,
-  X,
   Store,
+  Bike,
+  Armchair,
+  Ticket as TicketIcon,
+  ChevronRight,
+  X,
+  AlertCircle,
 } from 'lucide-react';
 
 interface MenuStandProps {
@@ -31,7 +45,30 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess }) =>
   const [loadingMenu, setLoadingMenu] = useState(false);
   const [cart, setCart] = useState<{ item: MenuItem; quantity: number }[]>([]);
   const [placingOrder, setPlacingOrder] = useState(false);
-  const [lastPlacedCode, setLastPlacedCode] = useState<string | null>(null);
+  
+  // Modal de confirmación y tipo de entrega
+  const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+  const [selectedOrderType, setSelectedOrderType] = useState<OrderType>('in-seat');
+  const [foodPaymentMethod, setFoodPaymentMethod] = useState<'Efectivo / Terminal física' | 'Tarjeta en Línea' | 'Venados Pay'>('Efectivo / Terminal física');
+  
+  // Datos de entrega in-seat
+  const [userTickets, setUserTickets] = useState<Ticket[]>([]);
+  const [selectedTicketId, setSelectedTicketId] = useState<string>('');
+  const [seatSection, setSeatSection] = useState<string>('');
+  const [seatRow, setSeatRow] = useState<string>('');
+  const [seatNumber, setSeatNumber] = useState<string>('');
+  const [resolvedZone, setResolvedZone] = useState<Zone | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  // Éxito de orden
+  const [lastPlacedOrder, setLastPlacedOrder] = useState<{
+    code: string;
+    type: OrderType;
+    section?: string;
+    row?: string;
+    seat?: string;
+    zoneName?: string;
+  } | null>(null);
 
   useEffect(() => {
     const fetchStands = async () => {
@@ -50,6 +87,42 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess }) =>
     };
     fetchStands();
   }, []);
+
+  // Cargar tickets del aficionado para autocompletar butaca
+  useEffect(() => {
+    if (!user?.uid) return;
+    const unsubscribe = subscribeUserTickets(
+      user.uid,
+      (tickets) => {
+        const activeTickets = tickets.filter((t) => t.status === 'activo');
+        setUserTickets(activeTickets);
+        if (activeTickets.length > 0 && !selectedTicketId) {
+          const first = activeTickets[0];
+          setSelectedTicketId(first.id);
+          setSeatSection(first.section);
+          setSeatRow(first.row);
+          setSeatNumber(first.seat);
+        }
+      },
+      (err) => console.warn('Error fetching tickets for in-seat delivery:', err)
+    );
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [user.uid]);
+
+  // Resolver zona cuando cambie la sección
+  useEffect(() => {
+    if (!seatSection) {
+      setResolvedZone(null);
+      return;
+    }
+    const resolve = async () => {
+      const zone = await getZoneBySection(seatSection);
+      setResolvedZone(zone);
+    };
+    resolve();
+  }, [seatSection]);
 
   useEffect(() => {
     if (!selectedStand) return;
@@ -95,9 +168,35 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess }) =>
   const total = cart.reduce((sum, c) => sum + c.item.price * c.quantity, 0);
   const totalCount = cart.reduce((sum, c) => sum + c.quantity, 0);
 
-  const handleCheckout = async () => {
+  const handleTicketSelect = (ticketId: string) => {
+    setSelectedTicketId(ticketId);
+    const found = userTickets.find((t) => t.id === ticketId);
+    if (found) {
+      setSeatSection(found.section);
+      setSeatRow(found.row);
+      setSeatNumber(found.seat);
+    }
+  };
+
+  const handleOpenCheckout = () => {
     if (cart.length === 0 || !selectedStand) return;
+    setFormError(null);
+    setIsCheckoutModalOpen(true);
+  };
+
+  const handleConfirmOrder = async () => {
+    if (cart.length === 0 || !selectedStand) return;
+
+    if (selectedOrderType === 'in-seat') {
+      if (!seatSection.trim() || !seatRow.trim() || !seatNumber.trim()) {
+        setFormError('Por favor indica tu Sección, Fila y Butaca para que el Runner pueda llevar tu pedido.');
+        return;
+      }
+    }
+
     setPlacingOrder(true);
+    setFormError(null);
+
     try {
       const foodItems: FoodOrderItem[] = cart.map((c) => ({
         itemId: c.item.id,
@@ -106,21 +205,43 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess }) =>
         quantity: c.quantity,
       }));
 
+      // Resolver zona final
+      let zoneId: string | undefined = undefined;
+      if (selectedOrderType === 'in-seat') {
+        const zone = await getZoneBySection(seatSection);
+        zoneId = zone?.id || 'zona-a';
+      }
+
       const order = await createFoodOrder({
         standId: selectedStand.id,
         standName: selectedStand.name,
         userId: user.uid,
         customerName: user.displayName || 'Aficionado Teodoro Mariscal',
+        orderType: selectedOrderType,
         items: foodItems,
         total,
-        paymentMethod: 'Tarjeta de Crédito / Débito',
+        paymentMethod: foodPaymentMethod,
+        section: selectedOrderType === 'in-seat' ? seatSection.trim() : undefined,
+        row: selectedOrderType === 'in-seat' ? seatRow.trim() : undefined,
+        seat: selectedOrderType === 'in-seat' ? seatNumber.trim() : undefined,
+        zoneId: zoneId,
       });
 
-      setLastPlacedCode(order.pickupCode);
+      setLastPlacedOrder({
+        code: order.pickupCode,
+        type: order.orderType,
+        section: order.section,
+        row: order.row,
+        seat: order.seat,
+        zoneName: resolvedZone?.name || 'Zona Asignada',
+      });
+
       setCart([]);
+      setIsCheckoutModalOpen(false);
       if (onOrderSuccess) onOrderSuccess();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error placing food order:', err);
+      setFormError(err.message || 'Error al procesar el pedido. Intenta de nuevo.');
     } finally {
       setPlacingOrder(false);
     }
@@ -128,23 +249,24 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess }) =>
 
   return (
     <div className="space-y-6">
-      {/* Banner Pickup Express */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-amber-700 via-amber-800 to-red-950 text-white p-6 sm:p-8 border border-amber-600/40 shadow-lg">
+      {/* Banner Principal */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-red-900 via-red-800 to-amber-900 text-white p-6 sm:p-8 border border-red-700/50 shadow-lg">
         <div className="relative z-10 space-y-2">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white/10 backdrop-blur-xs border border-white/20 text-amber-200">
-            <Sparkles className="w-3.5 h-3.5" /> Pickup Express • Estadio Teodoro Mariscal
+            <Sparkles className="w-3.5 h-3.5" /> Entrega a Butaca & Pickup Express • Estadio Teodoro Mariscal
           </div>
           <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
-            Pide desde tu Asiento & Recoge sin Filas
+            Pide Alimentos y Bebidas Directo a tu Asiento
           </h2>
-          <p className="text-xs sm:text-sm text-amber-100/90 max-w-xl">
-            Ordena aguachiles, tacos de asada, hamburguesas o cerveza de barril. Recibirás tu código express para retirar en la barra cuando tu pedido esté listo.
+          <p className="text-xs sm:text-sm text-red-100/90 max-w-2xl leading-relaxed">
+            Ordena mariscos, tacos de asada, hamburguesas, botanas o cerveza de barril. Elige recibirlo con un <strong>Runner en tu butaca</strong> o recogerlo con tu <strong>Código Express</strong> sin hacer filas.
           </p>
         </div>
       </div>
 
-      {lastPlacedCode && (
-        <div className="p-5 bg-emerald-50 border border-emerald-200 text-emerald-950 rounded-2xl shadow-xs space-y-2">
+      {/* Banner de Confirmación de Pedido Reciente */}
+      {lastPlacedOrder && (
+        <div className="p-5 bg-emerald-50 border border-emerald-200 text-emerald-950 rounded-2xl shadow-xs space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0" />
@@ -153,22 +275,42 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess }) =>
               </h3>
             </div>
             <button
-              onClick={() => setLastPlacedCode(null)}
+              onClick={() => setLastPlacedOrder(null)}
               className="text-xs text-emerald-700 hover:text-emerald-900 underline font-semibold"
             >
               Cerrar
             </button>
           </div>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-emerald-200">
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-emerald-200">
             <div>
-              <p className="text-xs text-slate-500">Tu código para recoger en mostrador es:</p>
-              <p className="text-2xl font-black text-emerald-700 tracking-wider font-mono">
-                {lastPlacedCode}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 font-medium">Modalidad:</span>
+                <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-100 text-emerald-800 uppercase">
+                  {lastPlacedOrder.type === 'in-seat' ? '🚴 Entrega a Butaca' : '⚡ Pickup Express'}
+                </span>
+              </div>
+              <p className="text-2xl font-black text-emerald-700 tracking-wider font-mono mt-1">
+                {lastPlacedOrder.code}
               </p>
             </div>
-            <p className="text-xs text-slate-600">
-              Pasa al mostrador cuando la pantalla o tu pestaña "Mis Pedidos" marque <strong>LISTO</strong>.
-            </p>
+
+            <div className="text-xs text-slate-600">
+              {lastPlacedOrder.type === 'in-seat' ? (
+                <div className="space-y-0.5">
+                  <p className="font-bold text-slate-900">
+                    Destino: Sección {lastPlacedOrder.section}, Fila {lastPlacedOrder.row}, Asiento {lastPlacedOrder.seat}
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    Un Runner de estadio te lo llevará en cuanto la cocina lo tenga listo.
+                  </p>
+                </div>
+              ) : (
+                <p>
+                  Pasa al mostrador cuando la pantalla o tu pestaña "Mis Pedidos" marque <strong>LISTO</strong>.
+                </p>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -180,7 +322,7 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess }) =>
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-              <Store className="w-4 h-4 text-red-700" /> Puestos Activos en el Estadio
+              <Store className="w-4 h-4 text-red-700" /> Concesiones & Puestos en Vivo
             </h3>
           </div>
 
@@ -269,7 +411,7 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess }) =>
                         {item.available && (
                           <button
                             onClick={() => addToCart(item)}
-                            className="px-3 py-1 bg-red-700 hover:bg-red-800 text-white text-xs font-bold rounded-lg shadow-xs flex items-center gap-1"
+                            className="px-3 py-1 bg-red-700 hover:bg-red-800 text-white text-xs font-bold rounded-lg shadow-xs flex items-center gap-1 transition-transform active:scale-95"
                           >
                             <Plus className="w-3 h-3" /> Agregar
                           </button>
@@ -289,12 +431,12 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess }) =>
             )}
           </div>
 
-          {/* Carrito de Pickup Express */}
+          {/* Carrito de Comanda */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4 h-fit sticky top-20">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200">
               <div className="flex items-center gap-2 font-extrabold text-sm text-slate-900">
                 <ShoppingBag className="w-4 h-4 text-red-700" />
-                <span>Comanda Express</span>
+                <span>Comanda del Estadio</span>
               </div>
               <span className="text-xs text-slate-500 font-semibold">{totalCount} platillos</span>
             </div>
@@ -344,19 +486,295 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess }) =>
               </div>
 
               <button
-                disabled={cart.length === 0 || placingOrder}
-                onClick={handleCheckout}
-                className="w-full py-3 bg-red-700 hover:bg-red-800 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
+                disabled={cart.length === 0}
+                onClick={handleOpenCheckout}
+                className="w-full py-3 bg-red-700 hover:bg-red-800 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
-                {placingOrder ? (
-                  'Generando Código de Retiro...'
-                ) : (
-                  <>
-                    <span>Confirmar y Pagar Orden</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
+                <span>Continuar al Pedido</span>
+                <ArrowRight className="w-4 h-4" />
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Selección de Método de Entrega (Pickup vs In-Seat) & Método de Pago */}
+      {isCheckoutModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-lg w-full max-h-[92vh] sm:max-h-[88vh] flex flex-col shadow-2xl border border-slate-100 overflow-hidden my-auto animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="p-4 sm:p-5 flex items-center justify-between border-b border-slate-100 bg-white shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-red-50 text-red-700 rounded-xl">
+                  <ShoppingBag className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 text-sm sm:text-base">Detalles y Pago del Pedido</h3>
+                  <p className="text-[11px] sm:text-xs text-slate-500">Puesto: {selectedStand?.name}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsCheckoutModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Scrollable Body */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs sm:text-sm">
+              {formError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-red-600 mt-0.5" />
+                  <span>{formError}</span>
+                </div>
+              )}
+
+              {/* 1. Modalidad de Entrega */}
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                  1. Modalidad de Entrega
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedOrderType('in-seat')}
+                    className={`p-3.5 rounded-2xl border-2 text-left transition-all flex flex-col justify-between cursor-pointer ${
+                      selectedOrderType === 'in-seat'
+                        ? 'border-red-700 bg-red-50/50 shadow-xs'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full mb-2">
+                      <div className={`p-2 rounded-xl ${selectedOrderType === 'in-seat' ? 'bg-red-700 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                        <Bike className="w-4 h-4" />
+                      </div>
+                      {selectedOrderType === 'in-seat' && (
+                        <span className="w-2.5 h-2.5 rounded-full bg-red-700"></span>
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-extrabold text-xs text-slate-900">Entrega a mi Asiento</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">Un Runner te lo lleva hasta tu butaca</p>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedOrderType('pickup')}
+                    className={`p-3.5 rounded-2xl border-2 text-left transition-all flex flex-col justify-between cursor-pointer ${
+                      selectedOrderType === 'pickup'
+                        ? 'border-amber-700 bg-amber-50/50 shadow-xs'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full mb-2">
+                      <div className={`p-2 rounded-xl ${selectedOrderType === 'pickup' ? 'bg-amber-700 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                        <Sparkles className="w-4 h-4" />
+                      </div>
+                      {selectedOrderType === 'pickup' && (
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-700"></span>
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-extrabold text-xs text-slate-900">Pickup Express</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">Recoges en la barra con tu código</p>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Formulario de Ubicación para In-Seat */}
+              {selectedOrderType === 'in-seat' && (
+                <div className="bg-slate-50 p-3.5 sm:p-4 rounded-2xl border border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <Armchair className="w-4 h-4 text-red-700" /> ¿Dónde estás sentado?
+                    </span>
+                    {resolvedZone && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">
+                        {resolvedZone.name}
+                      </span>
+                    )}
+                  </div>
+
+                  {userTickets.length > 0 && (
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-600 flex items-center gap-1 mb-1">
+                        <TicketIcon className="w-3 h-3 text-red-600" /> Usar ubicación de tu boleto activo:
+                      </label>
+                      <div className="space-y-1.5 max-h-28 overflow-y-auto">
+                        {userTickets.map((t) => (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => handleTicketSelect(t.id)}
+                            className={`w-full p-2 rounded-xl text-left text-xs border flex items-center justify-between transition-all cursor-pointer ${
+                              selectedTicketId === t.id
+                                ? 'bg-white border-red-700 shadow-xs font-bold text-slate-900'
+                                : 'bg-white/60 border-slate-200 text-slate-600 hover:bg-white'
+                            }`}
+                          >
+                            <div>
+                              <p className="truncate font-semibold">{t.matchTitle}</p>
+                              <p className="text-[10px] text-slate-400">
+                                Sección {t.section} • Fila {t.row} • Butaca {t.seat}
+                              </p>
+                            </div>
+                            {selectedTicketId === t.id && (
+                              <CheckCircle2 className="w-4 h-4 text-red-700 shrink-0" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-3 gap-2 pt-1">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase">Sección *</label>
+                      <input
+                        type="text"
+                        placeholder="Ej: 102"
+                        value={seatSection}
+                        onChange={(e) => {
+                          setSeatSection(e.target.value);
+                          setSelectedTicketId('');
+                        }}
+                        className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-red-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase">Fila *</label>
+                      <input
+                        type="text"
+                        placeholder="Ej: D"
+                        value={seatRow}
+                        onChange={(e) => {
+                          setSeatRow(e.target.value);
+                          setSelectedTicketId('');
+                        }}
+                        className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-red-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase">Asiento *</label>
+                      <input
+                        type="text"
+                        placeholder="Ej: 14"
+                        value={seatNumber}
+                        onChange={(e) => {
+                          setSeatNumber(e.target.value);
+                          setSelectedTicketId('');
+                        }}
+                        className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-red-600"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 2. Selector de Método de Pago */}
+              <div className="space-y-2">
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                  2. Método de Pago
+                </label>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFoodPaymentMethod('Efectivo / Terminal física')}
+                    className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between cursor-pointer ${
+                      foodPaymentMethod === 'Efectivo / Terminal física'
+                        ? 'border-emerald-600 bg-emerald-50/70 shadow-xs'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-base">💵</span>
+                      {foodPaymentMethod === 'Efectivo / Terminal física' && (
+                        <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-extrabold text-[11px] text-slate-900 leading-tight">
+                        Efectivo / Terminal física
+                      </p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">
+                        Paga al recibir en tu butaca o en la barra
+                      </p>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFoodPaymentMethod('Tarjeta en Línea')}
+                    className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between cursor-pointer ${
+                      foodPaymentMethod === 'Tarjeta en Línea'
+                        ? 'border-red-700 bg-red-50/70 shadow-xs'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-base">💳</span>
+                      {foodPaymentMethod === 'Tarjeta en Línea' && (
+                        <span className="w-2 h-2 rounded-full bg-red-700"></span>
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-extrabold text-[11px] text-slate-900 leading-tight">
+                        Tarjeta en Línea
+                      </p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">
+                        Visa, Mastercard, Amex
+                      </p>
+                    </div>
+                  </button>
+                </div>
+
+                {foodPaymentMethod === 'Efectivo / Terminal física' && (
+                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] text-emerald-900 font-medium flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0 animate-pulse"></span>
+                    <span>
+                      {selectedOrderType === 'in-seat'
+                        ? 'El Runner llevará terminal física inalámbrica o cambio en efectivo para tu cobro.'
+                        : 'Pagas directamente en la caja del puesto al recoger tus alimentos.'}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50 shrink-0 space-y-3">
+              <div className="flex justify-between items-center text-xs sm:text-sm font-extrabold text-slate-900">
+                <span>Total a Pagar ({totalCount} items):</span>
+                <span className="text-red-900 text-sm sm:text-base font-black">${total.toLocaleString('es-MX')} MXN</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCheckoutModalOpen(false)}
+                  className="px-4 py-2.5 bg-white border border-slate-300 text-slate-700 text-xs font-bold rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  disabled={placingOrder}
+                  onClick={handleConfirmOrder}
+                  className="flex-1 py-3 bg-red-700 hover:bg-red-800 disabled:opacity-50 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {placingOrder ? (
+                    'Enviando orden a cocina...'
+                  ) : (
+                    <>
+                      <span>Confirmar y Enviar Pedido</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

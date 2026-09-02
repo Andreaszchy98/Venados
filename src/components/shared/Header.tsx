@@ -68,10 +68,13 @@ export const Header: React.FC<HeaderProps> = ({ user, onOpenAuth, onRoleChanged 
                       Aficionado (Boletos, Tienda, Comida)
                     </option>
                     <option value="admin" className="bg-slate-900 text-white">
-                      Administrador (Ventas, Inventario, Envíos)
+                      Administrador (Ventas, Inventario, Envíos, Personal)
                     </option>
                     <option value="concesionario" className="bg-slate-900 text-white">
                       Concesionario (Comanda en Vivo)
+                    </option>
+                    <option value="runner" className="bg-slate-900 text-white">
+                      Runner (Entregas en Butaca)
                     </option>
                     <option value="taquilla" className="bg-slate-900 text-white">
                       Taquilla (Control de Accesos)

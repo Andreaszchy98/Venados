@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { SaleTransaction, SaleChannel } from '../../types';
-import { getSalesAuditLog, getSalesMetrics } from '../../lib/sales';
+import {
+  subscribeToSalesAuditLog,
+  calculateMetricsFromTransactions,
+} from '../../lib/sales';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import {
   DollarSign,
@@ -16,6 +19,8 @@ import {
   CheckCircle2,
   Receipt,
   FileSpreadsheet,
+  Activity,
+  RefreshCw,
 } from 'lucide-react';
 
 export const VentasAdmin: React.FC = () => {
@@ -32,24 +37,21 @@ export const VentasAdmin: React.FC = () => {
     totalTransactions: 0,
   });
 
-  const fetchSalesData = async () => {
-    setLoading(true);
-    try {
-      const [logs, stats] = await Promise.all([
-        getSalesAuditLog(),
-        getSalesMetrics(),
-      ]);
-      setSales(logs);
-      setMetrics(stats);
-    } catch (err) {
-      console.error('Error fetching sales data:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchSalesData();
+    setLoading(true);
+    const unsubscribe = subscribeToSalesAuditLog(
+      (liveSales) => {
+        setSales(liveSales);
+        setMetrics(calculateMetricsFromTransactions(liveSales));
+        setLoading(false);
+      },
+      (err) => {
+        console.error('Error in sales real-time stream:', err);
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
   }, []);
 
   const filteredSales = sales.filter((s) => {
@@ -115,7 +117,11 @@ export const VentasAdmin: React.FC = () => {
         <div>
           <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
             <Receipt className="w-6 h-6 text-red-700" />
-            Administración & Auditoría de Ventas
+            <span>Administración & Auditoría de Ventas</span>
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-900 border border-emerald-300">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+              En Vivo
+            </span>
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
             Registro unificado y en tiempo real de transacciones de taquilla, tienda oficial y concesiones

@@ -291,3 +291,83 @@ export async function deleteMenuItem(itemId: string): Promise<void> {
     handleFirestoreError(err, OperationType.DELETE, `${MENU_COLLECTION}/${itemId}`);
   }
 }
+
+/**
+ * Crear un nuevo puesto / negocio de estadio
+ */
+export async function createStadiumStand(
+  standData: Omit<StadiumStand, 'id' | 'createdAt'>
+): Promise<StadiumStand> {
+  try {
+    const docRef = doc(collection(db, STANDS_COLLECTION));
+    const now = new Date().toISOString();
+    const newStand: StadiumStand = {
+      ...standData,
+      id: docRef.id,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await setDoc(docRef, sanitizeFirestoreData(newStand));
+    return newStand;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.CREATE, STANDS_COLLECTION);
+    throw err;
+  }
+}
+
+/**
+ * Actualizar datos de un puesto / negocio de estadio
+ */
+export async function updateStadiumStand(
+  standId: string,
+  updates: Partial<StadiumStand>
+): Promise<void> {
+  try {
+    const docRef = doc(db, STANDS_COLLECTION, standId);
+    const payload = {
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+    await updateDoc(docRef, sanitizeFirestoreData(payload));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `${STANDS_COLLECTION}/${standId}`);
+  }
+}
+
+/**
+ * Activar / Desactivar operaciones de un puesto
+ */
+export async function toggleStandActive(standId: string, active: boolean): Promise<void> {
+  try {
+    const docRef = doc(db, STANDS_COLLECTION, standId);
+    await updateDoc(docRef, {
+      active,
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `${STANDS_COLLECTION}/${standId}`);
+  }
+}
+
+/**
+ * Eliminar un puesto del estadio (y opcionalmente sus platillos de menú)
+ */
+export async function deleteStadiumStand(standId: string): Promise<void> {
+  try {
+    const docRef = doc(db, STANDS_COLLECTION, standId);
+    await deleteDoc(docRef);
+
+    // Eliminar items del menú asociados
+    try {
+      const q = query(collection(db, MENU_COLLECTION), where('standId', '==', standId));
+      const snap = await getDocs(q);
+      for (const itemDoc of snap.docs) {
+        await deleteDoc(itemDoc.ref);
+      }
+    } catch (e) {
+      console.warn('Error limpiando items del menú para stand eliminado:', e);
+    }
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `${STANDS_COLLECTION}/${standId}`);
+  }
+}

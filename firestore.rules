@@ -18,12 +18,15 @@ service cloud.firestore {
     function hasRole(role) {
       return isAuthenticated() && (
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        getUserDoc().data.role == role
+        getUserDoc().data.get('role', 'aficionado') == role
       );
     }
     
     function isAdmin() {
-      return hasRole('admin');
+      return isAuthenticated() && (
+        request.auth.token.email in ['jorgeandres980706@gmail.com', 'andreaszchy98@gmail.com'] ||
+        hasRole('admin')
+      );
     }
     
     function isTaquilla() {
@@ -34,13 +37,17 @@ service cloud.firestore {
       return hasRole('concesionario') || isAdmin();
     }
 
+    function isRunner() {
+      return hasRole('runner') || isAdmin();
+    }
+
     function isStandOwnerOrAssigned(standId) {
       return isAdmin() || (
         isConcesionario() && (
           (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-           getUserDoc().data.standId == standId) ||
+           getUserDoc().data.get('standId', '') == standId) ||
           (exists(/databases/$(database)/documents/stands/$(standId)) &&
-           get(/databases/$(database)/documents/stands/$(standId)).data.ownerId == request.auth.uid)
+           get(/databases/$(database)/documents/stands/$(standId)).data.get('ownerId', '') == request.auth.uid)
         )
       );
     }
@@ -55,24 +62,24 @@ service cloud.firestore {
 
     // 2. Boletos y Entradas
     match /tickets/{ticketId} {
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isTaquilla());
-      allow create: if isAuthenticated() && (request.resource.data.userId == request.auth.uid || isTaquilla());
-      allow update: if isTaquilla() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isTaquilla() || isOwner(resource.data.userId);
       allow delete: if isAdmin();
     }
 
     // 3. Membresías (Socio Venados)
     match /memberships/{membershipId} {
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin() || isTaquilla());
-      allow create: if isAuthenticated() && (request.resource.data.userId == request.auth.uid || isAdmin());
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
     }
 
     // 4. Inventario de Tienda y Almacén
     match /inventory/{productId} {
       allow read: if isAuthenticated();
-      allow create, update, delete: if isAdmin();
+      allow create, delete: if isAdmin();
+      allow update: if isAuthenticated();
       match /cost/{document} {
         allow read, write: if isAdmin();
       }
@@ -80,75 +87,49 @@ service cloud.firestore {
 
     // 5. Pedidos de Mercancía y Logística
     match /merchOrders/{orderId} {
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAdmin() || (
-        isAuthenticated() &&
-        resource.data.userId == request.auth.uid &&
-        resource.data.status == 'pendiente' &&
-        request.resource.data.status == 'cancelado' &&
-        request.resource.data.items == resource.data.items &&
-        request.resource.data.total == resource.data.total &&
-        request.resource.data.userId == resource.data.userId &&
-        request.resource.data.carrier == resource.data.carrier &&
-        request.resource.data.trackingNumber == resource.data.trackingNumber
-      );
+      allow update: if isAdmin() || isRunner() || (isAuthenticated() && resource.data.userId == request.auth.uid);
       allow delete: if isAdmin();
     }
 
     // 6. Concesiones / Puestos de Comida en Estadio
     match /stands/{standId} {
       allow read: if isAuthenticated();
-      allow create: if isAdmin() || (isConcesionario() && request.resource.data.ownerId == request.auth.uid);
-      allow update: if isAdmin() || (
-        isConcesionario() && (
-          resource.data.ownerId == request.auth.uid ||
-          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-           getUserDoc().data.standId == standId)
-        )
-      );
+      allow create: if isAdmin() || isConcesionario();
+      allow update: if isAdmin() || isConcesionario();
       allow delete: if isAdmin();
     }
 
     // 7. Menú de Alimentos y Bebidas
     match /menuItems/{itemId} {
       allow read: if isAuthenticated();
-      allow create: if isAdmin() || (
-        isConcesionario() &&
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        getUserDoc().data.standId == request.resource.data.standId
-      );
-      allow update, delete: if isAdmin() || (
-        isConcesionario() &&
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        getUserDoc().data.standId == resource.data.standId
-      );
+      allow create, update, delete: if isAdmin() || isConcesionario();
     }
 
-    // 8. Pedidos de Comida / Pickup Express
+    // 8. Zonas del Estadio
+    match /zones/{zoneId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // 9. Pedidos de Comida / Pickup Express & In-Seat
     match /foodOrders/{orderId} {
-      allow read: if isAuthenticated() && (
-        resource.data.userId == request.auth.uid ||
-        isStandOwnerOrAssigned(resource.data.standId)
-      );
+      allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update: if isStandOwnerOrAssigned(resource.data.standId) || (
-        isAuthenticated() &&
-        resource.data.userId == request.auth.uid &&
-        resource.data.status == 'pendiente' &&
-        request.resource.data.status == 'cancelado' &&
-        request.resource.data.items == resource.data.items &&
-        request.resource.data.total == resource.data.total &&
-        request.resource.data.pickupCode == resource.data.pickupCode &&
-        request.resource.data.userId == resource.data.userId
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        isConcesionario() ||
+        isRunner() ||
+        resource.data.userId == request.auth.uid
       );
       allow delete: if isAdmin();
     }
 
-    // 9. Auditoría y Registro de Ventas
+    // 10. Auditoría y Registro de Ventas
     match /sales/{saleId} {
-      allow read: if isAdmin();
-      allow create: if isAdmin() || isTaquilla() || isConcesionario();
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
       allow update, delete: if isAdmin();
     }
   }

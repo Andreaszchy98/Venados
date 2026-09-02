@@ -2,16 +2,19 @@
   "entities": {
     "users": {
       "title": "users",
-      "description": "Perfiles de usuarios con asignación de roles (aficionado, admin, taquilla, concesionario)",
+      "description": "Perfiles de usuarios con asignación de roles (aficionado, admin, taquilla, concesionario, runner)",
       "type": "object",
       "properties": {
         "uid": { "type": "string" },
         "email": { "type": "string" },
         "displayName": { "type": "string" },
-        "role": { "type": "string", "enum": ["aficionado", "admin", "taquilla", "concesionario"] },
+        "role": { "type": "string", "enum": ["aficionado", "admin", "taquilla", "concesionario", "runner"] },
         "photoURL": { "type": "string" },
         "phoneNumber": { "type": "string" },
         "standId": { "type": "string" },
+        "standName": { "type": "string" },
+        "assignedZone": { "type": "string" },
+        "runnerStatus": { "type": "string", "enum": ["disponible", "en_entrega", "inactivo"] },
         "createdAt": { "type": "string" },
         "updatedAt": { "type": "string" }
       },
@@ -97,16 +100,24 @@
     },
     "stands": {
       "title": "stands",
-      "description": "Puestos y concesiones de alimentos y bebidas del estadio",
+      "description": "Puestos, locales y concesiones comerciales dentro del estadio",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
         "name": { "type": "string" },
         "location": { "type": "string" },
         "categoryTag": { "type": "string" },
+        "description": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "ownerName": { "type": "string" },
+        "contactPhone": { "type": "string" },
+        "contactEmail": { "type": "string" },
+        "commissionRate": { "type": "number" },
         "active": { "type": "boolean" },
+        "image": { "type": "string" },
         "estimatedWaitMinutes": { "type": "number" },
-        "createdAt": { "type": "string" }
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
       },
       "required": ["name", "location", "active"]
     },

@@ -11,9 +11,12 @@ import {
   getDoc,
   setDoc,
   updateDoc,
+  collection,
+  getDocs,
 } from 'firebase/firestore';
 import { auth, googleProvider, db } from './firebase';
 import { UserProfile, UserRole } from '../types';
+import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
 
 /**
  * Mapeo de errores de Firebase Auth a mensajes amigables en español
@@ -69,6 +72,10 @@ export async function syncUserProfile(
       role: currentRole,
       photoURL: data.photoURL || fbUser.photoURL,
       phoneNumber: data.phoneNumber || fbUser.phoneNumber,
+      standId: data.standId,
+      standName: data.standName,
+      assignedZone: data.assignedZone,
+      runnerStatus: data.runnerStatus,
       createdAt: data.createdAt || new Date().toISOString(),
       updatedAt: data.updatedAt,
     };
@@ -86,6 +93,22 @@ export async function syncUserProfile(
 
     await setDoc(userDocRef, newProfile);
     return newProfile;
+  }
+}
+
+/**
+ * Obtener lista de todos los usuarios registrados (Para Administración de Personal)
+ */
+export async function getAllUsers(): Promise<UserProfile[]> {
+  try {
+    const snap = await getDocs(collection(db, 'users'));
+    return snap.docs.map((d) => ({
+      uid: d.id,
+      ...d.data(),
+    })) as UserProfile[];
+  } catch (err) {
+    handleFirestoreError(err, OperationType.LIST, 'users');
+    return [];
   }
 }
 
@@ -137,7 +160,65 @@ export async function registerWithEmail(
 }
 
 /**
- * Actualizar rol de usuario (útil para pruebas y administración)
+ * Actualizar rol y asignaciones de un usuario (Admin declara roles, puestos o runners)
+ */
+export async function updateUserRoleAndDetails(
+  uid: string,
+  updates: {
+    role: UserRole;
+    standId?: string;
+    standName?: string;
+    assignedZone?: string;
+    runnerStatus?: 'disponible' | 'en_entrega' | 'inactivo';
+  }
+): Promise<void> {
+  try {
+    const userDocRef = doc(db, 'users', uid);
+    const payload: any = {
+      role: updates.role,
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (updates.role === 'concesionario') {
+      payload.standId = updates.standId || null;
+      payload.standName = updates.standName || null;
+      payload.assignedZone = null;
+      payload.runnerStatus = null;
+    } else if (updates.role === 'runner') {
+      payload.assignedZone = updates.assignedZone || 'Zona Central & Palcos';
+      payload.runnerStatus = updates.runnerStatus || 'disponible';
+      payload.standId = null;
+      payload.standName = null;
+    } else {
+      payload.standId = null;
+      payload.standName = null;
+      payload.assignedZone = null;
+      payload.runnerStatus = null;
+    }
+
+    await updateDoc(userDocRef, sanitizeFirestoreData(payload));
+
+    // Si es concesionario y tiene standId, vincular también en el puesto
+    if (updates.role === 'concesionario' && updates.standId) {
+      try {
+        const standRef = doc(db, 'stands', updates.standId);
+        const userDoc = await getDoc(userDocRef);
+        const userName = userDoc.data()?.displayName || userDoc.data()?.email || 'Concesionario';
+        await updateDoc(standRef, {
+          ownerId: uid,
+          ownerName: userName,
+        });
+      } catch (standErr) {
+        console.warn('No se pudo vincular ownerId en stands:', standErr);
+      }
+    }
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `users/${uid}`);
+  }
+}
+
+/**
+ * Actualizar rol simple de usuario
  */
 export async function updateUserRole(uid: string, newRole: UserRole): Promise<void> {
   const userDocRef = doc(db, 'users', uid);
@@ -146,6 +227,24 @@ export async function updateUserRole(uid: string, newRole: UserRole): Promise<vo
     roleSelectedByUser: true,
     updatedAt: new Date().toISOString(),
   });
+}
+
+/**
+ * Actualizar estado en vivo de runner (disponible / en_entrega / inactivo)
+ */
+export async function updateRunnerStatus(
+  uid: string,
+  runnerStatus: 'disponible' | 'en_entrega' | 'inactivo'
+): Promise<void> {
+  try {
+    const userDocRef = doc(db, 'users', uid);
+    await updateDoc(userDocRef, {
+      runnerStatus,
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `users/${uid}`);
+  }
 }
 
 /**

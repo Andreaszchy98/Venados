@@ -108,3 +108,41 @@ export async function updateTicketStatus(
     status: newStatus,
   });
 }
+
+/**
+ * Comprar boleto y registrar la venta en la auditoría del estadio
+ */
+export async function purchaseTicketWithSaleRecord(
+  ticketData: Omit<Ticket, 'id' | 'createdAt' | 'status' | 'qrId'>,
+  paymentMethod: string,
+  customerName: string
+): Promise<string> {
+  const qrId = `VND-2026-TKT-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+  const now = new Date().toISOString();
+
+  const newTicket: Omit<Ticket, 'id'> = {
+    ...ticketData,
+    status: 'activo',
+    qrId,
+    createdAt: now,
+  };
+
+  const ticketDocRef = await addDoc(collection(db, 'tickets'), newTicket);
+
+  // Registrar venta
+  try {
+    await addDoc(collection(db, 'sales'), {
+      channel: 'boletos',
+      referenceId: ticketDocRef.id,
+      customerName,
+      description: `Boleto: ${ticketData.matchTitle} - ${ticketData.section} (${ticketData.seat})`,
+      amount: ticketData.price,
+      paymentMethod,
+      date: now,
+    });
+  } catch (saleErr) {
+    console.warn('No se pudo registrar la venta en auditoría:', saleErr);
+  }
+
+  return ticketDocRef.id;
+}

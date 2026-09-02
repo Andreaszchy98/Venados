@@ -18,12 +18,12 @@ import { recordSaleTransaction } from './sales';
 const COLLECTION_NAME = 'foodOrders';
 
 export async function createFoodOrder(
-  orderData: Omit<FoodOrder, 'id' | 'pickupCode' | 'createdAt' | 'updatedAt' | 'statusHistory' | 'status'>
+  orderData: Omit<FoodOrder, 'id' | 'pickupCode' | 'createdAt' | 'updatedAt' | 'statusHistory' | 'status' | 'runnerId'>
 ): Promise<FoodOrder> {
   const now = new Date().toISOString();
   try {
     const docRef = doc(collection(db, COLLECTION_NAME));
-    // Generar un código de retiro corto y legible: V- seguido de 3 dígitos
+    // Generar un código de retiro / entrega corto y legible: V- seguido de 3 dígitos
     const codeNum = Math.floor(100 + Math.random() * 900);
     const pickupCode = `V-${codeNum}`;
 
@@ -32,11 +32,15 @@ export async function createFoodOrder(
       id: docRef.id,
       pickupCode,
       status: 'pendiente',
+      runnerId: null,
       statusHistory: [
         {
           status: 'pendiente',
           timestamp: now,
-          note: 'Orden recibida en cocina del puesto',
+          note:
+            orderData.orderType === 'in-seat'
+              ? `Orden in-seat recibida (Sección ${orderData.section || '-'}, Fila ${orderData.row || '-'}, Asiento ${orderData.seat || '-'})`
+              : 'Orden recibida en cocina para Pickup Express',
         },
       ],
       createdAt: now,
@@ -52,7 +56,7 @@ export async function createFoodOrder(
         channel: 'concesion_alimentos',
         referenceId: newOrder.id,
         customerName: newOrder.customerName,
-        description: `${newOrder.standName} (${newOrder.pickupCode}): ${newOrder.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')}`,
+        description: `[${newOrder.orderType.toUpperCase()}] ${newOrder.standName} (${newOrder.pickupCode}): ${newOrder.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')}`,
         amount: newOrder.total,
         paymentMethod: newOrder.paymentMethod || 'Tarjeta',
         date: now,
@@ -120,7 +124,8 @@ export function listenToStandFoodOrders(
 export async function advanceFoodOrderStatus(
   orderId: string,
   newStatus: FoodOrderStatus,
-  note?: string
+  note?: string,
+  extraFields?: Partial<FoodOrder>
 ): Promise<void> {
   const now = new Date().toISOString();
   try {
@@ -136,8 +141,84 @@ export async function advanceFoodOrderStatus(
       note: note || `Estado actualizado a ${newStatus}`,
     });
 
-    await updateDoc(docRef, {
+    const updatePayload: any = {
       status: newStatus,
+      statusHistory: history,
+      updatedAt: now,
+      ...extraFields,
+    };
+
+    const cleanPayload = sanitizeFirestoreData(updatePayload);
+    await updateDoc(docRef, cleanPayload);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `${COLLECTION_NAME}/${orderId}`);
+  }
+}
+
+/**
+ * Runner toma una orden in-seat disponible en su zona
+ */
+export async function claimInSeatOrder(
+  orderId: string,
+  runnerId: string,
+  runnerName?: string
+): Promise<void> {
+  const now = new Date().toISOString();
+  try {
+    const docRef = doc(db, COLLECTION_NAME, orderId);
+    const snap = await getDoc(docRef);
+    if (!snap.exists()) throw new Error('Orden no encontrada');
+
+    const data = snap.data() as FoodOrder;
+    if (data.status !== 'listo') {
+      throw new Error('La orden no está lista para ser tomada por un runner');
+    }
+    if (data.runnerId) {
+      throw new Error('La orden ya fue tomada por otro runner');
+    }
+
+    const history = data.statusHistory || [];
+    history.push({
+      status: 'en-camino',
+      timestamp: now,
+      note: `Tomado por runner ${runnerName || runnerId} para entrega a butaca`,
+    });
+
+    await updateDoc(docRef, {
+      status: 'en-camino',
+      runnerId: runnerId,
+      statusHistory: history,
+      updatedAt: now,
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `${COLLECTION_NAME}/${orderId}`);
+  }
+}
+
+/**
+ * Runner marca una orden in-seat como entregada en la butaca
+ */
+export async function deliverInSeatOrder(
+  orderId: string,
+  runnerId: string,
+  note?: string
+): Promise<void> {
+  const now = new Date().toISOString();
+  try {
+    const docRef = doc(db, COLLECTION_NAME, orderId);
+    const snap = await getDoc(docRef);
+    if (!snap.exists()) throw new Error('Orden no encontrada');
+
+    const data = snap.data() as FoodOrder;
+    const history = data.statusHistory || [];
+    history.push({
+      status: 'entregado',
+      timestamp: now,
+      note: note || 'Entregado en butaca del aficionado',
+    });
+
+    await updateDoc(docRef, {
+      status: 'entregado',
       statusHistory: history,
       updatedAt: now,
     });

@@ -9,6 +9,7 @@ import {
   setProductCost,
 } from '../../lib/inventory';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
+import { ConfirmationModal } from '../../components/shared/ConfirmationModal';
 import {
   Boxes,
   Plus,
@@ -37,6 +38,8 @@ export const InventarioAdmin: React.FC = () => {
   const [editingCostPrice, setEditingCostPrice] = useState<number>(0);
   const [saving, setSaving] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+  const [productToDelete, setProductToDelete] = useState<InventoryProduct | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchInventory = async () => {
     setLoading(true);
@@ -126,14 +129,23 @@ export const InventarioAdmin: React.FC = () => {
     }
   };
 
-  const handleDeleteProduct = async (productId: string) => {
-    if (!window.confirm('¿Seguro que deseas eliminar este producto del inventario?')) return;
+  const handleRequestDelete = (product: InventoryProduct) => {
+    setProductToDelete(product);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!productToDelete) return;
+    setDeleting(true);
     try {
-      await deleteInventoryProduct(productId);
-      setProducts((prev) => prev.filter((p) => p.id !== productId));
-      setFeedbackMessage('Producto eliminado del inventario.');
-    } catch (err) {
+      await deleteInventoryProduct(productToDelete.id);
+      setProducts((prev) => prev.filter((p) => p.id !== productToDelete.id));
+      setFeedbackMessage(`Producto "${productToDelete.name}" eliminado del inventario.`);
+      setProductToDelete(null);
+    } catch (err: any) {
       console.error('Error deleting product:', err);
+      setFeedbackMessage(`Error al eliminar: ${err?.message || 'No se pudo eliminar el producto'}`);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -349,9 +361,9 @@ export const InventarioAdmin: React.FC = () => {
                             <Edit2 className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => handleDeleteProduct(prod.id)}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-700 hover:bg-red-50 transition-colors"
-                            title="Eliminar"
+                            onClick={() => handleRequestDelete(prod)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
+                            title="Eliminar producto"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -368,27 +380,30 @@ export const InventarioAdmin: React.FC = () => {
 
       {/* Modal de Crear / Editar Producto */}
       {isModalOpen && editingProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
-              <h3 className="font-bold text-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 bg-slate-900/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-lg rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[88vh] my-auto animate-in zoom-in-95 duration-150">
+            <div className="bg-slate-900 text-white p-4 sm:p-5 flex items-center justify-between shrink-0">
+              <h3 className="font-bold text-xs sm:text-sm">
                 {editingProduct.id ? 'Editar Producto de Inventario' : 'Registrar Nuevo Producto'}
               </h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white">
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveProduct} className="p-5 overflow-y-auto space-y-3.5 text-xs">
-              <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleSaveProduct} className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-3.5 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Código SKU</label>
+                  <label className="block font-bold text-slate-700 mb-1">Código SKU *</label>
                   <input
                     type="text"
                     required
                     value={editingProduct.sku || ''}
                     onChange={(e) => setEditingProduct({ ...editingProduct, sku: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-lg font-mono font-bold"
+                    className="w-full p-2 border border-slate-300 rounded-xl font-mono font-bold text-xs focus:outline-hidden focus:ring-2 focus:ring-red-600"
                   />
                 </div>
                 <div>
@@ -396,7 +411,7 @@ export const InventarioAdmin: React.FC = () => {
                   <select
                     value={editingProduct.category || 'Jerseys'}
                     onChange={(e) => setEditingProduct({ ...editingProduct, category: e.target.value as any })}
-                    className="w-full p-2 border border-slate-300 rounded-lg font-semibold bg-white"
+                    className="w-full p-2 border border-slate-300 rounded-xl font-semibold bg-white text-xs focus:outline-hidden focus:ring-2 focus:ring-red-600"
                   >
                     <option value="Jerseys">Jerseys</option>
                     <option value="Gorras">Gorras</option>
@@ -409,27 +424,27 @@ export const InventarioAdmin: React.FC = () => {
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Nombre del Producto</label>
+                <label className="block font-bold text-slate-700 mb-1">Nombre del Producto *</label>
                 <input
                   type="text"
                   required
                   value={editingProduct.name || ''}
                   onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })}
                   placeholder="Ej. Jersey Rojo Conmemorativo 2026"
-                  className="w-full p-2 border border-slate-300 rounded-lg font-semibold"
+                  className="w-full p-2 border border-slate-300 rounded-xl font-semibold text-xs focus:outline-hidden focus:ring-2 focus:ring-red-600"
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Precio Venta (MXN)</label>
+                  <label className="block font-bold text-slate-700 mb-1">Precio Venta (MXN) *</label>
                   <input
                     type="number"
                     required
                     min="0"
                     value={editingProduct.price || 0}
                     onChange={(e) => setEditingProduct({ ...editingProduct, price: Number(e.target.value) })}
-                    className="w-full p-2 border border-slate-300 rounded-lg font-bold"
+                    className="w-full p-2 border border-slate-300 rounded-xl font-bold text-xs focus:outline-hidden focus:ring-2 focus:ring-red-600"
                   />
                 </div>
                 <div>
@@ -440,23 +455,23 @@ export const InventarioAdmin: React.FC = () => {
                     min="0"
                     value={editingCostPrice}
                     onChange={(e) => setEditingCostPrice(Number(e.target.value))}
-                    className="w-full p-2 border border-slate-300 rounded-lg font-medium"
+                    className="w-full p-2 border border-slate-300 rounded-xl font-medium text-xs focus:outline-hidden focus:ring-2 focus:ring-red-600"
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Stock Inicial</label>
+                  <label className="block font-bold text-slate-700 mb-1">Stock Inicial *</label>
                   <input
                     type="number"
                     required
                     min="0"
                     value={editingProduct.stock || 0}
                     onChange={(e) => setEditingProduct({ ...editingProduct, stock: Number(e.target.value) })}
-                    className="w-full p-2 border border-slate-300 rounded-lg font-bold"
+                    className="w-full p-2 border border-slate-300 rounded-xl font-bold text-xs focus:outline-hidden focus:ring-2 focus:ring-red-600"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Alerta Stock Mínimo</label>
                   <input
@@ -464,7 +479,7 @@ export const InventarioAdmin: React.FC = () => {
                     min="1"
                     value={editingProduct.minStockAlert || 5}
                     onChange={(e) => setEditingProduct({ ...editingProduct, minStockAlert: Number(e.target.value) })}
-                    className="w-full p-2 border border-slate-300 rounded-lg"
+                    className="w-full p-2 border border-slate-300 rounded-xl text-xs focus:outline-hidden focus:ring-2 focus:ring-red-600"
                   />
                 </div>
                 <div>
@@ -474,7 +489,7 @@ export const InventarioAdmin: React.FC = () => {
                     value={editingProduct.supplier || ''}
                     onChange={(e) => setEditingProduct({ ...editingProduct, supplier: e.target.value })}
                     placeholder="New Era / El Siglo"
-                    className="w-full p-2 border border-slate-300 rounded-lg"
+                    className="w-full p-2 border border-slate-300 rounded-xl text-xs focus:outline-hidden focus:ring-2 focus:ring-red-600"
                   />
                 </div>
               </div>
@@ -486,7 +501,7 @@ export const InventarioAdmin: React.FC = () => {
                   value={editingProduct.image || ''}
                   onChange={(e) => setEditingProduct({ ...editingProduct, image: e.target.value })}
                   placeholder="https://..."
-                  className="w-full p-2 border border-slate-300 rounded-lg text-[11px]"
+                  className="w-full p-2 border border-slate-300 rounded-xl text-[11px] focus:outline-hidden focus:ring-2 focus:ring-red-600"
                 />
               </div>
 
@@ -496,22 +511,22 @@ export const InventarioAdmin: React.FC = () => {
                   rows={2}
                   value={editingProduct.description || ''}
                   onChange={(e) => setEditingProduct({ ...editingProduct, description: e.target.value })}
-                  className="w-full p-2 border border-slate-300 rounded-lg text-xs"
+                  className="w-full p-2 border border-slate-300 rounded-xl text-xs focus:outline-hidden focus:ring-2 focus:ring-red-600"
                 />
               </div>
 
-              <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border border-slate-300 rounded-xl font-bold text-slate-700"
+                  className="px-4 py-2 border border-slate-300 rounded-xl font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer text-xs"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-5 py-2 bg-red-700 hover:bg-red-800 text-white font-bold rounded-xl shadow-xs flex items-center gap-1.5 disabled:opacity-50"
+                  className="px-5 py-2 bg-red-700 hover:bg-red-800 text-white font-bold rounded-xl shadow-xs flex items-center gap-1.5 disabled:opacity-50 transition-colors cursor-pointer text-xs"
                 >
                   <Save className="w-4 h-4" />
                   {saving ? 'Guardando...' : 'Guardar Producto'}
@@ -521,6 +536,19 @@ export const InventarioAdmin: React.FC = () => {
           </div>
         </div>
       )}
+      {/* Modal de Confirmación para Eliminar Producto */}
+      <ConfirmationModal
+        isOpen={!!productToDelete}
+        onClose={() => setProductToDelete(null)}
+        onConfirm={handleConfirmDelete}
+        isLoading={deleting}
+        title="¿Deseas eliminar este producto del inventario?"
+        message="Esta acción retirará el producto del catálogo y tienda oficial de Venados. Si tiene costos o registros asociados, serán removidos."
+        itemName={productToDelete ? `${productToDelete.name} (SKU: ${productToDelete.sku})` : undefined}
+        confirmText="Eliminar Producto"
+        cancelText="Cancelar"
+        variant="danger"
+      />
     </div>
   );
 };

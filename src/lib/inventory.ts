@@ -306,6 +306,14 @@ export async function adjustProductStock(productId: string, quantityChange: numb
 
 export async function deleteInventoryProduct(productId: string): Promise<void> {
   try {
+    // Intentar borrar la subcolección de costo confidencial si existe
+    try {
+      const costDocRef = doc(db, COLLECTION_NAME, productId, 'cost', 'data');
+      await deleteDoc(costDocRef);
+    } catch {
+      // Ignorar si no existe subcolección
+    }
+
     const docRef = doc(db, COLLECTION_NAME, productId);
     await deleteDoc(docRef);
   } catch (err) {

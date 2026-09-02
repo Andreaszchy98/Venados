@@ -68,33 +68,33 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 bg-slate-900/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-150">
       <div
         id="auth-modal-container"
-        className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden"
+        className="relative w-full max-w-sm sm:max-w-md bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-100 overflow-hidden my-auto flex flex-col max-h-[92vh]"
       >
         {/* Encabezado con imagen/identidad Venados */}
-        <div className="bg-gradient-to-r from-red-800 to-red-900 text-white p-6 text-center relative">
+        <div className="bg-gradient-to-r from-red-800 to-red-900 text-white p-5 sm:p-6 text-center relative shrink-0">
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 text-white/80 hover:text-white p-1 rounded-full hover:bg-white/10 transition-colors"
+            className="absolute top-3.5 right-3.5 sm:top-4 sm:right-4 text-white/80 hover:text-white p-1.5 rounded-full hover:bg-white/10 transition-colors cursor-pointer"
             title="Cerrar"
           >
             <X className="w-5 h-5" />
           </button>
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-white/10 border border-white/20 mb-3">
-            <span className="text-xl font-black tracking-tighter">V</span>
+          <div className="inline-flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white/10 border border-white/20 mb-2 sm:mb-3">
+            <span className="text-lg sm:text-xl font-black tracking-tighter">V</span>
           </div>
-          <h2 className="text-xl font-bold tracking-tight">
+          <h2 className="text-lg sm:text-xl font-bold tracking-tight">
             {isRegister ? 'Crear Cuenta en Venados App' : 'Bienvenido a Venados App'}
           </h2>
-          <p className="text-xs text-red-100/90 mt-1">
+          <p className="text-[11px] sm:text-xs text-red-100/90 mt-1">
             Plataforma oficial del Club Venados de Mazatlán
           </p>
         </div>
 
         {/* Cuerpo del Formulario */}
-        <div className="p-6 space-y-4">
+        <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 text-xs sm:text-sm">
           {errorMessage && (
             <ErrorMessage
               message={errorMessage}

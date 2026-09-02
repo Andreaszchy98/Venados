@@ -9,6 +9,7 @@ import { AficionadoView } from './views/aficionado/AficionadoView';
 import { AdminView } from './views/admin/AdminView';
 import { TaquillaView } from './views/taquilla/TaquillaView';
 import { ConcesionarioView } from './views/concesionario/ConcesionarioView';
+import { RunnerView } from './views/runner/RunnerView';
 import { LoadingSpinner } from './components/shared/LoadingSpinner';
 import {
   Ticket,
@@ -55,6 +56,10 @@ export default function App() {
                 role: data.role || 'aficionado',
                 photoURL: data.photoURL || currentUser.photoURL,
                 phoneNumber: data.phoneNumber || currentUser.phoneNumber,
+                standId: data.standId,
+                standName: data.standName,
+                assignedZone: data.assignedZone,
+                runnerStatus: data.runnerStatus,
                 createdAt: data.createdAt || new Date().toISOString(),
                 updatedAt: data.updatedAt,
               });
@@ -186,6 +191,9 @@ export default function App() {
             )}
             {userProfile.role === 'concesionario' && (
               <ConcesionarioView user={userProfile} />
+            )}
+            {userProfile.role === 'runner' && (
+              <RunnerView user={userProfile} />
             )}
             {userProfile.role === 'taquilla' && (
               <TaquillaView user={userProfile} />

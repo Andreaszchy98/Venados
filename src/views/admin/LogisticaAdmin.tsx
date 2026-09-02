@@ -246,25 +246,28 @@ export const LogisticaAdmin: React.FC = () => {
 
       {/* Modal de Asignación de Guía y Estado */}
       {selectedOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
-            <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 bg-slate-900/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-md rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[88vh] my-auto animate-in zoom-in-95 duration-150">
+            <div className="bg-slate-900 text-white p-4 sm:p-5 flex items-center justify-between shrink-0">
               <div>
-                <h3 className="font-bold text-sm">Gestionar Despacho de Orden</h3>
-                <span className="font-mono text-xs text-red-300">ID: {selectedOrder.id}</span>
+                <h3 className="font-bold text-xs sm:text-sm">Gestionar Despacho de Orden</h3>
+                <span className="font-mono text-[11px] sm:text-xs text-red-300">ID: {selectedOrder.id}</span>
               </div>
-              <button onClick={() => setSelectedOrder(null)} className="text-slate-400 hover:text-white">
+              <button
+                onClick={() => setSelectedOrder(null)}
+                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+              >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleUpdateLogistics} className="p-5 space-y-4 text-xs">
+            <form onSubmit={handleUpdateLogistics} className="p-4 sm:p-6 space-y-4 flex-1 overflow-y-auto text-xs sm:text-sm">
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Estado del Despacho</label>
                 <select
                   value={newStatus}
                   onChange={(e) => setNewStatus(e.target.value as MerchOrderStatus)}
-                  className="w-full p-2.5 border border-slate-300 rounded-xl font-bold bg-white text-slate-800"
+                  className="w-full p-2.5 border border-slate-300 rounded-xl font-bold bg-white text-slate-800 text-xs sm:text-sm focus:outline-hidden focus:ring-2 focus:ring-red-600"
                 >
                   <option value="pendiente">Pendiente de Empaque</option>
                   <option value="empacado">Empacado / Listo para Salir</option>
@@ -279,7 +282,7 @@ export const LogisticaAdmin: React.FC = () => {
                 <select
                   value={carrier}
                   onChange={(e) => setCarrier(e.target.value as CarrierCompany)}
-                  className="w-full p-2.5 border border-slate-300 rounded-xl font-semibold bg-white text-slate-800"
+                  className="w-full p-2.5 border border-slate-300 rounded-xl font-semibold bg-white text-slate-800 text-xs sm:text-sm focus:outline-hidden focus:ring-2 focus:ring-red-600"
                 >
                   <option value="DHL Express">DHL Express</option>
                   <option value="Estafeta">Estafeta</option>
@@ -296,22 +299,22 @@ export const LogisticaAdmin: React.FC = () => {
                   value={trackingNumber}
                   onChange={(e) => setTrackingNumber(e.target.value)}
                   placeholder="Ej. DHL-892183920 o LOCAL-MZT-441"
-                  className="w-full p-2.5 border border-slate-300 rounded-xl font-mono font-bold text-slate-900"
+                  className="w-full p-2.5 border border-slate-300 rounded-xl font-mono font-bold text-slate-900 text-xs sm:text-sm focus:outline-hidden focus:ring-2 focus:ring-red-600"
                 />
               </div>
 
-              <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setSelectedOrder(null)}
-                  className="px-4 py-2 border border-slate-300 rounded-xl font-bold text-slate-700"
+                  className="px-4 py-2 border border-slate-300 rounded-xl font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer text-xs"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={savingStatus}
-                  className="px-5 py-2 bg-red-700 hover:bg-red-800 text-white font-bold rounded-xl shadow-xs flex items-center gap-1.5 disabled:opacity-50"
+                  className="px-5 py-2 bg-red-700 hover:bg-red-800 text-white font-bold rounded-xl shadow-xs flex items-center gap-1.5 disabled:opacity-50 transition-colors cursor-pointer text-xs"
                 >
                   <Save className="w-4 h-4" />
                   {savingStatus ? 'Actualizando...' : 'Guardar y Notificar'}

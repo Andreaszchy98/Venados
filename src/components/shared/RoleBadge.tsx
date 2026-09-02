@@ -1,6 +1,6 @@
 import React from 'react';
 import { UserRole } from '../../types';
-import { Shield, Ticket, User, Utensils } from 'lucide-react';
+import { Shield, Ticket, User, Utensils, Bike } from 'lucide-react';
 
 interface RoleBadgeProps {
   role: UserRole;
@@ -16,10 +16,17 @@ export const RoleBadge: React.FC<RoleBadgeProps> = ({ role, showIcon = true }) =
           Administrador
         </span>
       );
-    case 'taquilla':
+    case 'runner':
       return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-100 text-blue-800 border border-blue-200">
-          {showIcon && <Ticket className="w-3.5 h-3.5 text-blue-600" />}
+          {showIcon && <Bike className="w-3.5 h-3.5 text-blue-600" />}
+          Runner Estadio
+        </span>
+      );
+    case 'taquilla':
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-purple-100 text-purple-800 border border-purple-200">
+          {showIcon && <Ticket className="w-3.5 h-3.5 text-purple-600" />}
           Taquilla / Operador
         </span>
       );
@@ -27,7 +34,7 @@ export const RoleBadge: React.FC<RoleBadgeProps> = ({ role, showIcon = true }) =
       return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
           {showIcon && <Utensils className="w-3.5 h-3.5 text-amber-600" />}
-          Concesionario / Cocina
+          Concesionario
         </span>
       );
     case 'aficionado':

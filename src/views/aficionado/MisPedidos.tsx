@@ -48,18 +48,25 @@ export const MisPedidos: React.FC<MisPedidosProps> = ({ user }) => {
     return () => clearInterval(interval);
   }, [user.uid]);
 
-  const getFoodStatusBadge = (status: FoodOrder['status']) => {
-    switch (status) {
+  const getFoodStatusBadge = (order: FoodOrder) => {
+    switch (order.status) {
       case 'pendiente':
         return <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800">Recibido en Cocina</span>;
       case 'preparando':
         return <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 animate-pulse">En Preparación</span>;
       case 'listo':
+        if (order.orderType === 'in-seat') {
+          return <span className="px-2.5 py-1 rounded-full text-xs font-black bg-purple-600 text-white shadow-xs">¡LISTO • ASIGNANDO RUNNER!</span>;
+        }
         return <span className="px-2.5 py-1 rounded-full text-xs font-black bg-emerald-500 text-white shadow-xs">¡LISTO PARA RECOGER!</span>;
+      case 'en-camino':
+        return <span className="px-2.5 py-1 rounded-full text-xs font-black bg-blue-600 text-white shadow-xs animate-bounce">🚴 ¡RUNNER EN CAMINO!</span>;
       case 'entregado':
         return <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700">Entregado</span>;
+      case 'cancelado':
+        return <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">Cancelado</span>;
       default:
-        return <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700">{status}</span>;
+        return <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700">{order.status}</span>;
     }
   };
 
@@ -147,11 +154,30 @@ export const MisPedidos: React.FC<MisPedidosProps> = ({ user }) => {
                   </div>
 
                   <div className="flex items-center gap-3">
-                    {getFoodStatusBadge(order.status)}
+                    {getFoodStatusBadge(order)}
                     <span className="text-sm font-black text-slate-900">
                       ${order.total.toLocaleString('es-MX')} MXN
                     </span>
                   </div>
+                </div>
+
+                {/* Modalidad y Ubicación */}
+                <div className="flex items-center justify-between text-xs bg-slate-100/70 px-3 py-1.5 rounded-lg text-slate-600">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-slate-800">
+                      {order.orderType === 'in-seat' ? '🚴 Entrega a Butaca:' : '⚡ Modalidad:'}
+                    </span>
+                    {order.orderType === 'in-seat' ? (
+                      <span className="font-bold text-red-900">
+                        Sección {order.section || '-'}, Fila {order.row || '-'}, Asiento {order.seat || '-'}
+                      </span>
+                    ) : (
+                      <span className="font-medium text-slate-600">Pickup Express en mostrador</span>
+                    )}
+                  </div>
+                  <span className="text-[11px] text-slate-500 font-medium">
+                    Pago: {order.paymentMethod}
+                  </span>
                 </div>
 
                 {/* Items de la orden */}
@@ -165,10 +191,22 @@ export const MisPedidos: React.FC<MisPedidosProps> = ({ user }) => {
                 </div>
 
                 {/* Mensaje de llamado */}
-                {order.status === 'listo' && (
+                {order.status === 'listo' && order.orderType === 'pickup' && (
                   <div className="p-3 bg-emerald-500 text-white rounded-xl font-bold text-xs flex items-center gap-2 shadow-sm animate-pulse">
                     <CheckCircle2 className="w-5 h-5 shrink-0" />
                     <span>¡Tu orden está servida en barra! Muestra tu código <strong>{order.pickupCode}</strong> al encargado para recoger.</span>
+                  </div>
+                )}
+                {order.status === 'listo' && order.orderType === 'in-seat' && (
+                  <div className="p-3 bg-purple-600 text-white rounded-xl font-bold text-xs flex items-center gap-2 shadow-sm">
+                    <Clock className="w-5 h-5 shrink-0" />
+                    <span>Tu pedido está listo en cocina. Esperando que un Runner lo tome para llevarlo a tu asiento (Sección {order.section}, Butaca {order.seat}).</span>
+                  </div>
+                )}
+                {order.status === 'en-camino' && (
+                  <div className="p-3 bg-blue-600 text-white rounded-xl font-black text-xs flex items-center gap-2 shadow-md animate-pulse">
+                    <CheckCircle2 className="w-5 h-5 shrink-0" />
+                    <span>🚴 ¡Un Runner va en camino con tu comida! Permanece en tu asiento (Sección {order.section}, Fila {order.row}, Asiento {order.seat}).</span>
                   </div>
                 )}
               </div>
