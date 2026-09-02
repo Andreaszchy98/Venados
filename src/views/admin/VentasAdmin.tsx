@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { SaleTransaction, SaleChannel } from '../../types';
+import { SaleTransaction, SaleChannel, UserProfile } from '../../types';
 import {
   subscribeToSalesAuditLog,
   calculateMetricsFromTransactions,
 } from '../../lib/sales';
+import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import {
   DollarSign,
@@ -23,7 +24,12 @@ import {
   RefreshCw,
 } from 'lucide-react';
 
-export const VentasAdmin: React.FC = () => {
+interface VentasAdminProps {
+  user?: UserProfile;
+}
+
+export const VentasAdmin: React.FC<VentasAdminProps> = ({ user }) => {
+  const venueId = user?.venueId || DEFAULT_VENUE_ID;
   const [sales, setSales] = useState<SaleTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedChannel, setSelectedChannel] = useState<string>('Todos');
@@ -48,11 +54,12 @@ export const VentasAdmin: React.FC = () => {
       (err) => {
         console.error('Error in sales real-time stream:', err);
         setLoading(false);
-      }
+      },
+      venueId
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [venueId]);
 
   const filteredSales = sales.filter((s) => {
     const matchesChannel =

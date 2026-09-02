@@ -12,6 +12,7 @@ import {
   toggleMenuItemAvailability,
 } from '../../lib/stands';
 import { getAllUsers } from '../../lib/auth';
+import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { ConfirmationModal } from '../../components/shared/ConfirmationModal';
 import {
@@ -78,7 +79,12 @@ const PRESET_IMAGES: { label: string; url: string }[] = [
   },
 ];
 
-export const NegociosAdmin: React.FC = () => {
+interface NegociosAdminProps {
+  user?: UserProfile;
+}
+
+export const NegociosAdmin: React.FC<NegociosAdminProps> = ({ user }) => {
+  const venueId = user?.venueId || DEFAULT_VENUE_ID;
   const [stands, setStands] = useState<StadiumStand[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -136,7 +142,7 @@ export const NegociosAdmin: React.FC = () => {
     setLoading(true);
     try {
       const [standsData, menuData, usersData] = await Promise.all([
-        getStadiumStands(),
+        getStadiumStands(venueId),
         getAllMenuItems().catch(() => []),
         getAllUsers().catch(() => []),
       ]);
@@ -152,7 +158,7 @@ export const NegociosAdmin: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [venueId]);
 
   const openNewStandModal = () => {
     setEditingStand(null);
@@ -208,6 +214,7 @@ export const NegociosAdmin: React.FC = () => {
 
       const payload = {
         name: standForm.name.trim(),
+        venueId: editingStand?.venueId || venueId,
         location: standForm.location.trim(),
         categoryTag: standForm.categoryTag,
         description: standForm.description.trim(),

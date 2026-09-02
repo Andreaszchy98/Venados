@@ -15,77 +15,150 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
+    function isBootstrappedAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email == 'jorgeandres980706@gmail.com'
+      );
+    }
+
     function hasRole(role) {
       return isAuthenticated() && (
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        getUserDoc().data.get('role', 'aficionado') == role
+        isBootstrappedAdmin() ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          getUserDoc().data.get('role', 'aficionado') == role
+        )
       );
     }
     
-    function isAdmin() {
-      return hasRole('admin');
-    }
-    
-    function isTaquilla() {
-      return hasRole('taquilla') || isAdmin();
-    }
-
-    function isConcesionario() {
-      return hasRole('concesionario') || isAdmin();
-    }
-
-    function isRunner() {
-      return hasRole('runner') || isAdmin();
-    }
-
-    function isStandOwnerOrAssigned(standId) {
-      return isAdmin() || (
-        isConcesionario() && (
-          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-           getUserDoc().data.get('standId', '') == standId) ||
-          (exists(/databases/$(database)/documents/stands/$(standId)) &&
-           get(/databases/$(database)/documents/stands/$(standId)).data.get('ownerId', '') == request.auth.uid)
+    function isSuperAdmin() {
+      return isAuthenticated() && (
+        isBootstrappedAdmin() ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          getUserDoc().data.get('role', 'aficionado') == 'superadmin'
         )
       );
     }
 
+    function isAdmin() {
+      return isAuthenticated() && (
+        isBootstrappedAdmin() ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          (
+            getUserDoc().data.get('role', 'aficionado') == 'admin' ||
+            getUserDoc().data.get('role', 'aficionado') == 'superadmin'
+          )
+        )
+      );
+    }
+
+    function isVenueAdmin(venueId) {
+      return isAuthenticated() && (
+        isBootstrappedAdmin() ||
+        isSuperAdmin() ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          (
+            getUserDoc().data.get('role', 'aficionado') == 'admin' ||
+            getUserDoc().data.get('role', 'aficionado') == 'superadmin'
+          ) && (
+            getUserDoc().data.get('venueId', 'venue-teodoro-mariscal') == (venueId != null && venueId != '' ? venueId : 'venue-teodoro-mariscal') ||
+            getUserDoc().data.get('venueId', '') == '' ||
+            getUserDoc().data.get('venueId', '') == 'all'
+          )
+        )
+      );
+    }
+    
+    function isTaquilla() {
+      return hasRole('taquilla');
+    }
+
+    function isConcesionario() {
+      return hasRole('concesionario');
+    }
+
+    function isRunner() {
+      return hasRole('runner');
+    }
+
+    function isStandOwnerOrAssigned(standId) {
+      return isConcesionario() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         getUserDoc().data.get('standId', '') == standId) ||
+        (exists(/databases/$(database)/documents/stands/$(standId)) &&
+         get(/databases/$(database)/documents/stands/$(standId)).data.get('ownerId', '') == request.auth.uid)
+      );
+    }
+
     // 1. Usuarios y Perfiles
+    // superadmin o admin puede actualizar usuarios (para gestión de roles/personal)
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.auth.uid == userId;
-      allow update: if isOwner(userId) || isAdmin();
-      allow delete: if isAdmin();
+      allow update: if isOwner(userId) || isSuperAdmin() || isAdmin();
+      allow delete: if isSuperAdmin();
     }
 
-    // 2. Boletos y Entradas
+    // 2. Boletos y Entradas (Scoped por recinto)
     match /tickets/{ticketId} {
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isTaquilla());
-      allow create: if isAuthenticated() && (request.resource.data.userId == request.auth.uid || isTaquilla());
-      allow update: if isTaquilla() || (isAuthenticated() && resource.data.userId == request.auth.uid);
-      allow delete: if isAdmin();
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.userId == request.auth.uid ||
+        isTaquilla() ||
+        isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal'))
+      );
+      allow create: if isAuthenticated() && (
+        isAdmin() ||
+        request.resource.data.userId == request.auth.uid ||
+        isTaquilla() ||
+        isVenueAdmin(request.resource.data.get('venueId', 'venue-teodoro-mariscal'))
+      );
+      allow update: if isAdmin() || isTaquilla() || (isAuthenticated() && resource.data.userId == request.auth.uid) || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal'));
+      allow delete: if isAdmin() || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal'));
     }
 
     // 3. Membresías (Socio Venados)
     match /memberships/{membershipId} {
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin() || isTaquilla());
-      allow create: if isAuthenticated() && (request.resource.data.userId == request.auth.uid || isAdmin());
-      allow update, delete: if isAdmin();
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.userId == request.auth.uid ||
+        isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal')) ||
+        isTaquilla()
+      );
+      allow create: if isAuthenticated() && (
+        isAdmin() ||
+        request.resource.data.userId == request.auth.uid ||
+        isVenueAdmin(request.resource.data.get('venueId', 'venue-teodoro-mariscal'))
+      );
+      allow update, delete: if isAdmin() || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal'));
     }
 
-    // 4. Inventario de Tienda y Almacén
+    // 4. Inventario de Tienda y Almacén (Scoped por recinto)
     match /inventory/{productId} {
       allow read: if isAuthenticated();
-      allow create, update, delete: if isAdmin();
+      allow create: if isAdmin() || isVenueAdmin(request.resource.data.get('venueId', 'venue-teodoro-mariscal'));
+      allow update, delete: if isAdmin() || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal'));
       match /cost/{document} {
-        allow read, write: if isAdmin();
+        allow read, write: if isAdmin() || isVenueAdmin(get(/databases/$(database)/documents/inventory/$(productId)).data.get('venueId', 'venue-teodoro-mariscal'));
       }
     }
 
-    // 5. Pedidos de Mercancía y Logística
+    // 5. Pedidos de Mercancía y Logística (Scoped por recinto)
     match /merchOrders/{orderId} {
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin() || isRunner());
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAdmin() || isRunner() || (
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.userId == request.auth.uid ||
+        isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal')) ||
+        isRunner()
+      );
+      allow create: if isAuthenticated() && (
+        request.resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
+      allow update: if isAdmin() || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal')) || isRunner() || (
         isAuthenticated() &&
         resource.data.userId == request.auth.uid &&
         resource.data.status == 'pendiente' &&
@@ -96,39 +169,39 @@ service cloud.firestore {
         request.resource.data.carrier == resource.data.carrier &&
         request.resource.data.trackingNumber == resource.data.trackingNumber
       );
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal'));
     }
 
-    // 6. Concesiones / Puestos de Comida en Estadio
+    // 6. Concesiones / Puestos de Comida en Estadio (Scoped por recinto)
     match /stands/{standId} {
       allow read: if isAuthenticated();
-      allow create: if isAdmin() || (isConcesionario() && request.resource.data.ownerId == request.auth.uid);
-      allow update: if isAdmin() || (
+      allow create: if isAdmin() || isVenueAdmin(request.resource.data.get('venueId', 'venue-teodoro-mariscal')) || (isConcesionario() && request.resource.data.ownerId == request.auth.uid);
+      allow update: if isAdmin() || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal')) || (
         isConcesionario() && (
           resource.data.ownerId == request.auth.uid ||
           (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
            getUserDoc().data.get('standId', '') == standId)
         )
       );
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal'));
     }
 
-    // 7. Menú de Alimentos y Bebidas
+    // 7. Menú de Alimentos y Bebidas (Scoped por puesto y recinto)
     match /menuItems/{itemId} {
       allow read: if isAuthenticated();
-      allow create: if isAdmin() || isStandOwnerOrAssigned(request.resource.data.standId);
-      allow update, delete: if isAdmin() || isStandOwnerOrAssigned(resource.data.standId);
+      allow create, update, delete: if isAdmin() || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal')) || isStandOwnerOrAssigned(request.resource.data.standId);
     }
 
-    // 8. Zonas del Estadio
+    // 8. Zonas del Estadio (Scoped por recinto)
     match /zones/{zoneId} {
       allow read: if isAuthenticated();
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if isAdmin() || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal'));
     }
 
-    // 9. Pedidos de Comida / Pickup Express & In-Seat
+    // 9. Pedidos de Comida / Pickup Express & In-Seat (Scoped por puesto, zona y recinto)
     match /foodOrders/{orderId} {
       allow read: if isAuthenticated() && (
+        isAdmin() ||
         resource.data.userId == request.auth.uid ||
         isStandOwnerOrAssigned(resource.data.standId) ||
         (isRunner() && resource.data.orderType == 'in-seat' && (
@@ -136,12 +209,12 @@ service cloud.firestore {
           getUserDoc().data.get('zoneId', '') == '' ||
           getUserDoc().data.get('zoneId', '') == resource.data.zoneId
         )) ||
-        isAdmin()
+        isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal'))
       );
 
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
 
-      allow update: if isAdmin() || (
+      allow update: if isAdmin() || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal')) || (
         // Concesionario del stand:
         // Solo puede avanzar a 'preparando' o 'listo'.
         // En pedidos pickup también puede avanzar a 'entregado' al retirar el aficionado.
@@ -198,26 +271,26 @@ service cloud.firestore {
         request.resource.data.orderType == resource.data.orderType
       );
 
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal'));
     }
 
-    // 10. Auditoría y Registro de Ventas
+    // 10. Auditoría y Registro de Ventas (Scoped por recinto)
     match /sales/{saleId} {
-      allow read: if isAdmin();
-      allow create: if isAdmin() || isTaquilla() || isConcesionario();
-      allow update, delete: if isAdmin();
+      allow read: if isAdmin() || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal'));
+      allow create: if isAdmin() || isVenueAdmin(request.resource.data.get('venueId', 'venue-teodoro-mariscal')) || isTaquilla() || isConcesionario();
+      allow update, delete: if isAdmin() || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal'));
     }
 
-    // 11. Recintos (Venues)
+    // 11. Recintos (Venues - Exclusivo de Superadmin / Admin)
     match /venues/{venueId} {
       allow read: if isAuthenticated();
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if isSuperAdmin() || isAdmin();
     }
 
-    // 12. Eventos por Recinto (Venue Events)
+    // 12. Eventos por Recinto (Venue Events - Exclusivo de Superadmin / Admin)
     match /venueEvents/{eventId} {
       allow read: if isAuthenticated();
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if isSuperAdmin() || isAdmin();
     }
   }
 }

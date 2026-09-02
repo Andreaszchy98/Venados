@@ -95,7 +95,8 @@ export async function getUserFoodOrders(userId: string): Promise<FoodOrder[]> {
 export function listenToStandFoodOrders(
   standId: string | null,
   onUpdate: (orders: FoodOrder[]) => void,
-  onError?: (err: any) => void
+  onError?: (err: any) => void,
+  venueId?: string
 ): () => void {
   try {
     let q = query(collection(db, COLLECTION_NAME));
@@ -106,10 +107,15 @@ export function listenToStandFoodOrders(
     return onSnapshot(
       q,
       (snap) => {
-        const orders = snap.docs.map((d) => ({
+        let orders = snap.docs.map((d) => ({
           id: d.id,
           ...d.data(),
         })) as FoodOrder[];
+
+        if (venueId) {
+          orders = orders.filter((o) => (o.venueId || DEFAULT_VENUE_ID) === venueId);
+        }
+
         orders.sort(
           (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );

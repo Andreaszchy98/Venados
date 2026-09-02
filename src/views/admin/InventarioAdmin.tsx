@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { InventoryProduct, ProductCategory } from '../../types';
+import { InventoryProduct, ProductCategory, UserProfile } from '../../types';
 import {
   getInventoryProducts,
   saveInventoryProduct,
@@ -8,6 +8,7 @@ import {
   getProductCost,
   setProductCost,
 } from '../../lib/inventory';
+import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { ConfirmationModal } from '../../components/shared/ConfirmationModal';
 import {
@@ -26,7 +27,12 @@ import {
   Save,
 } from 'lucide-react';
 
-export const InventarioAdmin: React.FC = () => {
+interface InventarioAdminProps {
+  user?: UserProfile;
+}
+
+export const InventarioAdmin: React.FC<InventarioAdminProps> = ({ user }) => {
+  const venueId = user?.venueId || DEFAULT_VENUE_ID;
   const [products, setProducts] = useState<InventoryProduct[]>([]);
   const [costsMap, setCostsMap] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -44,7 +50,7 @@ export const InventarioAdmin: React.FC = () => {
   const fetchInventory = async () => {
     setLoading(true);
     try {
-      const data = await getInventoryProducts();
+      const data = await getInventoryProducts(venueId);
       setProducts(data);
 
       // Cargar costos confidenciales desde la subcolección cost/data exclusiva de admin
@@ -112,6 +118,7 @@ export const InventarioAdmin: React.FC = () => {
     try {
       const saved = await saveInventoryProduct({
         ...editingProduct,
+        venueId: editingProduct.venueId || venueId,
         costPrice: editingCostPrice,
       } as any);
 

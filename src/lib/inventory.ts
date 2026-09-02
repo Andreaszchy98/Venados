@@ -13,6 +13,7 @@ import {
 import { db } from './firebase';
 import { InventoryProduct, ProductCost } from '../types';
 import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
+import { DEFAULT_VENUE_ID } from './defaultVenue';
 
 const COLLECTION_NAME = 'inventory';
 
@@ -121,32 +122,46 @@ const INITIAL_VENADOS_PRODUCTS: InitialProductWithCost[] = [
   },
 ];
 
-export async function getInventoryProducts(): Promise<InventoryProduct[]> {
+export async function getInventoryProducts(venueId?: string): Promise<InventoryProduct[]> {
   try {
-    const q = query(collection(db, COLLECTION_NAME));
-    const snap = await getDocs(q);
+    const snap = await getDocs(collection(db, COLLECTION_NAME));
 
     if (snap.empty) {
       try {
-        return await seedInitialProducts();
+        const seeded = await seedInitialProducts();
+        if (venueId) {
+          return seeded.filter((p) => (p.venueId || DEFAULT_VENUE_ID) === venueId);
+        }
+        return seeded;
       } catch (seedErr) {
         console.warn('No se pudo sembrar el inventario en Firestore (permiso restringido). Usando catálogo estático:', seedErr);
-        return INITIAL_VENADOS_PRODUCTS.map((p, idx) => {
+        const staticList = INITIAL_VENADOS_PRODUCTS.map((p, idx) => {
           const { initialCost, ...rest } = p;
           return {
             ...rest,
             id: `prod-init-${idx + 1}`,
+            venueId: DEFAULT_VENUE_ID,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           };
         });
+        if (venueId) {
+          return staticList.filter((p) => (p.venueId || DEFAULT_VENUE_ID) === venueId);
+        }
+        return staticList;
       }
     }
 
-    return snap.docs.map((d) => ({
+    let products = snap.docs.map((d) => ({
       id: d.id,
       ...d.data(),
     })) as InventoryProduct[];
+
+    if (venueId) {
+      products = products.filter((p) => (p.venueId || DEFAULT_VENUE_ID) === venueId);
+    }
+
+    return products;
   } catch (err) {
     handleFirestoreError(err, OperationType.LIST, COLLECTION_NAME);
   }
@@ -251,6 +266,7 @@ export async function saveInventoryProduct(
       const docRef = doc(collection(db, COLLECTION_NAME));
       const newProduct: InventoryProduct = {
         id: docRef.id,
+        venueId: rootData.venueId || DEFAULT_VENUE_ID,
         sku: rootData.sku,
         name: rootData.name,
         category: (rootData.category as any) || 'Jerseys',

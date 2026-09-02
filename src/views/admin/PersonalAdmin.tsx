@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { UserProfile, UserRole, StadiumStand } from '../../types';
 import { getAllUsers, updateUserRoleAndDetails } from '../../lib/auth';
 import { getStadiumStands } from '../../lib/stands';
+import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import {
   Users,
@@ -23,7 +24,12 @@ import {
   Zap,
 } from 'lucide-react';
 
-export const PersonalAdmin: React.FC = () => {
+interface PersonalAdminProps {
+  user?: UserProfile;
+}
+
+export const PersonalAdmin: React.FC<PersonalAdminProps> = ({ user }) => {
+  const venueId = user?.venueId || DEFAULT_VENUE_ID;
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [stands, setStands] = useState<StadiumStand[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,7 +51,7 @@ export const PersonalAdmin: React.FC = () => {
     try {
       const [allUsers, allStands] = await Promise.all([
         getAllUsers(),
-        getStadiumStands().catch(() => []),
+        getStadiumStands(venueId).catch(() => []),
       ]);
       setUsers(allUsers);
       setStands(allStands);
@@ -58,7 +64,7 @@ export const PersonalAdmin: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [venueId]);
 
   const handleOpenModal = (user: UserProfile) => {
     setSelectedUser(user);

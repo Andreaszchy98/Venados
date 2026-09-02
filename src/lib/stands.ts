@@ -175,22 +175,35 @@ const INITIAL_MENU_ITEMS: Record<string, Omit<MenuItem, 'id' | 'standId' | 'crea
   ],
 };
 
-export async function getStadiumStands(): Promise<StadiumStand[]> {
+export async function getStadiumStands(venueId?: string): Promise<StadiumStand[]> {
   try {
     const snap = await getDocs(collection(db, STANDS_COLLECTION));
     if (snap.empty) {
       try {
-        return await seedInitialStandsAndMenu();
+        const seeded = await seedInitialStandsAndMenu();
+        if (venueId) {
+          return seeded.filter((s) => (s.venueId || DEFAULT_VENUE_ID) === venueId);
+        }
+        return seeded;
       } catch (seedErr) {
         console.warn('No se pudieron sembrar los puestos en Firestore (permiso restringido). Usando datos iniciales:', seedErr);
-        return INITIAL_STANDS.map((s, idx) => ({
+        const staticList = INITIAL_STANDS.map((s, idx) => ({
           ...s,
+          venueId: DEFAULT_VENUE_ID,
           id: `stand-init-${idx + 1}`,
           createdAt: new Date().toISOString(),
         }));
+        if (venueId) {
+          return staticList.filter((s) => (s.venueId || DEFAULT_VENUE_ID) === venueId);
+        }
+        return staticList;
       }
     }
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StadiumStand[];
+    let stands = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StadiumStand[];
+    if (venueId) {
+      stands = stands.filter((s) => (s.venueId || DEFAULT_VENUE_ID) === venueId);
+    }
+    return stands;
   } catch (err) {
     handleFirestoreError(err, OperationType.LIST, STANDS_COLLECTION);
   }

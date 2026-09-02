@@ -30,13 +30,15 @@ export const AdminView: React.FC<AdminViewProps> = ({ user }) => {
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-2 border-b border-slate-200">
         <div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-            <span>Administración General Venados</span>
+            <span>Administración de Sede</span>
             <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-red-100 text-red-800 border border-red-200">
               Gerencia
             </span>
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Control de negocio, concesiones del estadio, inventario, logística, ventas y personal
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5 flex flex-wrap items-center gap-1.5">
+            <span>Sede asignada: <strong className="text-slate-800 font-semibold">{user.venueName || 'Estadio Teodoro Mariscal'}</strong></span>
+            <span className="text-slate-300">•</span>
+            <span>Control de negocio, inventario, logística, ventas y personal</span>
           </p>
         </div>
 
@@ -120,13 +122,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ user }) => {
 
       {/* Renderizado de Pestaña */}
       {activeTab === 'resumen' && (
-        <AdminOverview onNavigateTab={(tab) => setActiveTab(tab as any)} />
+        <AdminOverview user={user} onNavigateTab={(tab) => setActiveTab(tab as any)} />
       )}
-      {activeTab === 'negocios' && <NegociosAdmin />}
-      {activeTab === 'personal' && <PersonalAdmin />}
-      {activeTab === 'ventas' && <VentasAdmin />}
-      {activeTab === 'inventario' && <InventarioAdmin />}
-      {activeTab === 'logistica' && <LogisticaAdmin />}
+      {activeTab === 'negocios' && <NegociosAdmin user={user} />}
+      {activeTab === 'personal' && <PersonalAdmin user={user} />}
+      {activeTab === 'ventas' && <VentasAdmin user={user} />}
+      {activeTab === 'inventario' && <InventarioAdmin user={user} />}
+      {activeTab === 'logistica' && <LogisticaAdmin user={user} />}
     </div>
   );
 };

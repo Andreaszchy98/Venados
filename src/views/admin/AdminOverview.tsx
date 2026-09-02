@@ -4,6 +4,7 @@ import { getSalesMetrics } from '../../lib/sales';
 import { getInventoryProducts } from '../../lib/inventory';
 import { getAllMerchOrders } from '../../lib/logistics';
 import { getStadiumStands } from '../../lib/stands';
+import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import {
   TrendingUp,
@@ -20,11 +21,13 @@ import {
 } from 'lucide-react';
 
 interface AdminOverviewProps {
+  user?: UserProfile;
   onNavigateTab: (tab: 'ventas' | 'inventario' | 'logistica' | 'personal' | 'negocios') => void;
 }
 
-export const AdminOverview: React.FC<AdminOverviewProps> = ({ onNavigateTab }) => {
+export const AdminOverview: React.FC<AdminOverviewProps> = ({ user, onNavigateTab }) => {
   const [loading, setLoading] = useState(true);
+  const venueId = user?.venueId || DEFAULT_VENUE_ID;
   const [stats, setStats] = useState({
     totalGrossRevenue: 0,
     ticketsRevenue: 0,
@@ -41,16 +44,16 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ onNavigateTab }) =
       setLoading(true);
       try {
         const [salesStats, products, merchOrders, stands] = await Promise.all([
-          getSalesMetrics().catch(() => ({
+          getSalesMetrics(venueId).catch(() => ({
             totalGrossRevenue: 0,
             ticketsRevenue: 0,
             merchRevenue: 0,
             foodRevenue: 0,
             totalTransactions: 0,
           })),
-          getInventoryProducts().catch(() => []),
-          getAllMerchOrders().catch(() => []),
-          getStadiumStands().catch(() => []),
+          getInventoryProducts(venueId).catch(() => []),
+          getAllMerchOrders(venueId).catch(() => []),
+          getStadiumStands(venueId).catch(() => []),
         ]);
 
         const lowStock = (products || []).filter((p) => p.stock <= p.minStockAlert).length;

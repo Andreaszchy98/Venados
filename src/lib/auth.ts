@@ -60,18 +60,40 @@ export async function syncUserProfile(
 ): Promise<UserProfile> {
   const userDocRef = doc(db, 'users', fbUser.uid);
   const userSnapshot = await getDoc(userDocRef);
+  const isBootstrapUser = fbUser.email === 'jorgeandres980706@gmail.com';
 
   if (userSnapshot.exists()) {
     const data = userSnapshot.data();
-    const currentRole: UserRole = data.role || 'aficionado';
+    let currentRole: UserRole = data.role || (isBootstrapUser ? 'superadmin' : 'aficionado');
+    let venueId = data.venueId || (isBootstrapUser || currentRole === 'admin' ? 'venue-teodoro-mariscal' : undefined);
+    let venueName = data.venueName || (isBootstrapUser || currentRole === 'admin' ? 'Estadio Teodoro Mariscal' : undefined);
+
+    // Si es el usuario principal y no tiene rol de administración definido o falta su sede
+    if (isBootstrapUser && (!data.role || (data.role === 'aficionado' && !data.roleSelectedByUser) || !data.venueId)) {
+      currentRole = data.role === 'admin' ? 'admin' : 'superadmin';
+      venueId = 'venue-teodoro-mariscal';
+      venueName = 'Estadio Teodoro Mariscal';
+      try {
+        await updateDoc(userDocRef, {
+          role: currentRole,
+          venueId,
+          venueName,
+          updatedAt: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.warn('Could not auto-promote bootstrap admin doc:', e);
+      }
+    }
 
     return {
       uid: fbUser.uid,
       email: data.email || fbUser.email,
-      displayName: data.displayName || fbUser.displayName || 'Aficionado Venados',
+      displayName: data.displayName || fbUser.displayName || (isBootstrapUser ? 'Jorge Andrés (Admin)' : 'Aficionado Venados'),
       role: currentRole,
       photoURL: data.photoURL || fbUser.photoURL,
       phoneNumber: data.phoneNumber || fbUser.phoneNumber,
+      venueId,
+      venueName,
       standId: data.standId,
       standName: data.standName,
       assignedZone: data.assignedZone,
@@ -80,18 +102,24 @@ export async function syncUserProfile(
       updatedAt: data.updatedAt,
     };
   } else {
-    // Crear nuevo perfil en Firestore con rol por defecto aficionado
+    // Crear nuevo perfil en Firestore
+    const defaultRole: UserRole = isBootstrapUser ? 'superadmin' : initialRole;
+    const defaultVenueId = isBootstrapUser || defaultRole === 'admin' ? 'venue-teodoro-mariscal' : null;
+    const defaultVenueName = isBootstrapUser || defaultRole === 'admin' ? 'Estadio Teodoro Mariscal' : null;
+
     const newProfile: UserProfile = {
       uid: fbUser.uid,
       email: fbUser.email,
       displayName: fbUser.displayName || (fbUser.email ? fbUser.email.split('@')[0] : 'Aficionado Venados'),
-      role: initialRole,
+      role: defaultRole,
       photoURL: fbUser.photoURL || null,
       phoneNumber: fbUser.phoneNumber || null,
+      venueId: defaultVenueId || undefined,
+      venueName: defaultVenueName || undefined,
       createdAt: new Date().toISOString(),
     };
 
-    await setDoc(userDocRef, newProfile);
+    await setDoc(userDocRef, sanitizeFirestoreData(newProfile));
     return newProfile;
   }
 }
@@ -220,13 +248,72 @@ export async function updateUserRoleAndDetails(
 /**
  * Actualizar rol simple de usuario
  */
-export async function updateUserRole(uid: string, newRole: UserRole): Promise<void> {
+export async function updateUserRole(
+  uid: string,
+  newRole: UserRole,
+  venueId?: string,
+  venueName?: string
+): Promise<void> {
   const userDocRef = doc(db, 'users', uid);
-  await updateDoc(userDocRef, {
+  const updates: any = {
     role: newRole,
     roleSelectedByUser: true,
     updatedAt: new Date().toISOString(),
-  });
+  };
+
+  if ((newRole === 'admin' || newRole === 'superadmin') && !venueId) {
+    updates.venueId = 'venue-teodoro-mariscal';
+    updates.venueName = 'Estadio Teodoro Mariscal';
+  } else if (venueId) {
+    updates.venueId = venueId;
+    updates.venueName = venueName || 'Estadio Teodoro Mariscal';
+  }
+
+  await updateDoc(userDocRef, updates);
+}
+
+/**
+ * Asignar rol de Administrador a un usuario junto con su sede (Exclusivo Superadmin)
+ */
+export async function assignAdminRole(
+  uid: string,
+  venueId: string,
+  venueName: string
+): Promise<void> {
+  try {
+    const userDocRef = doc(db, 'users', uid);
+    await updateDoc(userDocRef, {
+      role: 'admin',
+      venueId,
+      venueName,
+      standId: null,
+      standName: null,
+      assignedZone: null,
+      runnerStatus: null,
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `users/${uid}`);
+    throw err;
+  }
+}
+
+/**
+ * Revocar rol de Administrador (Exclusivo Superadmin)
+ */
+export async function revokeAdminRole(uid: string): Promise<void> {
+  try {
+    const userDocRef = doc(db, 'users', uid);
+    await updateDoc(userDocRef, {
+      role: 'aficionado',
+      venueId: null,
+      venueName: null,
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `users/${uid}`);
+    throw err;
+  }
 }
 
 /**

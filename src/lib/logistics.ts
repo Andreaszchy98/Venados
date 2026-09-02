@@ -13,26 +13,35 @@ import { db } from './firebase';
 import { MerchOrder, MerchOrderStatus, CarrierCompany } from '../types';
 import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
 import { recordSaleTransaction } from './sales';
+import { DEFAULT_VENUE_ID } from './defaultVenue';
 
 const COLLECTION_NAME = 'merchOrders';
 
-export async function getAllMerchOrders(): Promise<MerchOrder[]> {
+export async function getAllMerchOrders(venueId?: string): Promise<MerchOrder[]> {
   try {
     const q = query(collection(db, COLLECTION_NAME));
     const snap = await getDocs(q);
 
     if (snap.empty) {
       try {
-        return await seedInitialMerchOrders();
+        const seeded = await seedInitialMerchOrders();
+        if (venueId) {
+          return seeded.filter((o) => (o.venueId || DEFAULT_VENUE_ID) === venueId);
+        }
+        return seeded;
       } catch {
         return [];
       }
     }
 
-    const orders = snap.docs.map((d) => ({
+    let orders = snap.docs.map((d) => ({
       id: d.id,
       ...d.data(),
     })) as MerchOrder[];
+
+    if (venueId) {
+      orders = orders.filter((o) => (o.venueId || DEFAULT_VENUE_ID) === venueId);
+    }
 
     return orders.sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -70,6 +79,7 @@ export async function createMerchOrder(orderData: Omit<MerchOrder, 'id' | 'creat
     const docRef = doc(collection(db, COLLECTION_NAME));
     const newOrder: MerchOrder = {
       ...orderData,
+      venueId: orderData.venueId || DEFAULT_VENUE_ID,
       id: docRef.id,
       createdAt: now,
       updatedAt: now,

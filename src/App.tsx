@@ -10,6 +10,7 @@ import { AdminView } from './views/admin/AdminView';
 import { TaquillaView } from './views/taquilla/TaquillaView';
 import { ConcesionarioView } from './views/concesionario/ConcesionarioView';
 import { RunnerView } from './views/runner/RunnerView';
+import { SuperAdminView } from './views/superadmin/SuperAdminView';
 import { LoadingSpinner } from './components/shared/LoadingSpinner';
 import {
   Ticket,
@@ -68,6 +69,8 @@ export default function App() {
                 standName: data.standName,
                 assignedZone: data.assignedZone,
                 runnerStatus: data.runnerStatus,
+                venueId: data.venueId,
+                venueName: data.venueName,
                 createdAt: data.createdAt || new Date().toISOString(),
                 updatedAt: data.updatedAt,
               });
@@ -191,6 +194,9 @@ export default function App() {
         ) : (
           /* Vistas según el rol del usuario */
           <div>
+            {userProfile.role === 'superadmin' && (
+              <SuperAdminView user={userProfile} />
+            )}
             {userProfile.role === 'aficionado' && (
               <AficionadoView user={userProfile} />
             )}

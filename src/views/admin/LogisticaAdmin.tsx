@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { MerchOrder, MerchOrderStatus, CarrierCompany } from '../../types';
+import { MerchOrder, MerchOrderStatus, CarrierCompany, UserProfile } from '../../types';
 import { getAllMerchOrders, updateOrderStatus } from '../../lib/logistics';
+import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import {
   Truck,
@@ -18,7 +19,12 @@ import {
   Building,
 } from 'lucide-react';
 
-export const LogisticaAdmin: React.FC = () => {
+interface LogisticaAdminProps {
+  user?: UserProfile;
+}
+
+export const LogisticaAdmin: React.FC<LogisticaAdminProps> = ({ user }) => {
+  const venueId = user?.venueId || DEFAULT_VENUE_ID;
   const [orders, setOrders] = useState<MerchOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('Todos');
@@ -34,7 +40,7 @@ export const LogisticaAdmin: React.FC = () => {
   const fetchOrders = async () => {
     setLoading(true);
     try {
-      const data = await getAllMerchOrders();
+      const data = await getAllMerchOrders(venueId);
       setOrders(data);
     } catch (err) {
       console.error('Error fetching logistics orders:', err);
@@ -45,7 +51,7 @@ export const LogisticaAdmin: React.FC = () => {
 
   useEffect(() => {
     fetchOrders();
-  }, []);
+  }, [venueId]);
 
   const handleSelectOrder = (order: MerchOrder) => {
     setSelectedOrder(order);

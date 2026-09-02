@@ -3,7 +3,7 @@
  * Plataforma Integral de Negocio, Afición y Operaciones del Club Venados de Mazatlán
  */
 
-export type UserRole = 'aficionado' | 'admin' | 'taquilla' | 'concesionario' | 'runner';
+export type UserRole = 'aficionado' | 'admin' | 'taquilla' | 'concesionario' | 'runner' | 'superadmin';
 
 export interface UserProfile {
   uid: string;
@@ -12,6 +12,8 @@ export interface UserProfile {
   role: UserRole;
   photoURL?: string | null;
   phoneNumber?: string | null;
+  venueId?: string; // Para administradores de sede: ID del recinto asignado (ej: 'venue-teodoro-mariscal')
+  venueName?: string; // Nombre del recinto asignado
   standId?: string; // Si el usuario es operador de un puesto de comida/concesionario
   standName?: string; // Nombre del puesto asignado
   zoneId?: string; // ID de la zona del estadio asignada al runner (ej: 'zona-a')
@@ -96,6 +98,7 @@ export type ProductCategory = 'Jerseys' | 'Gorras' | 'Sudaderas' | 'Souvenirs' |
 
 export interface InventoryProduct {
   id: string;
+  venueId?: string;
   sku: string;
   name: string;
   category: ProductCategory;
@@ -147,6 +150,7 @@ export interface ShippingAddress {
 
 export interface MerchOrder {
   id: string;
+  venueId?: string;
   userId: string;
   customerName: string;
   customerEmail: string;

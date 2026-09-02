@@ -63,17 +63,26 @@ export async function seedInitialZones(): Promise<void> {
 /**
  * Obtener todas las zonas del estadio
  */
-export async function getZones(): Promise<Zone[]> {
+export async function getZones(venueId?: string): Promise<Zone[]> {
   try {
     const snap = await getDocs(collection(db, ZONES_COLLECTION));
     if (snap.empty) {
       await seedInitialZones();
-      return INITIAL_ZONES;
+      const initial = INITIAL_ZONES;
+      if (venueId) {
+        return initial.filter((z) => (z.venueId || DEFAULT_VENUE_ID) === venueId);
+      }
+      return initial;
     }
-    return snap.docs.map((d) => ({
+    let zones = snap.docs.map((d) => ({
       id: d.id,
       ...d.data(),
     })) as Zone[];
+
+    if (venueId) {
+      zones = zones.filter((z) => (z.venueId || DEFAULT_VENUE_ID) === venueId);
+    }
+    return zones;
   } catch (err) {
     handleFirestoreError(err, OperationType.LIST, ZONES_COLLECTION);
     return INITIAL_ZONES;

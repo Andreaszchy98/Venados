@@ -1,6 +1,6 @@
 import React from 'react';
 import { UserRole } from '../../types';
-import { Shield, Ticket, User, Utensils, Bike } from 'lucide-react';
+import { Shield, Ticket, User, Utensils, Bike, Crown } from 'lucide-react';
 
 interface RoleBadgeProps {
   role: UserRole;
@@ -9,6 +9,13 @@ interface RoleBadgeProps {
 
 export const RoleBadge: React.FC<RoleBadgeProps> = ({ role, showIcon = true }) => {
   switch (role) {
+    case 'superadmin':
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-900 border border-amber-300">
+          {showIcon && <Crown className="w-3.5 h-3.5 text-amber-600" />}
+          Superadmin
+        </span>
+      );
     case 'admin':
       return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-800 border border-red-200">

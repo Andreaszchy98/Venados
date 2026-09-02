@@ -65,7 +65,8 @@ export function calculateMetricsFromTransactions(transactions: SaleTransaction[]
  */
 export function subscribeToSalesAuditLog(
   onUpdate: (sales: SaleTransaction[]) => void,
-  onError?: (err: any) => void
+  onError?: (err: any) => void,
+  venueId?: string
 ): () => void {
   const q = query(collection(db, COLLECTION_NAME));
 
@@ -75,7 +76,8 @@ export function subscribeToSalesAuditLog(
       if (snapshot.empty) {
         try {
           const seeded = await seedInitialSales();
-          onUpdate(seeded);
+          const filtered = venueId ? seeded.filter((s) => (s.venueId || DEFAULT_VENUE_ID) === venueId) : seeded;
+          onUpdate(filtered);
           return;
         } catch (e) {
           onUpdate([]);
@@ -83,10 +85,14 @@ export function subscribeToSalesAuditLog(
         }
       }
 
-      const sales = snapshot.docs.map((d) => ({
+      let sales = snapshot.docs.map((d) => ({
         id: d.id,
         ...d.data(),
       })) as SaleTransaction[];
+
+      if (venueId) {
+        sales = sales.filter((s) => (s.venueId || DEFAULT_VENUE_ID) === venueId);
+      }
 
       const sorted = sales.sort(
         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -101,23 +107,31 @@ export function subscribeToSalesAuditLog(
   );
 }
 
-export async function getAllSalesTransactions(): Promise<SaleTransaction[]> {
+export async function getAllSalesTransactions(venueId?: string): Promise<SaleTransaction[]> {
   try {
     const q = query(collection(db, COLLECTION_NAME));
     const snap = await getDocs(q);
 
     if (snap.empty) {
       try {
-        return await seedInitialSales();
+        const seeded = await seedInitialSales();
+        if (venueId) {
+          return seeded.filter((s) => (s.venueId || DEFAULT_VENUE_ID) === venueId);
+        }
+        return seeded;
       } catch {
         return [];
       }
     }
 
-    const sales = snap.docs.map((d) => ({
+    let sales = snap.docs.map((d) => ({
       id: d.id,
       ...d.data(),
     })) as SaleTransaction[];
+
+    if (venueId) {
+      sales = sales.filter((s) => (s.venueId || DEFAULT_VENUE_ID) === venueId);
+    }
 
     return sales.sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -130,14 +144,14 @@ export async function getAllSalesTransactions(): Promise<SaleTransaction[]> {
 
 export const getSalesAuditLog = getAllSalesTransactions;
 
-export async function getSalesMetrics(): Promise<{
+export async function getSalesMetrics(venueId?: string): Promise<{
   totalGrossRevenue: number;
   ticketsRevenue: number;
   merchRevenue: number;
   foodRevenue: number;
   totalTransactions: number;
 }> {
-  const transactions = await getAllSalesTransactions();
+  const transactions = await getAllSalesTransactions(venueId);
   return calculateMetricsFromTransactions(transactions);
 }
 

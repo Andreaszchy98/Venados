@@ -17,7 +17,12 @@ export const Header: React.FC<HeaderProps> = ({ user, onOpenAuth, onRoleChanged 
     if (!user) return;
     setSwitchingRole(true);
     try {
-      await updateUserRole(user.uid, newRole);
+      await updateUserRole(
+        user.uid,
+        newRole,
+        user.venueId || 'venue-teodoro-mariscal',
+        user.venueName || 'Estadio Teodoro Mariscal'
+      );
       if (onRoleChanged) onRoleChanged();
     } catch (err) {
       console.error('Error changing role:', err);
@@ -64,6 +69,11 @@ export const Header: React.FC<HeaderProps> = ({ user, onOpenAuth, onRoleChanged 
                     className="bg-transparent text-white font-bold focus:outline-hidden cursor-pointer hover:text-red-300 transition-colors text-xs"
                     title="Alternar rol para explorar todos los módulos del negocio"
                   >
+                    {(user.role === 'superadmin' || user.email === 'jorgeandres980706@gmail.com') && (
+                      <option value="superadmin" className="bg-slate-900 text-amber-300">
+                        Superadmin (Gestión Global de Sedes)
+                      </option>
+                    )}
                     <option value="aficionado" className="bg-slate-900 text-white">
                       Aficionado (Boletos, Tienda, Comida)
                     </option>
