@@ -23,10 +23,7 @@ service cloud.firestore {
     }
     
     function isAdmin() {
-      return isAuthenticated() && (
-        request.auth.token.email in ['jorgeandres980706@gmail.com', 'andreaszchy98@gmail.com'] ||
-        hasRole('admin')
-      );
+      return hasRole('admin');
     }
     
     function isTaquilla() {
@@ -62,24 +59,23 @@ service cloud.firestore {
 
     // 2. Boletos y Entradas
     match /tickets/{ticketId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isTaquilla() || isOwner(resource.data.userId);
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isTaquilla());
+      allow create: if isAuthenticated() && (request.resource.data.userId == request.auth.uid || isTaquilla());
+      allow update: if isTaquilla() || (isAuthenticated() && resource.data.userId == request.auth.uid);
       allow delete: if isAdmin();
     }
 
     // 3. Membresías (Socio Venados)
     match /memberships/{membershipId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin() || isTaquilla());
+      allow create: if isAuthenticated() && (request.resource.data.userId == request.auth.uid || isAdmin());
       allow update, delete: if isAdmin();
     }
 
     // 4. Inventario de Tienda y Almacén
     match /inventory/{productId} {
       allow read: if isAuthenticated();
-      allow create, delete: if isAdmin();
-      allow update: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
       match /cost/{document} {
         allow read, write: if isAdmin();
       }
@@ -87,24 +83,41 @@ service cloud.firestore {
 
     // 5. Pedidos de Mercancía y Logística
     match /merchOrders/{orderId} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin() || isRunner());
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAdmin() || isRunner() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow update: if isAdmin() || isRunner() || (
+        isAuthenticated() &&
+        resource.data.userId == request.auth.uid &&
+        resource.data.status == 'pendiente' &&
+        request.resource.data.status == 'cancelado' &&
+        request.resource.data.items == resource.data.items &&
+        request.resource.data.total == resource.data.total &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.carrier == resource.data.carrier &&
+        request.resource.data.trackingNumber == resource.data.trackingNumber
+      );
       allow delete: if isAdmin();
     }
 
     // 6. Concesiones / Puestos de Comida en Estadio
     match /stands/{standId} {
       allow read: if isAuthenticated();
-      allow create: if isAdmin() || isConcesionario();
-      allow update: if isAdmin() || isConcesionario();
+      allow create: if isAdmin() || (isConcesionario() && request.resource.data.ownerId == request.auth.uid);
+      allow update: if isAdmin() || (
+        isConcesionario() && (
+          resource.data.ownerId == request.auth.uid ||
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           getUserDoc().data.get('standId', '') == standId)
+        )
+      );
       allow delete: if isAdmin();
     }
 
     // 7. Menú de Alimentos y Bebidas
     match /menuItems/{itemId} {
       allow read: if isAuthenticated();
-      allow create, update, delete: if isAdmin() || isConcesionario();
+      allow create: if isAdmin() || isStandOwnerOrAssigned(request.resource.data.standId);
+      allow update, delete: if isAdmin() || isStandOwnerOrAssigned(resource.data.standId);
     }
 
     // 8. Zonas del Estadio
@@ -115,22 +128,85 @@ service cloud.firestore {
 
     // 9. Pedidos de Comida / Pickup Express & In-Seat
     match /foodOrders/{orderId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAuthenticated() && (
-        isAdmin() ||
-        isConcesionario() ||
-        isRunner() ||
-        resource.data.userId == request.auth.uid
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        isStandOwnerOrAssigned(resource.data.standId) ||
+        (isRunner() && resource.data.orderType == 'in-seat' && (
+          !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
+          getUserDoc().data.get('zoneId', '') == '' ||
+          getUserDoc().data.get('zoneId', '') == resource.data.zoneId
+        )) ||
+        isAdmin()
       );
+
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+
+      allow update: if isAdmin() || (
+        // Concesionario del stand:
+        // Solo puede avanzar a 'preparando' o 'listo'.
+        // En pedidos pickup también puede avanzar a 'entregado' al retirar el aficionado.
+        // En pedidos in-seat NO puede poner 'en-camino' ni 'entregado'.
+        isStandOwnerOrAssigned(resource.data.standId) && (
+          (request.resource.data.status in ['preparando', 'listo']) ||
+          (resource.data.orderType == 'pickup' && request.resource.data.status == 'entregado')
+        ) &&
+        request.resource.data.standId == resource.data.standId &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.items == resource.data.items &&
+        request.resource.data.total == resource.data.total &&
+        request.resource.data.orderType == resource.data.orderType
+      ) || (
+        // Runner:
+        // Solo puede actualizar pedidos in-seat de su propia zona asignada
+        isRunner() &&
+        resource.data.orderType == 'in-seat' &&
+        (
+          !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
+          getUserDoc().data.get('zoneId', '') == '' ||
+          getUserDoc().data.get('zoneId', '') == resource.data.zoneId
+        ) && (
+          // Caso A: Tomar pedido disponible en su zona ('listo' sin runner -> 'en-camino' con runnerId = request.auth.uid)
+          (
+            resource.data.status == 'listo' &&
+            (resource.data.runnerId == null || resource.data.runnerId == '') &&
+            request.resource.data.status == 'en-camino' &&
+            request.resource.data.runnerId == request.auth.uid
+          ) ||
+          // Caso B: Marcar como entregado en butaca ('en-camino' -> 'entregado' para su propio runnerId)
+          (
+            resource.data.status == 'en-camino' &&
+            resource.data.runnerId == request.auth.uid &&
+            request.resource.data.status == 'entregado' &&
+            request.resource.data.runnerId == request.auth.uid
+          )
+        ) &&
+        request.resource.data.standId == resource.data.standId &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.items == resource.data.items &&
+        request.resource.data.total == resource.data.total &&
+        request.resource.data.orderType == resource.data.orderType
+      ) || (
+        // Aficionado dueño del pedido: solo puede cancelar si está 'pendiente'
+        isAuthenticated() &&
+        resource.data.userId == request.auth.uid &&
+        resource.data.status == 'pendiente' &&
+        request.resource.data.status == 'cancelado' &&
+        request.resource.data.items == resource.data.items &&
+        request.resource.data.total == resource.data.total &&
+        request.resource.data.pickupCode == resource.data.pickupCode &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.orderType == resource.data.orderType
+      );
+
       allow delete: if isAdmin();
     }
 
     // 10. Auditoría y Registro de Ventas
     match /sales/{saleId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
+      allow read: if isAdmin();
+      allow create: if isAdmin() || isTaquilla() || isConcesionario();
       allow update, delete: if isAdmin();
     }
   }
 }
+
