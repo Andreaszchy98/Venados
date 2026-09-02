@@ -37,7 +37,11 @@ export async function getAllSalesTransactions(): Promise<SaleTransaction[]> {
     const snap = await getDocs(q);
 
     if (snap.empty) {
-      return await seedInitialSales();
+      try {
+        return await seedInitialSales();
+      } catch {
+        return [];
+      }
     }
 
     const sales = snap.docs.map((d) => ({
@@ -50,6 +54,7 @@ export async function getAllSalesTransactions(): Promise<SaleTransaction[]> {
     );
   } catch (err) {
     handleFirestoreError(err, OperationType.LIST, COLLECTION_NAME);
+    return [];
   }
 }
 

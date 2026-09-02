@@ -60,18 +60,20 @@ export async function syncUserProfile(
 
   if (userSnapshot.exists()) {
     const data = userSnapshot.data();
+    const currentRole: UserRole = data.role || 'aficionado';
+
     return {
       uid: fbUser.uid,
       email: data.email || fbUser.email,
       displayName: data.displayName || fbUser.displayName || 'Aficionado Venados',
-      role: data.role || 'aficionado',
+      role: currentRole,
       photoURL: data.photoURL || fbUser.photoURL,
       phoneNumber: data.phoneNumber || fbUser.phoneNumber,
       createdAt: data.createdAt || new Date().toISOString(),
       updatedAt: data.updatedAt,
     };
   } else {
-    // Si no existe, crear documento inicial en Firestore
+    // Crear nuevo perfil en Firestore con rol por defecto aficionado
     const newProfile: UserProfile = {
       uid: fbUser.uid,
       email: fbUser.email,
@@ -141,6 +143,7 @@ export async function updateUserRole(uid: string, newRole: UserRole): Promise<vo
   const userDocRef = doc(db, 'users', uid);
   await updateDoc(userDocRef, {
     role: newRole,
+    roleSelectedByUser: true,
     updatedAt: new Date().toISOString(),
   });
 }

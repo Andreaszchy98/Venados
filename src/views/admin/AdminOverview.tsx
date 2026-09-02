@@ -41,15 +41,21 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ onNavigateTab }) =
       setLoading(true);
       try {
         const [salesStats, products, merchOrders, stands] = await Promise.all([
-          getSalesMetrics(),
-          getInventoryProducts(),
-          getAllMerchOrders(),
-          getStadiumStands(),
+          getSalesMetrics().catch(() => ({
+            totalGrossRevenue: 0,
+            ticketsRevenue: 0,
+            merchRevenue: 0,
+            foodRevenue: 0,
+            totalTransactions: 0,
+          })),
+          getInventoryProducts().catch(() => []),
+          getAllMerchOrders().catch(() => []),
+          getStadiumStands().catch(() => []),
         ]);
 
-        const lowStock = products.filter((p) => p.stock <= p.minStockAlert).length;
-        const pendingShipments = merchOrders.filter((o) => o.status === 'pendiente' || o.status === 'empacado').length;
-        const activeStands = stands.filter((s) => s.active).length;
+        const lowStock = (products || []).filter((p) => p.stock <= p.minStockAlert).length;
+        const pendingShipments = (merchOrders || []).filter((o) => o.status === 'pendiente' || o.status === 'empacado').length;
+        const activeStands = (stands || []).filter((s) => s.active).length;
 
         setStats({
           ...salesStats,

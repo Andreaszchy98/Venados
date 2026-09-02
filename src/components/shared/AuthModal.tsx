@@ -4,7 +4,6 @@ import {
   signInWithEmail,
   registerWithEmail,
 } from '../../lib/auth';
-import { UserRole } from '../../types';
 import { ErrorMessage } from './ErrorMessage';
 import { LogIn, UserPlus, Mail, Lock, User, X } from 'lucide-react';
 
@@ -23,7 +22,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [selectedRole, setSelectedRole] = useState<UserRole>('aficionado');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -53,7 +51,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         if (!email.trim() || !password.trim()) {
           throw new Error('Por favor completa todos los campos.');
         }
-        await registerWithEmail(email, password, displayName, selectedRole);
+        await registerWithEmail(email, password, displayName, 'aficionado');
       } else {
         if (!email.trim() || !password.trim()) {
           throw new Error('Ingresa tu correo y contraseña.');
@@ -192,23 +190,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 />
               </div>
             </div>
-
-            {isRegister && (
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Rol de Usuario para Pruebas
-                </label>
-                <select
-                  value={selectedRole}
-                  onChange={(e) => setSelectedRole(e.target.value as UserRole)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-red-600 bg-white"
-                >
-                  <option value="aficionado">Aficionado (Acceso regular)</option>
-                  <option value="admin">Administrador (Gestión total)</option>
-                  <option value="taquilla">Taquilla / Operador (Validación)</option>
-                </select>
-              </div>
-            )}
 
             <button
               id="submit-auth-btn"

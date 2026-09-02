@@ -22,7 +22,11 @@ export async function getAllMerchOrders(): Promise<MerchOrder[]> {
     const snap = await getDocs(q);
 
     if (snap.empty) {
-      return await seedInitialMerchOrders();
+      try {
+        return await seedInitialMerchOrders();
+      } catch {
+        return [];
+      }
     }
 
     const orders = snap.docs.map((d) => ({
@@ -35,6 +39,7 @@ export async function getAllMerchOrders(): Promise<MerchOrder[]> {
     );
   } catch (err) {
     handleFirestoreError(err, OperationType.LIST, COLLECTION_NAME);
+    return [];
   }
 }
 
@@ -55,6 +60,7 @@ export async function getUserMerchOrders(userId: string): Promise<MerchOrder[]> 
     );
   } catch (err) {
     handleFirestoreError(err, OperationType.LIST, COLLECTION_NAME);
+    return [];
   }
 }
 
