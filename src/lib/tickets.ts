@@ -11,6 +11,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Ticket } from '../types';
+import { DEFAULT_EVENT_ID, DEFAULT_VENUE_ID } from './defaultVenue';
 
 /**
  * Obtener boletos de un usuario específico en tiempo real
@@ -59,6 +60,7 @@ export async function createSampleTicketsForUser(userId: string): Promise<void> 
   const sampleTickets: Omit<Ticket, 'id'>[] = [
     {
       userId,
+      eventId: DEFAULT_EVENT_ID,
       matchTitle: 'Venados de Mazatlán vs Tomateros de Culiacán',
       opponent: 'Tomateros de Culiacán',
       matchDate: '2026-10-15',
@@ -75,6 +77,7 @@ export async function createSampleTicketsForUser(userId: string): Promise<void> 
     },
     {
       userId,
+      eventId: DEFAULT_EVENT_ID,
       matchTitle: 'Venados de Mazatlán vs Naranjeros de Hermosillo',
       opponent: 'Naranjeros de Hermosillo',
       matchDate: '2026-10-22',
@@ -113,7 +116,7 @@ export async function updateTicketStatus(
  * Comprar boleto y registrar la venta en la auditoría del estadio
  */
 export async function purchaseTicketWithSaleRecord(
-  ticketData: Omit<Ticket, 'id' | 'createdAt' | 'status' | 'qrId'>,
+  ticketData: Omit<Ticket, 'id' | 'createdAt' | 'status' | 'qrId'> | (Omit<Ticket, 'id' | 'createdAt' | 'status' | 'qrId' | 'eventId'> & { eventId?: string }),
   paymentMethod: string,
   customerName: string
 ): Promise<string> {
@@ -122,6 +125,7 @@ export async function purchaseTicketWithSaleRecord(
 
   const newTicket: Omit<Ticket, 'id'> = {
     ...ticketData,
+    eventId: (ticketData as any).eventId || DEFAULT_EVENT_ID,
     status: 'activo',
     qrId,
     createdAt: now,
@@ -133,12 +137,15 @@ export async function purchaseTicketWithSaleRecord(
   try {
     await addDoc(collection(db, 'sales'), {
       channel: 'boletos',
+      venueId: DEFAULT_VENUE_ID,
+      eventId: (ticketData as any).eventId || DEFAULT_EVENT_ID,
       referenceId: ticketDocRef.id,
       customerName,
       description: `Boleto: ${ticketData.matchTitle} - ${ticketData.section} (${ticketData.seat})`,
       amount: ticketData.price,
       paymentMethod,
       date: now,
+      status: 'completada',
     });
   } catch (saleErr) {
     console.warn('No se pudo registrar la venta en auditoría:', saleErr);

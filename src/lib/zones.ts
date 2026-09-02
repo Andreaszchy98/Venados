@@ -8,27 +8,32 @@ import {
 import { db } from './firebase';
 import { Zone } from '../types';
 import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
+import { DEFAULT_VENUE_ID } from './defaultVenue';
 
 const ZONES_COLLECTION = 'zones';
 
 export const INITIAL_ZONES: Zone[] = [
   {
     id: 'zona-a',
+    venueId: DEFAULT_VENUE_ID,
     name: 'Zona A - Sombra Central',
     sections: ['100', '101', '102', '103', '104', '105', 'Palcos Centrales', 'Sombra Central'],
   },
   {
     id: 'zona-b',
+    venueId: DEFAULT_VENUE_ID,
     name: 'Zona B - Palcos VIP & Diamante',
     sections: ['200', '201', '202', '203', 'Palcos VIP', 'Platino', 'Diamante', 'Planta Baja VIP'],
   },
   {
     id: 'zona-c',
+    venueId: DEFAULT_VENUE_ID,
     name: 'Zona C - Lateral & Preferente',
     sections: ['300', '301', '302', '303', '304', 'Lateral 1', 'Lateral 2', 'Preferente', 'Lateral Sombra'],
   },
   {
     id: 'zona-d',
+    venueId: DEFAULT_VENUE_ID,
     name: 'Zona D - Bleachers & Cabecera',
     sections: ['400', '401', '402', '403', 'Bleachers', 'General', 'Cabecera', 'Bleachers Planta Alta'],
   },
@@ -43,7 +48,11 @@ export async function seedInitialZones(): Promise<void> {
     if (snap.empty) {
       for (const zone of INITIAL_ZONES) {
         const docRef = doc(db, ZONES_COLLECTION, zone.id);
-        await setDoc(docRef, sanitizeFirestoreData(zone));
+        const zoneWithVenue: Zone = {
+          ...zone,
+          venueId: zone.venueId || DEFAULT_VENUE_ID,
+        };
+        await setDoc(docRef, sanitizeFirestoreData(zoneWithVenue));
       }
     }
   } catch (err) {

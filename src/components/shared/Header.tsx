@@ -38,10 +38,10 @@ export const Header: React.FC<HeaderProps> = ({ user, onOpenAuth, onRoleChanged 
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-extrabold text-base tracking-tight text-white">
-                  VENADOS
+                  VXP
                 </span>
                 <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-red-700/80 text-red-100 tracking-wider">
-                  App
+                  Venados
                 </span>
               </div>
               <span className="text-[11px] text-slate-400 block -mt-0.5">

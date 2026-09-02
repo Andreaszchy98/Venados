@@ -12,12 +12,14 @@ import {
 import { db } from './firebase';
 import { StadiumStand, MenuItem } from '../types';
 import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
+import { DEFAULT_VENUE_ID } from './defaultVenue';
 
 const STANDS_COLLECTION = 'stands';
 const MENU_COLLECTION = 'menuItems';
 
 const INITIAL_STANDS: Omit<StadiumStand, 'id' | 'createdAt'>[] = [
   {
+    venueId: DEFAULT_VENUE_ID,
     name: 'Mariscos El Muchacho Alegre - Estadio',
     location: 'Explanada Principal - Puerta 3',
     categoryTag: 'Mariscos & Botaneros',
@@ -26,6 +28,7 @@ const INITIAL_STANDS: Omit<StadiumStand, 'id' | 'createdAt'>[] = [
     image: 'https://images.unsplash.com/photo-1535400255456-984241443b29?w=600&auto=format&fit=crop&q=80',
   },
   {
+    venueId: DEFAULT_VENUE_ID,
     name: 'Asador Venados BBQ & Tacos',
     location: 'Zona Central - Planta Baja Pasillo 5',
     categoryTag: 'Tacos & Parrilla',
@@ -34,6 +37,7 @@ const INITIAL_STANDS: Omit<StadiumStand, 'id' | 'createdAt'>[] = [
     image: 'https://images.unsplash.com/photo-1551504734-5ee1c4a1479b?w=600&auto=format&fit=crop&q=80',
   },
   {
+    venueId: DEFAULT_VENUE_ID,
     name: 'Snacks & Hot Dogs Teodoro Mariscal',
     location: 'Bleachers - Nivel 2 y Puerta 8',
     categoryTag: 'Hot Dogs & Snacks',
@@ -42,6 +46,7 @@ const INITIAL_STANDS: Omit<StadiumStand, 'id' | 'createdAt'>[] = [
     image: 'https://images.unsplash.com/photo-1619740455993-9e612b1af08a?w=600&auto=format&fit=crop&q=80',
   },
   {
+    venueId: DEFAULT_VENUE_ID,
     name: 'Barra 21 Cervecería Pacífico',
     location: 'Zona Lateral Poniente y Palcos',
     categoryTag: 'Cerveza & Coctelería',
@@ -200,6 +205,7 @@ export async function seedInitialStandsAndMenu(): Promise<StadiumStand[]> {
     const standDocRef = doc(collection(db, STANDS_COLLECTION));
     const fullStand: StadiumStand = {
       ...standData,
+      venueId: (standData as any).venueId || DEFAULT_VENUE_ID,
       id: standDocRef.id,
       createdAt: now,
     };
@@ -296,13 +302,14 @@ export async function deleteMenuItem(itemId: string): Promise<void> {
  * Crear un nuevo puesto / negocio de estadio
  */
 export async function createStadiumStand(
-  standData: Omit<StadiumStand, 'id' | 'createdAt'>
+  standData: Omit<StadiumStand, 'id' | 'createdAt'> | (Omit<StadiumStand, 'id' | 'createdAt' | 'venueId'> & { venueId?: string })
 ): Promise<StadiumStand> {
   try {
     const docRef = doc(collection(db, STANDS_COLLECTION));
     const now = new Date().toISOString();
     const newStand: StadiumStand = {
       ...standData,
+      venueId: (standData as any).venueId || DEFAULT_VENUE_ID,
       id: docRef.id,
       createdAt: now,
       updatedAt: now,

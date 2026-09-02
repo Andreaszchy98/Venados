@@ -1,5 +1,5 @@
 /**
- * Venados App - Modelos y Tipos Centralizados
+ * VXP - Modelos y Tipos Centralizados
  * Plataforma Integral de Negocio, Afición y Operaciones del Club Venados de Mazatlán
  */
 
@@ -22,6 +22,31 @@ export interface UserProfile {
 }
 
 // ==========================================
+// 0. RECINTOS & EVENTOS (VENUES & EVENTS)
+// ==========================================
+export interface Venue {
+  id: string;
+  name: string;
+  city: string;
+  state: string;
+  address: string;
+  active: boolean;
+  createdAt: string;
+}
+
+export type EventType = 'baseball' | 'football' | 'basketball' | 'concert' | 'other';
+
+export interface VenueEvent {
+  id: string;
+  venueId: string;
+  type: EventType;
+  name: string;
+  date: string;
+  active: boolean;
+  createdAt: string;
+}
+
+// ==========================================
 // 1. BOLETOS & TAQUILLA
 // ==========================================
 export type TicketStatus = 'activo' | 'usado' | 'cancelado';
@@ -29,6 +54,7 @@ export type TicketStatus = 'activo' | 'usado' | 'cancelado';
 export interface Ticket {
   id: string;
   userId: string;
+  eventId: string;
   matchTitle: string;
   opponent?: string;
   matchDate: string;
@@ -148,6 +174,7 @@ export type StandCategoryTag = 'Mariscos & Botaneros' | 'Tacos & Parrilla' | 'Ho
 
 export interface StadiumStand {
   id: string;
+  venueId: string;
   name: string;
   location: string; // Ej: 'Zona Central Puerta 3', 'Bleachers Planta Alta'
   categoryTag: StandCategoryTag;
@@ -185,6 +212,7 @@ export type FoodOrderStatus = 'pendiente' | 'preparando' | 'listo' | 'en-camino'
 
 export interface Zone {
   id: string;
+  venueId: string;
   name: string; // Ej: "Zona A - Sombra Central"
   sections: string[]; // Ej: ['100', '101', '102', '103']
 }
@@ -199,6 +227,7 @@ export interface FoodOrderItem {
 
 export interface FoodOrder {
   id: string;
+  venueId: string;
   standId: string;
   standName: string;
   userId: string;
@@ -231,6 +260,8 @@ export type SaleChannel = 'boletos' | 'tienda_merch' | 'concesion_alimentos';
 
 export interface SaleTransaction {
   id: string;
+  venueId?: string;
+  eventId?: string;
   channel: SaleChannel;
   referenceId: string;
   customerName: string;

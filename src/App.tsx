@@ -28,6 +28,7 @@ import {
   Receipt,
 } from 'lucide-react';
 import { doc, onSnapshot } from 'firebase/firestore';
+import { ensureDefaultVenueExists } from './lib/defaultVenue';
 
 export default function App() {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
@@ -35,12 +36,19 @@ export default function App() {
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
+  // Inicializar recinto y evento por defecto una sola vez al arrancar la app
+  useEffect(() => {
+    ensureDefaultVenueExists();
+  }, []);
+
   useEffect(() => {
     let unsubscribeUserDoc: (() => void) | null = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       setFirebaseUser(currentUser);
       if (currentUser) {
+        // Asegurar recinto con sesión activa
+        ensureDefaultVenueExists();
         try {
           const profile = await syncUserProfile(currentUser);
           setUserProfile(profile);
@@ -210,7 +218,7 @@ export default function App() {
 
       {/* Pie de página discreto */}
       <footer className="mt-auto border-t border-slate-200 bg-white py-4 px-6 text-center text-xs text-slate-500">
-        <p>Venados App • Plataforma Integral del Negocio y Estadio • Club Venados de Mazatlán &copy; 2026</p>
+        <p>VXP • Plataforma Integral del Negocio y Estadio • Club Venados de Mazatlán &copy; 2026</p>
       </footer>
     </div>
   );

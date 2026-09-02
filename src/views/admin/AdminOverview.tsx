@@ -74,7 +74,7 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ onNavigateTab }) =
   }, []);
 
   if (loading) {
-    return <LoadingSpinner message="Consolidando métricas ejecutivas de Venados App..." />;
+    return <LoadingSpinner message="Consolidando métricas ejecutivas de VXP..." />;
   }
 
   return (

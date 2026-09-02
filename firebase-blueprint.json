@@ -170,6 +170,36 @@
         "status": { "type": "string" }
       },
       "required": ["channel", "amount", "date", "status"]
+    },
+    "venues": {
+      "title": "venues",
+      "description": "Recintos deportivos o de entretenimiento",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "city": { "type": "string" },
+        "state": { "type": "string" },
+        "address": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["name", "city", "state", "address", "active"]
+    },
+    "venueEvents": {
+      "title": "venueEvents",
+      "description": "Eventos por recinto (partidos, conciertos, etc.)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "venueId": { "type": "string" },
+        "type": { "type": "string", "enum": ["baseball", "football", "basketball", "concert", "other"] },
+        "name": { "type": "string" },
+        "date": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["venueId", "type", "name", "date", "active"]
     }
   }
 }

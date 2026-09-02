@@ -55,7 +55,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
               <Building2 className="w-3.5 h-3.5" /> Panel Operativo del Club
             </div>
             <h1 className="text-xl sm:text-2xl font-black tracking-tight">
-              Centro de Mando - Venados App
+              Centro de Mando - VXP
             </h1>
             <p className="text-xs sm:text-sm text-slate-400 mt-1">
               Administrador conectado: <strong className="text-slate-200">{user.displayName || user.email}</strong>

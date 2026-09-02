@@ -14,11 +14,12 @@ import { db } from './firebase';
 import { FoodOrder, FoodOrderStatus } from '../types';
 import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
 import { recordSaleTransaction } from './sales';
+import { DEFAULT_VENUE_ID, DEFAULT_EVENT_ID } from './defaultVenue';
 
 const COLLECTION_NAME = 'foodOrders';
 
 export async function createFoodOrder(
-  orderData: Omit<FoodOrder, 'id' | 'pickupCode' | 'createdAt' | 'updatedAt' | 'statusHistory' | 'status' | 'runnerId'>
+  orderData: Omit<FoodOrder, 'id' | 'pickupCode' | 'createdAt' | 'updatedAt' | 'statusHistory' | 'status' | 'runnerId'> | (Omit<FoodOrder, 'id' | 'pickupCode' | 'createdAt' | 'updatedAt' | 'statusHistory' | 'status' | 'runnerId' | 'venueId'> & { venueId?: string })
 ): Promise<FoodOrder> {
   const now = new Date().toISOString();
   try {
@@ -29,6 +30,7 @@ export async function createFoodOrder(
 
     const newOrder: FoodOrder = {
       ...orderData,
+      venueId: (orderData as any).venueId || DEFAULT_VENUE_ID,
       id: docRef.id,
       pickupCode,
       status: 'pendiente',
@@ -54,6 +56,8 @@ export async function createFoodOrder(
     try {
       await recordSaleTransaction({
         channel: 'concesion_alimentos',
+        venueId: (orderData as any).venueId || DEFAULT_VENUE_ID,
+        eventId: DEFAULT_EVENT_ID,
         referenceId: newOrder.id,
         customerName: newOrder.customerName,
         description: `[${newOrder.orderType.toUpperCase()}] ${newOrder.standName} (${newOrder.pickupCode}): ${newOrder.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')}`,

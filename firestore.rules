@@ -207,6 +207,18 @@ service cloud.firestore {
       allow create: if isAdmin() || isTaquilla() || isConcesionario();
       allow update, delete: if isAdmin();
     }
+
+    // 11. Recintos (Venues)
+    match /venues/{venueId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // 12. Eventos por Recinto (Venue Events)
+    match /venueEvents/{eventId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
   }
 }
 

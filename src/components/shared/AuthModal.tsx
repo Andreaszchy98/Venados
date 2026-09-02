@@ -86,7 +86,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <span className="text-lg sm:text-xl font-black tracking-tighter">V</span>
           </div>
           <h2 className="text-lg sm:text-xl font-bold tracking-tight">
-            {isRegister ? 'Crear Cuenta en Venados App' : 'Bienvenido a Venados App'}
+            {isRegister ? 'Crear Cuenta en VXP' : 'Bienvenido a VXP'}
           </h2>
           <p className="text-[11px] sm:text-xs text-red-100/90 mt-1">
             Plataforma oficial del Club Venados de Mazatlán

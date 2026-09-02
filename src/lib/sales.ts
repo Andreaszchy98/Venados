@@ -12,6 +12,7 @@ import {
 import { db } from './firebase';
 import { SaleTransaction, SaleChannel } from '../types';
 import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
+import { DEFAULT_VENUE_ID, DEFAULT_EVENT_ID } from './defaultVenue';
 
 const COLLECTION_NAME = 'sales';
 
@@ -22,6 +23,8 @@ export async function recordSaleTransaction(
     const docRef = doc(collection(db, COLLECTION_NAME));
     const transaction: SaleTransaction = {
       ...sale,
+      venueId: sale.venueId || DEFAULT_VENUE_ID,
+      eventId: sale.eventId || DEFAULT_EVENT_ID,
       id: docRef.id,
     };
     await setDoc(docRef, sanitizeFirestoreData(transaction));
@@ -144,6 +147,8 @@ export async function seedInitialSales(): Promise<SaleTransaction[]> {
   const sampleSales: Omit<SaleTransaction, 'id'>[] = [
     {
       channel: 'boletos',
+      venueId: DEFAULT_VENUE_ID,
+      eventId: DEFAULT_EVENT_ID,
       referenceId: 't-101',
       customerName: 'Jorge Andrés Morales',
       description: '2x Boletos Zona Diamante (Inauguración)',
@@ -154,6 +159,8 @@ export async function seedInitialSales(): Promise<SaleTransaction[]> {
     },
     {
       channel: 'tienda_merch',
+      venueId: DEFAULT_VENUE_ID,
+      eventId: DEFAULT_EVENT_ID,
       referenceId: 'ord-551',
       customerName: 'Jorge Andrés Morales',
       description: 'Jersey Oficial + Gorra 59FIFTY',
@@ -164,6 +171,8 @@ export async function seedInitialSales(): Promise<SaleTransaction[]> {
     },
     {
       channel: 'concesion_alimentos',
+      venueId: DEFAULT_VENUE_ID,
+      eventId: DEFAULT_EVENT_ID,
       referenceId: 'food-201',
       customerName: 'Carlos Valdez',
       description: 'Aguachile de Camarón + 2x Cerveza Pacífico',
@@ -174,6 +183,8 @@ export async function seedInitialSales(): Promise<SaleTransaction[]> {
     },
     {
       channel: 'boletos',
+      venueId: DEFAULT_VENUE_ID,
+      eventId: DEFAULT_EVENT_ID,
       referenceId: 't-102',
       customerName: 'Ana Sofía R.',
       description: '4x Boletos Butaca Central vs Tomateros',
@@ -184,6 +195,8 @@ export async function seedInitialSales(): Promise<SaleTransaction[]> {
     },
     {
       channel: 'tienda_merch',
+      venueId: DEFAULT_VENUE_ID,
+      eventId: DEFAULT_EVENT_ID,
       referenceId: 'ord-552',
       customerName: 'Roberto Lizárraga',
       description: 'Jersey Alternativo Black Edition',
@@ -194,6 +207,8 @@ export async function seedInitialSales(): Promise<SaleTransaction[]> {
     },
     {
       channel: 'concesion_alimentos',
+      venueId: DEFAULT_VENUE_ID,
+      eventId: DEFAULT_EVENT_ID,
       referenceId: 'food-202',
       customerName: 'Esteban Ríos',
       description: 'Combo Doble Hot Dog Teodoro + Refresco',
