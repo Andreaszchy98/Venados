@@ -138,6 +138,7 @@ export async function purchaseTicketWithSaleRecord(
     const venueIdToRecord = (ticketData as any).venueId || DEFAULT_VENUE_ID;
     await addDoc(collection(db, 'sales'), {
       channel: 'boletos',
+      userId: ticketData.userId,
       venueId: venueIdToRecord,
       eventId: (ticketData as any).eventId || DEFAULT_EVENT_ID,
       referenceId: ticketDocRef.id,

@@ -303,7 +303,8 @@ export function subscribeSeatSections(
     q,
     (snap) => {
       if (snap.empty) {
-        seedMariscalSeatMap(venueId).then(callback);
+        const localData = buildMariscalSectionsData(venueId);
+        callback(localData.map((d) => ({ id: `${venueId}_sec_${d.sectionNumber}`, ...d })));
       } else {
         const sections = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<SeatSection, 'id'>) }));
         callback(sections);
@@ -477,21 +478,26 @@ export async function purchaseSeatsTransaction(params: PurchaseSeatsParams): Pro
       const seatRef = doc(db, 'eventSeats', seat.seatId);
       const snap = await transaction.get(seatRef);
 
-      if (snap.exists()) {
-        const data = snap.data() as EventSeat;
-        if (data.status === 'vendido') {
-          unavailableSeats.push(
-            `Sec ${seat.sectionNumber} - Fila ${seat.rowLabel} Asiento ${seat.seatNumber}`
-          );
-          continue;
-        }
+      if (!snap.exists()) {
+        unavailableSeats.push(
+          `Sec ${seat.sectionNumber} - Fila ${seat.rowLabel} Asiento ${seat.seatNumber} (No registrado en sistema)`
+        );
+        continue;
       }
-      // Asiento libre/disponible
+
+      const data = snap.data() as EventSeat;
+      if (data.status !== 'disponible') {
+        unavailableSeats.push(
+          `Sec ${seat.sectionNumber} - Fila ${seat.rowLabel} Asiento ${seat.seatNumber}`
+        );
+        continue;
+      }
+
       seatSnapshots.push({ ref: seatRef, seat });
     }
 
     if (unavailableSeats.length > 0) {
-      const errorMsg = `SEAT_CONFLICT: Los siguientes asientos ya no están disponibles porque acaban de ser adquiridos: ${unavailableSeats.join(
+      const errorMsg = `SEAT_CONFLICT: Los siguientes asientos no están disponibles: ${unavailableSeats.join(
         ', '
       )}. Por favor deselecciónalos y elige otros asientos.`;
       throw new Error(errorMsg);
@@ -527,24 +533,13 @@ export async function purchaseSeatsTransaction(params: PurchaseSeatsParams): Pro
       };
 
       transaction.set(ticketDocRef, ticketData);
-      transaction.set(
-        seatRef,
-        {
-          id: seat.seatId,
-          eventId: event.id,
-          sectionId: seat.sectionId,
-          sectionNumber: seat.sectionNumber,
-          zoneName: seat.zoneName,
-          rowLabel: seat.rowLabel,
-          seatNumber: seat.seatNumber,
-          status: 'vendido',
-          ticketId: ticketDocRef.id,
-          purchaseId,
-          updatedAt: now,
-          userId,
-        },
-        { merge: true }
-      );
+      transaction.update(seatRef, {
+        status: 'vendido',
+        ticketId: ticketDocRef.id,
+        purchaseId,
+        updatedAt: now,
+        userId,
+      });
 
       createdTicketIds.push(ticketDocRef.id);
     }
@@ -561,6 +556,7 @@ export async function purchaseSeatsTransaction(params: PurchaseSeatsParams): Pro
   try {
     await addDoc(collection(db, 'sales'), {
       channel: 'boletos',
+      userId,
       venueId: event.venueId,
       eventId: event.id,
       referenceId: purchaseId,
