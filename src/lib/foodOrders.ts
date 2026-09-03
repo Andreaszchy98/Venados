@@ -122,12 +122,22 @@ export function listenToStandFoodOrders(
         onUpdate(orders);
       },
       (error) => {
-        if (onError) onError(error);
-        handleFirestoreError(error, OperationType.GET, COLLECTION_NAME);
+        console.warn('Error en snapshot de órdenes de comida:', error);
+        if (onError) {
+          onError(error);
+        } else {
+          handleFirestoreError(error, OperationType.GET, COLLECTION_NAME);
+        }
       }
     );
   } catch (err) {
-    handleFirestoreError(err, OperationType.GET, COLLECTION_NAME);
+    console.warn('Error al iniciar listener de órdenes:', err);
+    if (onError) {
+      onError(err);
+    } else {
+      handleFirestoreError(err, OperationType.GET, COLLECTION_NAME);
+    }
+    return () => {};
   }
 }
 

@@ -89,7 +89,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             {isRegister ? 'Crear Cuenta en VXP' : 'Bienvenido a VXP'}
           </h2>
           <p className="text-[11px] sm:text-xs text-red-100/90 mt-1">
-            Plataforma oficial del Club Venados de Mazatlán
+            Ingresa a tu cuenta de VXP
           </p>
         </div>
 

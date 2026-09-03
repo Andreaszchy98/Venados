@@ -1,16 +1,39 @@
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, auth } from './firebase';
 import { Venue, VenueEvent } from '../types';
 
 export const DEFAULT_VENUE_ID = 'venue-teodoro-mariscal';
 export const DEFAULT_EVENT_ID = 'event-temporada-2026';
 
+export const DEFAULT_FALLBACK_EVENT: VenueEvent = {
+  id: DEFAULT_EVENT_ID,
+  venueId: DEFAULT_VENUE_ID,
+  type: 'baseball',
+  name: 'Temporada Regular Venados 2026',
+  opponent: 'Tomateros de Culiacán',
+  date: '2026-10-15',
+  time: '20:00 hrs',
+  gate: 'Puertas 1, 2, 4 y 8',
+  active: true,
+  ticketsAvailable: true,
+  priceTiers: [
+    { section: 'Platea Baja Central', price: 450 },
+    { section: 'Preferente Lateral', price: 320 },
+    { section: 'Palco VIP Premier', price: 850 },
+    { section: 'Bleachers / Grada General', price: 150 },
+  ],
+  createdAt: '2026-09-01T00:00:00.000Z',
+};
+
 /**
  * Asegura que existan los documentos por defecto en Firestore para el recinto
  * (Estadio Teodoro Mariscal) y el evento principal (Temporada Regular Venados 2026).
- * Se ejecuta una sola vez al iniciar la app junto con los seeds existentes.
+ * Se ejecuta solo si hay una sesión activa.
  */
 export async function ensureDefaultVenueExists(): Promise<void> {
+  if (!auth.currentUser) {
+    return;
+  }
   try {
     const venueRef = doc(db, 'venues', DEFAULT_VENUE_ID);
     const venueSnap = await getDoc(venueRef);
@@ -37,8 +60,18 @@ export async function ensureDefaultVenueExists(): Promise<void> {
         venueId: DEFAULT_VENUE_ID,
         type: 'baseball',
         name: 'Temporada Regular Venados 2026',
+        opponent: 'Tomateros de Culiacán',
         date: '2026-10-15',
+        time: '20:00 hrs',
+        gate: 'Puertas 1, 2, 4 y 8',
         active: true,
+        ticketsAvailable: true,
+        priceTiers: [
+          { section: 'Platea Baja Central', price: 450 },
+          { section: 'Preferente Lateral', price: 320 },
+          { section: 'Palco VIP Premier', price: 850 },
+          { section: 'Bleachers / Grada General', price: 150 },
+        ],
         createdAt: new Date().toISOString(),
       };
       await setDoc(eventRef, defaultEvent);

@@ -9,14 +9,51 @@ import {
   query,
   where,
   orderBy,
+  onSnapshot,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Venue, VenueEvent, EventType } from '../types';
 import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
-import { DEFAULT_VENUE_ID, DEFAULT_EVENT_ID } from './defaultVenue';
+import { DEFAULT_VENUE_ID, DEFAULT_EVENT_ID, DEFAULT_FALLBACK_EVENT } from './defaultVenue';
 
 const VENUES_COLLECTION = 'venues';
 const EVENTS_COLLECTION = 'venueEvents';
+
+/**
+ * Escuchar todos los recintos (Venues) en tiempo real
+ */
+export function subscribeVenues(
+  onUpdate: (venues: Venue[]) => void,
+  onError?: (err: Error) => void
+): () => void {
+  const q = query(collection(db, VENUES_COLLECTION));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      if (snapshot.empty) {
+        onUpdate([
+          {
+            id: DEFAULT_VENUE_ID,
+            name: 'Estadio Teodoro Mariscal',
+            city: 'Mazatlán',
+            state: 'Sinaloa',
+            address: 'Av. Justo Sierra s/n, Estadio, 82140 Mazatlán, Sin.',
+            active: true,
+            createdAt: new Date().toISOString(),
+          },
+        ]);
+        return;
+      }
+      const venuesList = snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) as Venue[];
+      onUpdate(venuesList);
+    },
+    (err) => {
+      console.warn('Error al escuchar sedes en tiempo real:', err);
+      if (onError) onError(err);
+      else handleFirestoreError(err, OperationType.LIST, VENUES_COLLECTION);
+    }
+  );
+}
 
 /**
  * Obtener todos los recintos (Venues)
@@ -121,17 +158,7 @@ export async function getVenueEvents(venueId?: string): Promise<VenueEvent[]> {
     }
     const snap = await getDocs(q);
     if (snap.empty && (!venueId || venueId === DEFAULT_VENUE_ID)) {
-      return [
-        {
-          id: DEFAULT_EVENT_ID,
-          venueId: DEFAULT_VENUE_ID,
-          type: 'baseball',
-          name: 'Temporada Regular Venados 2026',
-          date: '2026-10-15',
-          active: true,
-          createdAt: new Date().toISOString(),
-        },
-      ];
+      return [DEFAULT_FALLBACK_EVENT];
     }
     return snap.docs.map((d) => ({ id: d.id, ...d.data() })) as VenueEvent[];
   } catch (err) {
@@ -140,54 +167,11 @@ export async function getVenueEvents(venueId?: string): Promise<VenueEvent[]> {
   }
 }
 
-/**
- * Crear un evento para un recinto (Exclusivo Superadmin)
- */
-export async function createVenueEvent(
-  eventData: Omit<VenueEvent, 'id' | 'createdAt'> & { id?: string }
-): Promise<VenueEvent> {
-  const now = new Date().toISOString();
-  try {
-    const docRef = eventData.id ? doc(db, EVENTS_COLLECTION, eventData.id) : doc(collection(db, EVENTS_COLLECTION));
-    const newEvent: VenueEvent = {
-      id: docRef.id,
-      venueId: eventData.venueId,
-      type: eventData.type,
-      name: eventData.name,
-      date: eventData.date,
-      active: eventData.active !== undefined ? eventData.active : true,
-      createdAt: now,
-    };
-    await setDoc(docRef, sanitizeFirestoreData(newEvent));
-    return newEvent;
-  } catch (err) {
-    handleFirestoreError(err, OperationType.CREATE, EVENTS_COLLECTION);
-    throw err;
-  }
-}
+export {
+  createVenueEvent,
+  updateVenueEvent,
+  deleteVenueEvent,
+  getActiveEventsForVenue,
+  subscribeVenueEvents,
+} from './venueEvents';
 
-/**
- * Actualizar evento (Exclusivo Superadmin)
- */
-export async function updateVenueEvent(eventId: string, updates: Partial<VenueEvent>): Promise<void> {
-  try {
-    const docRef = doc(db, EVENTS_COLLECTION, eventId);
-    await updateDoc(docRef, sanitizeFirestoreData(updates));
-  } catch (err) {
-    handleFirestoreError(err, OperationType.UPDATE, `${EVENTS_COLLECTION}/${eventId}`);
-    throw err;
-  }
-}
-
-/**
- * Eliminar evento (Exclusivo Superadmin)
- */
-export async function deleteVenueEvent(eventId: string): Promise<void> {
-  try {
-    const docRef = doc(db, EVENTS_COLLECTION, eventId);
-    await deleteDoc(docRef);
-  } catch (err) {
-    handleFirestoreError(err, OperationType.DELETE, `${EVENTS_COLLECTION}/${eventId}`);
-    throw err;
-  }
-}

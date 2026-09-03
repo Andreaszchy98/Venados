@@ -36,11 +36,7 @@ export default function App() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-
-  // Inicializar recinto y evento por defecto una sola vez al arrancar la app
-  useEffect(() => {
-    ensureDefaultVenueExists();
-  }, []);
+  const [activeVenueTag, setActiveVenueTag] = useState<string>('Tu estadio, en un solo lugar');
 
   useEffect(() => {
     let unsubscribeUserDoc: (() => void) | null = null;
@@ -55,27 +51,33 @@ export default function App() {
           setUserProfile(profile);
 
           const userDocRef = doc(db, 'users', currentUser.uid);
-          unsubscribeUserDoc = onSnapshot(userDocRef, (snap) => {
-            if (snap.exists()) {
-              const data = snap.data();
-              setUserProfile({
-                uid: currentUser.uid,
-                email: data.email || currentUser.email,
-                displayName: data.displayName || currentUser.displayName,
-                role: data.role || 'aficionado',
-                photoURL: data.photoURL || currentUser.photoURL,
-                phoneNumber: data.phoneNumber || currentUser.phoneNumber,
-                standId: data.standId,
-                standName: data.standName,
-                assignedZone: data.assignedZone,
-                runnerStatus: data.runnerStatus,
-                venueId: data.venueId,
-                venueName: data.venueName,
-                createdAt: data.createdAt || new Date().toISOString(),
-                updatedAt: data.updatedAt,
-              });
+          unsubscribeUserDoc = onSnapshot(
+            userDocRef,
+            (snap) => {
+              if (snap.exists()) {
+                const data = snap.data();
+                setUserProfile({
+                  uid: currentUser.uid,
+                  email: data.email || currentUser.email,
+                  displayName: data.displayName || currentUser.displayName,
+                  role: data.role || 'aficionado',
+                  photoURL: data.photoURL || currentUser.photoURL,
+                  phoneNumber: data.phoneNumber || currentUser.phoneNumber,
+                  standId: data.standId,
+                  standName: data.standName,
+                  assignedZone: data.assignedZone,
+                  runnerStatus: data.runnerStatus,
+                  venueId: data.venueId,
+                  venueName: data.venueName,
+                  createdAt: data.createdAt || new Date().toISOString(),
+                  updatedAt: data.updatedAt,
+                });
+              }
+            },
+            (error) => {
+              console.warn('Error en listener de perfil de usuario:', error);
             }
-          });
+          );
         } catch (err) {
           console.error('Error syncing profile:', err);
         }
@@ -118,15 +120,13 @@ export default function App() {
               <div className="relative z-10 max-w-2xl space-y-4">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-white/10 backdrop-blur-xs border border-white/20 text-red-100">
                   <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                  Temporada 2026-2027 • LMP • Mazatlán
+                  {activeVenueTag}
                 </div>
                 <h1 className="text-3xl sm:text-5xl font-black tracking-tight leading-tight">
-                  Venados de Mazatlán
+                  Bienvenido a VXP
                 </h1>
                 <p className="text-sm sm:text-base text-red-100/90 leading-relaxed font-normal">
-                  Plataforma integral para aficionados y la gestión completa del negocio:
-                  boletos digitales, tienda oficial, pickup express de alimentos, administración de
-                  inventario en almacén y logística de despacho.
+                  Boletos digitales, pedidos a tu asiento, tienda oficial y toda la experiencia de tu estadio, desde tu celular.
                 </p>
                 <div className="pt-4 flex flex-wrap items-center justify-center sm:justify-start gap-3">
                   <button
@@ -224,7 +224,7 @@ export default function App() {
 
       {/* Pie de página discreto */}
       <footer className="mt-auto border-t border-slate-200 bg-white py-4 px-6 text-center text-xs text-slate-500">
-        <p>VXP • Plataforma Integral del Negocio y Estadio • Club Venados de Mazatlán &copy; 2026</p>
+        <p>VXP — Venue Experience Platform &copy; 2026</p>
       </footer>
     </div>
   );

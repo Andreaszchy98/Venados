@@ -151,6 +151,9 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
       selectedStand.id,
       (liveOrders) => {
         setOrders(liveOrders);
+      },
+      (err) => {
+        console.warn('Error escuchando órdenes del puesto en tiempo real:', err);
       }
     );
 

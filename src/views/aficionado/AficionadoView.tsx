@@ -27,10 +27,10 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({ user }) => {
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-2 border-b border-slate-200">
         <div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-            Hola, {user.displayName || 'Aficionado Venados'}
+            Hola, {user.displayName || 'Aficionado'}
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Portal oficial del aficionado de los Venados de Mazatlán
+            Portal de Experiencia del Aficionado • Boletos, eventos, consumos y tienda en tu sede
           </p>
         </div>
 
@@ -57,7 +57,7 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({ user }) => {
             }`}
           >
             <Award className="w-4 h-4 text-amber-600" />
-            Socio Venados
+            Membresía & Abonos
           </button>
 
           <button

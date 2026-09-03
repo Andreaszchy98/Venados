@@ -1,6 +1,6 @@
 {
   "name": "VXP",
-  "description": "Plataforma multiservicio para estadio de béisbol con gestión de boletos, membresías y panel administrativo.",
+  "description": "Plataforma integral de recintos deportivos y eventos con portal del aficionado, boletos, concesiones, inventario, logística y administración de ventas.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

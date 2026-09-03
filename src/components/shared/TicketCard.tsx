@@ -48,8 +48,15 @@ export const TicketCard: React.FC<TicketCardProps> = ({
       <div className="flex-1 p-5 md:p-6 flex flex-col justify-between space-y-4">
         <div>
           <div className="flex items-start justify-between gap-3 mb-2">
-            <div className="inline-block px-2 py-0.5 rounded text-[11px] font-bold tracking-wider uppercase bg-red-800 text-white">
-              LMP Temporada Regular
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="inline-block px-2 py-0.5 rounded text-[11px] font-bold tracking-wider uppercase bg-red-800 text-white">
+                LMP Temporada Regular
+              </div>
+              {ticket.purchaseId && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                  Ref: #{ticket.purchaseId.slice(-7)}
+                </span>
+              )}
             </div>
             {getStatusBadge()}
           </div>

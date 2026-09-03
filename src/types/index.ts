@@ -38,13 +38,23 @@ export interface Venue {
 
 export type EventType = 'baseball' | 'football' | 'basketball' | 'concert' | 'other';
 
+export interface EventPriceTier {
+  section: string; // ej. "Platea Baja Central"
+  price: number;
+}
+
 export interface VenueEvent {
   id: string;
   venueId: string;
   type: EventType;
-  name: string;
+  name: string; // ej. "Venados de Mazatlán vs Tomateros de Culiacán"
+  opponent?: string;
   date: string;
+  time: string;
+  gate?: string;
   active: boolean;
+  ticketsAvailable: boolean; // el admin abre/cierra la venta
+  priceTiers: EventPriceTier[];
   createdAt: string;
 }
 
@@ -57,6 +67,9 @@ export interface Ticket {
   id: string;
   userId: string;
   eventId: string;
+  venueId?: string;
+  purchaseId?: string;
+  seatId?: string;
   matchTitle: string;
   opponent?: string;
   matchDate: string;
@@ -70,6 +83,34 @@ export interface Ticket {
   qrId: string;
   gate?: string;
   createdAt: string;
+}
+
+// Mapa físico — pertenece a la SEDE, no cambia entre eventos
+export interface SeatSection {
+  id: string;
+  venueId: string;
+  sectionNumber: string; // "101", "227", etc.
+  zoneName: string; // "Diamante", "Platino", "Sky Plus", "Oro", "Plus", "Sky", "Fan", "Fan Plus", "Deluxe Supreme"
+  totalSeats: number; // capacidad total de la sección (ej. 30)
+  rows: number; // filas dentro de la sección, para poder generar la cuadrícula de asientos
+  seatsPerRow: number;
+}
+
+// Disponibilidad — pertenece al EVENTO, se reinicia por cada partido/concierto
+export type SeatStatus = 'disponible' | 'vendido';
+
+export interface EventSeat {
+  id: string;
+  eventId: string;
+  sectionId: string;
+  sectionNumber?: string;
+  zoneName?: string;
+  rowLabel: string; // "A", "B", "1", "2"...
+  seatNumber: number;
+  status: SeatStatus;
+  ticketId?: string; // se llena cuando se vende
+  purchaseId?: string;
+  updatedAt?: string;
 }
 
 // ==========================================

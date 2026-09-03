@@ -200,6 +200,38 @@
         "createdAt": { "type": "string" }
       },
       "required": ["venueId", "type", "name", "date", "active"]
+    },
+    "seatSections": {
+      "title": "seatSections",
+      "description": "Mapa físico de secciones y capacidad de butacas por sede deportiva",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "venueId": { "type": "string" },
+        "sectionNumber": { "type": "string" },
+        "zoneName": { "type": "string" },
+        "totalSeats": { "type": "number" },
+        "rows": { "type": "number" },
+        "seatsPerRow": { "type": "number" }
+      },
+      "required": ["venueId", "sectionNumber", "zoneName", "totalSeats", "rows", "seatsPerRow"]
+    },
+    "eventSeats": {
+      "title": "eventSeats",
+      "description": "Disponibilidad y estado de cada butaca por evento programado",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "eventId": { "type": "string" },
+        "sectionId": { "type": "string" },
+        "rowLabel": { "type": "string" },
+        "seatNumber": { "type": "number" },
+        "status": { "type": "string", "enum": ["disponible", "vendido"] },
+        "ticketId": { "type": "string" },
+        "purchaseId": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["eventId", "sectionId", "rowLabel", "seatNumber", "status"]
     }
   }
 }

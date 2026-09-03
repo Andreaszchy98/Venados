@@ -45,12 +45,9 @@ export const Header: React.FC<HeaderProps> = ({ user, onOpenAuth, onRoleChanged 
                 <span className="font-extrabold text-base tracking-tight text-white">
                   VXP
                 </span>
-                <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-red-700/80 text-red-100 tracking-wider">
-                  Venados
-                </span>
               </div>
               <span className="text-[11px] text-slate-400 block -mt-0.5">
-                Estadio Teodoro Mariscal • Plataforma Integral
+                Venue Experience Platform
               </span>
             </div>
           </div>
@@ -69,7 +66,7 @@ export const Header: React.FC<HeaderProps> = ({ user, onOpenAuth, onRoleChanged 
                     className="bg-transparent text-white font-bold focus:outline-hidden cursor-pointer hover:text-red-300 transition-colors text-xs"
                     title="Alternar rol para explorar todos los módulos del negocio"
                   >
-                    {(user.role === 'superadmin' || user.email === 'jorgeandres980706@gmail.com') && (
+                    {user.role === 'superadmin' && (
                       <option value="superadmin" className="bg-slate-900 text-amber-300">
                         Superadmin (Gestión Global de Sedes)
                       </option>

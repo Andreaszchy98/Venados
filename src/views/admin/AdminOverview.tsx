@@ -18,11 +18,12 @@ import {
   ArrowRight,
   Store,
   Users,
+  Calendar,
 } from 'lucide-react';
 
 interface AdminOverviewProps {
   user?: UserProfile;
-  onNavigateTab: (tab: 'ventas' | 'inventario' | 'logistica' | 'personal' | 'negocios') => void;
+  onNavigateTab: (tab: 'ventas' | 'inventario' | 'logistica' | 'personal' | 'negocios' | 'eventos') => void;
 }
 
 export const AdminOverview: React.FC<AdminOverviewProps> = ({ user, onNavigateTab }) => {
@@ -260,6 +261,38 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ user, onNavigateTa
             <button
               onClick={() => onNavigateTab('personal')}
               className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-lg flex items-center gap-1 shadow-xs transition-colors"
+            >
+              <span>Gestionar</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+        {/* Módulo Eventos & Partidos de Sede */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between space-y-4 hover:border-slate-300 transition-colors">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="p-2.5 rounded-xl bg-red-50 text-red-700">
+                <Calendar className="w-5 h-5" />
+              </div>
+              <span className="text-xs font-bold text-red-700 bg-red-100/60 px-2 py-0.5 rounded-full">
+                Sede
+              </span>
+            </div>
+            <h3 className="font-extrabold text-base text-slate-900">Eventos & Partidos</h3>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Programar partidos y eventos, abrir/cerrar venta de boletos y configurar precios por sección.
+            </p>
+          </div>
+
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+            <div>
+              <span className="text-[11px] text-slate-400 block font-medium">Taquilla Sede</span>
+              <span className="text-base font-black text-slate-900">Calendario</span>
+            </div>
+            <button
+              id="overview-goto-eventos"
+              onClick={() => onNavigateTab('eventos')}
+              className="px-3 py-1.5 bg-red-700 hover:bg-red-800 text-white text-xs font-bold rounded-lg flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
             >
               <span>Gestionar</span>
               <ArrowRight className="w-3.5 h-3.5" />

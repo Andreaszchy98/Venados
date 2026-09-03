@@ -60,35 +60,16 @@ export async function syncUserProfile(
 ): Promise<UserProfile> {
   const userDocRef = doc(db, 'users', fbUser.uid);
   const userSnapshot = await getDoc(userDocRef);
-  const isBootstrapUser = fbUser.email === 'jorgeandres980706@gmail.com';
-
   if (userSnapshot.exists()) {
     const data = userSnapshot.data();
-    let currentRole: UserRole = data.role || (isBootstrapUser ? 'superadmin' : 'aficionado');
-    let venueId = data.venueId || (isBootstrapUser || currentRole === 'admin' ? 'venue-teodoro-mariscal' : undefined);
-    let venueName = data.venueName || (isBootstrapUser || currentRole === 'admin' ? 'Estadio Teodoro Mariscal' : undefined);
-
-    // Si es el usuario principal y no tiene rol de administración definido o falta su sede
-    if (isBootstrapUser && (!data.role || (data.role === 'aficionado' && !data.roleSelectedByUser) || !data.venueId)) {
-      currentRole = data.role === 'admin' ? 'admin' : 'superadmin';
-      venueId = 'venue-teodoro-mariscal';
-      venueName = 'Estadio Teodoro Mariscal';
-      try {
-        await updateDoc(userDocRef, {
-          role: currentRole,
-          venueId,
-          venueName,
-          updatedAt: new Date().toISOString(),
-        });
-      } catch (e) {
-        console.warn('Could not auto-promote bootstrap admin doc:', e);
-      }
-    }
+    const currentRole: UserRole = data.role || 'aficionado';
+    const venueId = data.venueId || undefined;
+    const venueName = data.venueName || undefined;
 
     return {
       uid: fbUser.uid,
       email: data.email || fbUser.email,
-      displayName: data.displayName || fbUser.displayName || (isBootstrapUser ? 'Jorge Andrés (Admin)' : 'Aficionado Venados'),
+      displayName: data.displayName || fbUser.displayName || 'Aficionado Venados',
       role: currentRole,
       photoURL: data.photoURL || fbUser.photoURL,
       phoneNumber: data.phoneNumber || fbUser.phoneNumber,
@@ -103,19 +84,13 @@ export async function syncUserProfile(
     };
   } else {
     // Crear nuevo perfil en Firestore
-    const defaultRole: UserRole = isBootstrapUser ? 'superadmin' : initialRole;
-    const defaultVenueId = isBootstrapUser || defaultRole === 'admin' ? 'venue-teodoro-mariscal' : null;
-    const defaultVenueName = isBootstrapUser || defaultRole === 'admin' ? 'Estadio Teodoro Mariscal' : null;
-
     const newProfile: UserProfile = {
       uid: fbUser.uid,
       email: fbUser.email,
       displayName: fbUser.displayName || (fbUser.email ? fbUser.email.split('@')[0] : 'Aficionado Venados'),
-      role: defaultRole,
+      role: initialRole,
       photoURL: fbUser.photoURL || null,
       phoneNumber: fbUser.phoneNumber || null,
-      venueId: defaultVenueId || undefined,
-      venueName: defaultVenueName || undefined,
       createdAt: new Date().toISOString(),
     };
 

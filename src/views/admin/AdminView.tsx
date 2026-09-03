@@ -6,6 +6,7 @@ import { InventarioAdmin } from './InventarioAdmin';
 import { LogisticaAdmin } from './LogisticaAdmin';
 import { PersonalAdmin } from './PersonalAdmin';
 import { NegociosAdmin } from './NegociosAdmin';
+import { EventsManager } from './EventsManager';
 import {
   ShieldAlert,
   TrendingUp,
@@ -15,6 +16,7 @@ import {
   Receipt,
   Users,
   Store,
+  Calendar,
 } from 'lucide-react';
 
 interface AdminViewProps {
@@ -22,7 +24,20 @@ interface AdminViewProps {
 }
 
 export const AdminView: React.FC<AdminViewProps> = ({ user }) => {
-  const [activeTab, setActiveTab] = useState<'resumen' | 'ventas' | 'inventario' | 'logistica' | 'personal' | 'negocios'>('resumen');
+  const [activeTab, setActiveTab] = useState<'resumen' | 'eventos' | 'ventas' | 'inventario' | 'logistica' | 'personal' | 'negocios'>('resumen');
+
+  // El superadmin NO debe tener acceso a esta vista ni a la gestión de eventos
+  if (user.role === 'superadmin') {
+    return (
+      <div className="p-8 bg-amber-50 border border-amber-200 rounded-3xl text-center space-y-3 max-w-xl mx-auto">
+        <ShieldAlert className="w-10 h-10 text-amber-600 mx-auto" />
+        <h3 className="text-base font-black text-amber-900">Vista de Operación de Sede</h3>
+        <p className="text-xs text-amber-700">
+          Esta vista y la administración de eventos y taquilla corresponden exclusivamente a administradores asignados a recintos deportivos. Como Superadmin de la plataforma, utiliza el panel global.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -54,6 +69,19 @@ export const AdminView: React.FC<AdminViewProps> = ({ user }) => {
           >
             <LayoutDashboard className="w-4 h-4 text-red-700" />
             Resumen
+          </button>
+
+          <button
+            id="admin-tab-eventos"
+            onClick={() => setActiveTab('eventos')}
+            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all shrink-0 ${
+              activeTab === 'eventos'
+                ? 'bg-white text-red-800 shadow-xs font-bold'
+                : 'text-slate-700 hover:text-slate-900'
+            }`}
+          >
+            <Calendar className="w-4 h-4 text-red-700" />
+            Eventos & Partidos
           </button>
 
           <button
@@ -124,6 +152,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ user }) => {
       {activeTab === 'resumen' && (
         <AdminOverview user={user} onNavigateTab={(tab) => setActiveTab(tab as any)} />
       )}
+      {activeTab === 'eventos' && <EventsManager user={user} />}
       {activeTab === 'negocios' && <NegociosAdmin user={user} />}
       {activeTab === 'personal' && <PersonalAdmin user={user} />}
       {activeTab === 'ventas' && <VentasAdmin user={user} />}
