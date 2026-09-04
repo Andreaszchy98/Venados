@@ -7,6 +7,7 @@ import {
   getEventPosterPlaceholder,
   getVenueEventById,
 } from '../../lib/venueEvents';
+import { normalizeGoogleDriveImageUrl } from '../../lib/imageUtils';
 import { subscribeVenues, getAllVenues } from '../../lib/venues';
 import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
 import { TicketCard } from '../../components/shared/TicketCard';
@@ -616,7 +617,7 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
                     ev.priceTiers && ev.priceTiers.length > 0
                       ? Math.min(...ev.priceTiers.map((t) => t.price))
                       : 0;
-                  const posterSrc = ev.posterUrl || getEventPosterPlaceholder(ev.type);
+                  const posterSrc = normalizeGoogleDriveImageUrl(ev.posterUrl) || getEventPosterPlaceholder(ev.type);
 
                   return (
                     <div
@@ -624,18 +625,26 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
                       className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col justify-between group"
                     >
                       <div>
-                        {/* Póster Promocional del Evento */}
-                        <div className="relative aspect-4/3 sm:aspect-3/4 overflow-hidden bg-slate-900">
+                        {/* Póster Promocional del Evento (completo y sin recortes) */}
+                        <div className="relative aspect-16/9 sm:aspect-16/10 overflow-hidden bg-slate-950 flex items-center justify-center">
+                          {/* Fondo con blur ambiental para dar profundidad sin distorsión */}
+                          <img
+                            src={posterSrc}
+                            alt=""
+                            aria-hidden="true"
+                            className="absolute inset-0 w-full h-full object-cover blur-md opacity-35 scale-110 pointer-events-none"
+                            referrerPolicy="no-referrer"
+                          />
+                          {/* Imagen principal: object-contain para mostrarla 100% íntegra */}
                           <img
                             src={posterSrc}
                             alt={ev.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            className="relative z-10 w-full h-full object-contain group-hover:scale-102 transition-transform duration-300 drop-shadow-md"
                             referrerPolicy="no-referrer"
                           />
-                          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-slate-950/30 to-black/20" />
 
                           {/* Badges superiores */}
-                          <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-2">
+                          <div className="absolute top-3 left-3 right-3 z-20 flex items-center justify-between gap-2">
                             <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-700/90 backdrop-blur-xs text-white border border-red-500/50 shadow-xs">
                               {ev.type}
                             </span>
@@ -644,24 +653,22 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
                               Venta Abierta
                             </span>
                           </div>
-
-                          {/* Información superpuesta al pie del póster */}
-                          <div className="absolute bottom-3 left-3 right-3 text-white space-y-1">
-                            <div className="flex items-center gap-2 text-[11px] font-bold text-amber-300">
-                              <Calendar className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                              <span>{ev.date}</span>
-                              <span>•</span>
-                              <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                              <span>{ev.time || '20:00 hrs'}</span>
-                            </div>
-                            <h4 className="text-base font-black text-white leading-snug line-clamp-2">
-                              {ev.name}
-                            </h4>
-                          </div>
                         </div>
 
-                        {/* Metadatos y detalles */}
-                        <div className="p-4 space-y-3">
+                        {/* Metadatos y detalles en el cuerpo de la tarjeta para no tapar el póster */}
+                        <div className="p-4 space-y-2.5">
+                          <div className="flex items-center gap-2 text-xs font-bold text-red-700">
+                            <Calendar className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                            <span>{ev.date}</span>
+                            <span>•</span>
+                            <Clock className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                            <span>{ev.time || '20:00 hrs'}</span>
+                          </div>
+
+                          <h4 className="text-base font-black text-slate-900 leading-snug line-clamp-2">
+                            {ev.name}
+                          </h4>
+
                           {ev.opponent && (
                             <p className="text-xs text-slate-600 font-medium">
                               Rival: <span className="font-bold text-slate-900">{ev.opponent}</span>

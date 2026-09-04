@@ -330,12 +330,21 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
               </div>
               <div className="flex gap-4 items-center">
                 {upcomingEvent.posterUrl && (
-                  <img
-                    src={upcomingEvent.posterUrl}
-                    alt={upcomingEvent.name}
-                    className="w-16 h-20 object-cover rounded-xl border border-amber-200 shadow-xs shrink-0"
-                    referrerPolicy="no-referrer"
-                  />
+                  <div className="w-24 h-16 rounded-xl overflow-hidden bg-slate-950 border border-amber-200 shadow-xs shrink-0 relative flex items-center justify-center">
+                    <img
+                      src={upcomingEvent.posterUrl}
+                      alt=""
+                      aria-hidden="true"
+                      className="absolute inset-0 w-full h-full object-cover blur-xs opacity-35 scale-110 pointer-events-none"
+                      referrerPolicy="no-referrer"
+                    />
+                    <img
+                      src={upcomingEvent.posterUrl}
+                      alt={upcomingEvent.name}
+                      className="relative z-10 max-h-full max-w-full object-contain"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
                 )}
                 <div className="flex-1 min-w-0">
                   <h4 className="font-extrabold text-sm sm:text-base text-slate-900 leading-snug">

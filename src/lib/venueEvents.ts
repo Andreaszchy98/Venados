@@ -15,6 +15,7 @@ import { VenueEvent, EventPriceTier, EventType } from '../types';
 import { DEFAULT_VENUE_ID } from './defaultVenue';
 import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
 import { generateEventSeats } from './seatMap';
+import { normalizeGoogleDriveImageUrl } from './imageUtils';
 
 const COLLECTION_NAME = 'venueEvents';
 
@@ -178,6 +179,7 @@ export async function createVenueEvent(
 
     const defaultWindow = computeDefaultOrderingWindow(eventData.date, eventData.time);
 
+    const rawPoster = eventData.posterUrl ? normalizeGoogleDriveImageUrl(eventData.posterUrl) : '';
     const newEvent: VenueEvent = {
       id: docRef.id,
       venueId: adminVenueId, // Forzado estricto al del admin
@@ -189,7 +191,7 @@ export async function createVenueEvent(
       gate: eventData.gate || 'Puertas Generales',
       active: eventData.active !== undefined ? eventData.active : true,
       ticketsAvailable: eventData.ticketsAvailable !== undefined ? eventData.ticketsAvailable : true,
-      posterUrl: eventData.posterUrl || getEventPosterPlaceholder(eventData.type || 'baseball'),
+      posterUrl: rawPoster || getEventPosterPlaceholder(eventData.type || 'baseball'),
       orderingOpensAt: eventData.orderingOpensAt || defaultWindow.orderingOpensAt,
       orderingClosesAt: eventData.orderingClosesAt || defaultWindow.orderingClosesAt,
       priceTiers: eventData.priceTiers && eventData.priceTiers.length > 0
@@ -246,6 +248,9 @@ export async function updateVenueEvent(
     // Proteger congelando venueId al del admin
     const safeUpdates: any = { ...updates };
     safeUpdates.venueId = adminVenueId;
+    if (safeUpdates.posterUrl !== undefined) {
+      safeUpdates.posterUrl = normalizeGoogleDriveImageUrl(safeUpdates.posterUrl);
+    }
 
     await updateDoc(docRef, sanitizeFirestoreData(safeUpdates));
   } catch (err) {
@@ -290,7 +295,14 @@ export async function getActiveEventsForVenue(venueId: string): Promise<VenueEve
       where('venueId', '==', venueId)
     );
     const snap = await getDocs(q);
-    const all = snap.docs.map((d) => ({ id: d.id, ...d.data() } as VenueEvent));
+    const all = snap.docs.map((d) => {
+      const data = d.data();
+      return {
+        id: d.id,
+        ...data,
+        posterUrl: normalizeGoogleDriveImageUrl(data.posterUrl),
+      } as VenueEvent;
+    });
 
     const activeEvents = all
       .filter((e) => e.active === true && e.ticketsAvailable === true)
@@ -330,10 +342,14 @@ export function subscribeVenueEvents(
       }
 
       const events: VenueEvent[] = snapshot.docs
-        .map((docSnap) => ({
-          id: docSnap.id,
-          ...(docSnap.data() as Omit<VenueEvent, 'id'>),
-        }))
+        .map((docSnap) => {
+          const data = docSnap.data();
+          return {
+            id: docSnap.id,
+            ...data,
+            posterUrl: normalizeGoogleDriveImageUrl(data.posterUrl),
+          } as VenueEvent;
+        })
         .sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : 0));
 
       onUpdate(events);
@@ -436,7 +452,12 @@ export async function getVenueEventById(eventId: string): Promise<VenueEvent | n
     const docRef = doc(db, COLLECTION_NAME, eventId);
     const snap = await getDoc(docRef);
     if (snap.exists()) {
-      return { id: snap.id, ...snap.data() } as VenueEvent;
+      const data = snap.data();
+      return {
+        id: snap.id,
+        ...data,
+        posterUrl: normalizeGoogleDriveImageUrl(data.posterUrl),
+      } as VenueEvent;
     }
     const fallback = DEFAULT_FALLBACK_EVENTS.find((e) => e.id === eventId);
     return fallback || null;
@@ -448,25 +469,31 @@ export async function getVenueEventById(eventId: string): Promise<VenueEvent | n
 }
 
 /**
- * Consulta los eventos active: true de DEFAULT_VENUE_ID con fecha futura, ordenados por date, límite 6.
- * Filtra solo aquellos que tengan un posterUrl real para el carrusel de fondo del hero previo al login.
+ * Consulta los eventos active: true con fecha futura, ordenados por date, límite limitCount.
+ * Si se pasa venueId, prioriza los de ese venue o incluye todos para la vista previa previa al login.
+ * Filtra solo aquellos que tengan un posterUrl real para el carrusel de bienvenida.
  */
 export async function getUpcomingHeroEvents(
-  venueId: string = DEFAULT_VENUE_ID,
+  venueId?: string,
   limitCount: number = 6
 ): Promise<VenueEvent[]> {
-  const targetVenueId = venueId || DEFAULT_VENUE_ID;
   const todayStr = new Date().toISOString().split('T')[0];
 
   try {
-    const q = query(
-      collection(db, COLLECTION_NAME),
-      where('venueId', '==', targetVenueId)
-    );
+    const q = venueId
+      ? query(collection(db, COLLECTION_NAME), where('venueId', '==', venueId))
+      : collection(db, COLLECTION_NAME);
     const snap = await getDocs(q);
-    let events = snap.docs.map((d) => ({ id: d.id, ...d.data() } as VenueEvent));
+    let events = snap.docs.map((d) => {
+      const data = d.data();
+      return {
+        id: d.id,
+        ...data,
+        posterUrl: normalizeGoogleDriveImageUrl(data.posterUrl),
+      } as VenueEvent;
+    });
 
-    if (events.length === 0 && targetVenueId === DEFAULT_VENUE_ID) {
+    if (events.length === 0) {
       events = [...DEFAULT_FALLBACK_EVENTS];
     }
 
@@ -478,6 +505,32 @@ export async function getUpcomingHeroEvents(
       })
       .sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : 0))
       .slice(0, limitCount);
+
+    // Si con el filtro de venueId quedó vacío o con un solo evento y se pidió un venue específico,
+    // intentar buscar en todos los venues para no dejar el carrusel sin eventos
+    if (filtered.length < 2 && venueId) {
+      const allSnap = await getDocs(collection(db, COLLECTION_NAME));
+      const allEvents = allSnap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          ...data,
+          posterUrl: normalizeGoogleDriveImageUrl(data.posterUrl),
+        } as VenueEvent;
+      });
+      const allFiltered = allEvents
+        .filter((e) => {
+          const isFuture = e.date >= todayStr;
+          const hasPoster = typeof e.posterUrl === 'string' && e.posterUrl.trim().length > 0;
+          return e.active === true && isFuture && hasPoster;
+        })
+        .sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : 0))
+        .slice(0, limitCount);
+
+      if (allFiltered.length > 0) {
+        return allFiltered;
+      }
+    }
 
     return filtered;
   } catch (err) {

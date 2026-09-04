@@ -11,6 +11,7 @@ import {
   computeDefaultOrderingWindow,
 } from '../../lib/venueEvents';
 import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
+import { normalizeGoogleDriveImageUrl, isGoogleDriveUrl } from '../../lib/imageUtils';
 import { ConfirmationModal } from '../../components/shared/ConfirmationModal';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import {
@@ -190,10 +191,18 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user }) => {
       opensAt = opensAt || defWindow.orderingOpensAt;
       closesAt = closesAt || defWindow.orderingClosesAt;
     }
-    setFormPosterUrl(event.posterUrl || '');
+    setFormPosterUrl(normalizeGoogleDriveImageUrl(event.posterUrl) || '');
     setFormOrderingOpensAt(toDateTimeLocal(opensAt));
     setFormOrderingClosesAt(toDateTimeLocal(closesAt));
     setIsModalOpen(true);
+  };
+
+  const handlePosterUrlChange = (val: string) => {
+    const normalized = normalizeGoogleDriveImageUrl(val);
+    setFormPosterUrl(normalized);
+    if (isGoogleDriveUrl(val) && normalized !== val) {
+      showNotice('success', 'Enlace de Google Drive detectado y transformado automáticamente a URL directa.');
+    }
   };
 
   const handleRecalculateOrderingWindow = () => {
@@ -627,13 +636,20 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user }) => {
                   </div>
                 </div>
 
-                {/* Título y detalles con miniatura del póster */}
+                {/* Título y detalles con miniatura del póster (completo sin recortar) */}
                 <div className="flex gap-3 items-start">
-                  <div className="w-16 h-22 rounded-xl overflow-hidden bg-slate-200 border border-slate-300 shrink-0 shadow-xs relative">
+                  <div className="w-24 h-16 rounded-xl overflow-hidden bg-slate-950 border border-slate-300 shrink-0 shadow-xs relative flex items-center justify-center">
+                    <img
+                      src={ev.posterUrl || getEventPosterPlaceholder(ev.type)}
+                      alt=""
+                      aria-hidden="true"
+                      className="absolute inset-0 w-full h-full object-cover blur-xs opacity-35 scale-110 pointer-events-none"
+                      referrerPolicy="no-referrer"
+                    />
                     <img
                       src={ev.posterUrl || getEventPosterPlaceholder(ev.type)}
                       alt={ev.name}
-                      className="w-full h-full object-cover"
+                      className="relative z-10 max-h-full max-w-full object-contain"
                       referrerPolicy="no-referrer"
                     />
                   </div>
@@ -909,16 +925,23 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user }) => {
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-4 items-start">
-                  {/* Vista previa miniatura del póster */}
-                  <div className="w-24 h-32 sm:w-28 sm:h-36 rounded-xl overflow-hidden bg-slate-200 border border-slate-300 shrink-0 relative shadow-xs">
+                  {/* Vista previa miniatura del póster (completa sin recortar) */}
+                  <div className="w-36 h-24 sm:w-48 sm:h-28 rounded-xl overflow-hidden bg-slate-950 border border-slate-300 shrink-0 relative shadow-xs flex items-center justify-center">
+                    <img
+                      src={formPosterUrl || getEventPosterPlaceholder(formType)}
+                      alt=""
+                      aria-hidden="true"
+                      className="absolute inset-0 w-full h-full object-cover blur-xs opacity-35 scale-110 pointer-events-none"
+                      referrerPolicy="no-referrer"
+                    />
                     <img
                       src={formPosterUrl || getEventPosterPlaceholder(formType)}
                       alt="Póster preview"
-                      className="w-full h-full object-cover"
+                      className="relative z-10 max-h-full max-w-full object-contain"
                       referrerPolicy="no-referrer"
                     />
                     {!formPosterUrl && (
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center p-1 text-center">
+                      <div className="absolute inset-0 z-20 bg-black/40 flex items-center justify-center p-1 text-center">
                         <span className="text-[9px] font-bold text-white uppercase leading-tight">
                           Placeholder por defecto ({formType})
                         </span>
@@ -947,15 +970,21 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user }) => {
 
                     <div>
                       <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                        O pega una URL directa de imagen
+                        O pega una URL de imagen (soporta enlaces de Google Drive)
                       </label>
                       <input
                         type="url"
-                        placeholder="https://ejemplo.com/poster.jpg"
+                        placeholder="https://ejemplo.com/poster.jpg o enlace compartido de Drive"
                         value={formPosterUrl}
-                        onChange={(e) => setFormPosterUrl(e.target.value)}
+                        onChange={(e) => handlePosterUrlChange(e.target.value)}
                         className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-red-600"
                       />
+                      {formPosterUrl && formPosterUrl.includes('googleusercontent.com/d/') && (
+                        <p className="text-[10px] text-emerald-700 font-semibold mt-1 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                          Enlace de Google Drive optimizado con URL directa de imagen CDN.
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>

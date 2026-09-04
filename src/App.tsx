@@ -28,6 +28,8 @@ import {
   TrendingUp,
   ChefHat,
   Receipt,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { DEFAULT_VENUE_ID, ensureDefaultVenueExists } from './lib/defaultVenue';
@@ -53,10 +55,10 @@ function MainLayout() {
   const [heroEvents, setHeroEvents] = useState<VenueEvent[]>([]);
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
 
-  // Cargar eventos con póster para el carrusel de fondo antes de iniciar sesión
+  // Cargar eventos con póster para el carrusel de fondo antes de iniciar sesión (todos los venues activos)
   useEffect(() => {
     let isMounted = true;
-    getUpcomingHeroEvents(DEFAULT_VENUE_ID, 6)
+    getUpcomingHeroEvents(undefined, 6)
       .then((events) => {
         if (isMounted) {
           setHeroEvents(events);
@@ -71,16 +73,16 @@ function MainLayout() {
     };
   }, []);
 
-  // Ciclo automático de fondo: cada 4.5 segundos avanza a la siguiente imagen con fade suave
+  // Ciclo automático de fondo y póster: exactamente cada 5 segundos avanza a la siguiente imagen con fade suave
   useEffect(() => {
     if (heroEvents.length <= 1) return;
 
     const interval = setInterval(() => {
       setCurrentSlideIndex((prev) => (prev + 1) % heroEvents.length);
-    }, 4500);
+    }, 5000);
 
     return () => clearInterval(interval);
-  }, [heroEvents.length]);
+  }, [heroEvents.length, currentSlideIndex]);
 
   // Si el usuario autenticado tiene un rol distinto a aficionado, descartar pendingEventId
   useEffect(() => {
@@ -204,31 +206,28 @@ function MainLayout() {
           /* Pantalla de Bienvenida cuando no hay sesión iniciada */
           <div className="max-w-5xl mx-auto space-y-8 py-6">
             {/* Banner Principal con Cartelera Dinámica o Hero Genérico */}
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-red-950 via-red-900 to-slate-950 text-white p-8 sm:p-12 shadow-xl border border-red-800/40 text-center sm:text-left min-h-[380px] sm:min-h-[420px] flex flex-col justify-between">
-              {/* Ciclo de imágenes de fondo con transición suave en CSS (opacity + transition) */}
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-red-950 via-red-900 to-slate-950 text-white p-6 sm:p-10 lg:p-12 shadow-xl border border-red-800/40 text-center sm:text-left min-h-[400px] flex flex-col justify-between">
+              {/* Fondo ambiental suave basado en el póster del evento activo */}
               {heroEvents.length > 0 && (
-                <div className="absolute inset-0 z-0 overflow-hidden">
+                <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
                   {heroEvents.map((event, index) => {
                     const isActive = index === currentSlideIndex;
                     return (
                       <div
                         key={event.id}
-                        id={`hero-poster-slide-${event.id}`}
-                        onClick={() => handleSelectHeroEvent(event.id)}
-                        className={`absolute inset-0 transition-opacity duration-1000 ease-in-out cursor-pointer ${
-                          isActive ? 'opacity-100 pointer-events-auto z-10' : 'opacity-0 pointer-events-none z-0'
+                        className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
+                          isActive ? 'opacity-100' : 'opacity-0'
                         }`}
-                        title={`Clic para ver y comprar boletos para: ${event.name}`}
                       >
                         <img
                           src={event.posterUrl}
-                          alt={event.name}
+                          alt=""
+                          aria-hidden="true"
                           referrerPolicy="no-referrer"
-                          className="w-full h-full object-cover object-center transform scale-100 hover:scale-105 transition-transform duration-700"
+                          className="w-full h-full object-cover blur-3xl opacity-25 scale-110"
                         />
-                        {/* Gradientes que aseguran alto contraste y legibilidad para el CTA y textos */}
-                        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/95 via-red-950/85 to-slate-950/70 pointer-events-none" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-slate-950/60 pointer-events-none" />
+                        <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/85 to-red-950/60" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-black/40" />
                       </div>
                     );
                   })}
@@ -238,70 +237,185 @@ function MainLayout() {
               {/* Resplandor luminoso decorativo de fondo */}
               <div className="absolute top-0 right-0 w-96 h-96 bg-red-600/15 rounded-full blur-3xl pointer-events-none z-10" />
 
-              {/* Contenido en primer plano (texto y CTA siempre visibles y por encima del ciclo) */}
-              <div className="relative z-20 max-w-2xl space-y-4">
-                {heroEvents.length > 0 && heroEvents[currentSlideIndex] ? (
-                  <button
-                    type="button"
-                    onClick={() => handleSelectHeroEvent(heroEvents[currentSlideIndex].id)}
-                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold tracking-wider bg-black/50 hover:bg-black/75 backdrop-blur-md border border-white/20 text-red-100 transition-all cursor-pointer shadow-xs text-left"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-amber-300 shrink-0" />
-                    <span className="truncate max-w-[200px] sm:max-w-sm">
-                      {heroEvents[currentSlideIndex].name}
-                    </span>
-                    <span className="text-amber-300 font-black text-[10px] uppercase bg-amber-400/20 px-1.5 py-0.5 rounded-sm shrink-0">
-                      Ver Boletos
-                    </span>
-                  </button>
-                ) : (
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-white/10 backdrop-blur-xs border border-white/20 text-red-100">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                    {t('hero.tag', 'Tu estadio, en un solo lugar')}
+              {/* Contenido en primer plano con grilla adaptable */}
+              <div className="relative z-20 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-center py-2">
+                {/* Columna izquierda: Información, textos y CTA */}
+                <div className="lg:col-span-7 space-y-4 text-center sm:text-left">
+                  {heroEvents.length > 0 && heroEvents[currentSlideIndex] ? (
+                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleSelectHeroEvent(heroEvents[currentSlideIndex].id)}
+                        className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold tracking-wider bg-black/60 hover:bg-black/80 backdrop-blur-md border border-white/20 text-red-100 transition-all cursor-pointer shadow-xs text-left"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                        <span className="truncate max-w-[200px] sm:max-w-xs">
+                          {heroEvents[currentSlideIndex].name}
+                        </span>
+                        <span className="text-amber-300 font-black text-[10px] uppercase bg-amber-400/20 px-1.5 py-0.5 rounded-sm shrink-0">
+                          Ver Boletos
+                        </span>
+                      </button>
+                      <span className="text-xs font-semibold text-amber-300/90 bg-black/40 px-2.5 py-1 rounded-full border border-white/10">
+                        📅 {heroEvents[currentSlideIndex].date}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-white/10 backdrop-blur-xs border border-white/20 text-red-100">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                      {t('hero.tag', 'Tu estadio, en un solo lugar')}
+                    </div>
+                  )}
+
+                  <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight leading-tight drop-shadow-sm">
+                    {t('hero.title', 'Bienvenido a VXP')}
+                  </h1>
+
+                  <p className="text-sm sm:text-base text-red-100/90 leading-relaxed font-normal max-w-xl">
+                    {t(
+                      'hero.subtitle',
+                      'Boletos digitales, pedidos a tu asiento, tienda oficial y toda la experiencia de tu estadio, desde tu celular.'
+                    )}
+                  </p>
+
+                  <div className="pt-2 flex flex-wrap items-center justify-center sm:justify-start gap-3">
+                    <button
+                      id="hero-login-btn"
+                      onClick={handleGenericLogin}
+                      className="px-6 py-3 bg-white hover:bg-slate-100 text-red-900 font-extrabold text-sm rounded-xl shadow-lg transition-all transform hover:-translate-y-0.5 cursor-pointer"
+                    >
+                      {t('hero.login_btn', 'Ingresar con Google o Correo')}
+                    </button>
+
+                    {heroEvents.length > 0 && heroEvents[currentSlideIndex] && (
+                      <button
+                        type="button"
+                        id="hero-select-event-btn"
+                        onClick={() => handleSelectHeroEvent(heroEvents[currentSlideIndex].id)}
+                        className="inline-flex items-center gap-2 px-5 py-3 bg-red-700/90 hover:bg-red-700 text-white font-bold text-sm rounded-xl border border-white/20 backdrop-blur-xs shadow-md transition-all cursor-pointer"
+                      >
+                        <Ticket className="w-4 h-4 text-amber-300" />
+                        <span>Comprar para este evento</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Columna derecha: Tarjeta del Póster Oficial Completo con Transición Suave (Crossfade) */}
+                {heroEvents.length > 0 && (
+                  <div className="lg:col-span-5 flex justify-center w-full">
+                    <div
+                      id="hero-featured-poster-card"
+                      className="relative group w-full max-w-md rounded-2xl overflow-hidden border border-white/20 bg-slate-950/80 shadow-2xl transition-all duration-300 hover:scale-[1.02] hover:border-amber-400/60 p-2 backdrop-blur-md"
+                    >
+                      {/* Contenedor adaptativo: Aspecto 16/9 o 16/10 con crossfade suave de 1000ms */}
+                      <div className="relative w-full aspect-16/9 sm:aspect-16/10 rounded-xl overflow-hidden bg-slate-950 flex items-center justify-center">
+                        {heroEvents.map((event, idx) => {
+                          const isActive = idx === currentSlideIndex;
+                          return (
+                            <div
+                              key={event.id}
+                              onClick={() => handleSelectHeroEvent(event.id)}
+                              className={`absolute inset-0 transition-opacity duration-1000 ease-in-out flex items-center justify-center cursor-pointer ${
+                                isActive
+                                  ? 'opacity-100 z-10 pointer-events-auto'
+                                  : 'opacity-0 z-0 pointer-events-none'
+                              }`}
+                              title={`Clic para ver y comprar boletos: ${event.name}`}
+                            >
+                              {/* Fondo difuminado a juego para rellenar bordes si el formato varía */}
+                              <img
+                                src={event.posterUrl}
+                                alt=""
+                                aria-hidden="true"
+                                className="absolute inset-0 w-full h-full object-cover blur-md opacity-35 scale-110 pointer-events-none"
+                                referrerPolicy="no-referrer"
+                              />
+                              {/* Imagen principal: object-contain para mostrarla 100% completa sin recortar */}
+                              <img
+                                src={event.posterUrl}
+                                alt={event.name}
+                                className="relative z-10 max-h-full max-w-full object-contain rounded-lg drop-shadow-xl"
+                                referrerPolicy="no-referrer"
+                              />
+                              {/* Overlay al pasar el mouse */}
+                              <div className="absolute inset-0 z-20 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
+                                <span className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-amber-300 bg-red-700/95 px-3 py-1.5 rounded-lg w-fit shadow-md">
+                                  <Ticket className="w-3.5 h-3.5 text-amber-300" />
+                                  Comprar boletos para este evento
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {/* Flechas de cambio rápido entre imágenes */}
+                        {heroEvents.length > 1 && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setCurrentSlideIndex((prev) => (prev - 1 + heroEvents.length) % heroEvents.length);
+                              }}
+                              className="absolute left-2 top-1/2 -translate-y-1/2 z-30 w-8 h-8 rounded-full bg-black/65 hover:bg-black/90 text-white flex items-center justify-center border border-white/20 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer shadow-md"
+                              aria-label="Imagen anterior"
+                            >
+                              <ChevronLeft className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setCurrentSlideIndex((prev) => (prev + 1) % heroEvents.length);
+                              }}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 z-30 w-8 h-8 rounded-full bg-black/65 hover:bg-black/90 text-white flex items-center justify-center border border-white/20 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer shadow-md"
+                              aria-label="Siguiente imagen"
+                            >
+                              <ChevronRight className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Pie de foto de la tarjeta con nombre y fecha con cambio suave */}
+                      <div className="mt-2 px-2 py-0.5 relative h-6 overflow-hidden">
+                        {heroEvents.map((event, idx) => {
+                          const isActive = idx === currentSlideIndex;
+                          return (
+                            <div
+                              key={event.id}
+                              className={`absolute inset-0 flex items-center justify-between gap-2 text-xs transition-opacity duration-700 ease-in-out ${
+                                isActive ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none z-0'
+                              }`}
+                            >
+                              <span className="font-bold text-white truncate max-w-[220px]">
+                                {event.name}
+                              </span>
+                              <span className="text-amber-300 font-extrabold text-[11px] shrink-0 bg-amber-400/20 px-2 py-0.5 rounded-sm">
+                                {event.date}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 )}
-
-                <h1 className="text-3xl sm:text-5xl font-black tracking-tight leading-tight drop-shadow-sm">
-                  {t('hero.title', 'Bienvenido a VXP')}
-                </h1>
-
-                <p className="text-sm sm:text-base text-red-100/90 leading-relaxed font-normal drop-shadow-xs">
-                  {t(
-                    'hero.subtitle',
-                    'Boletos digitales, pedidos a tu asiento, tienda oficial y toda la experiencia de tu estadio, desde tu celular.'
-                  )}
-                </p>
-
-                <div className="pt-4 flex flex-wrap items-center justify-center sm:justify-start gap-3">
-                  <button
-                    id="hero-login-btn"
-                    onClick={handleGenericLogin}
-                    className="px-6 py-3 bg-white hover:bg-slate-100 text-red-900 font-extrabold text-sm rounded-xl shadow-lg transition-all transform hover:-translate-y-0.5 cursor-pointer"
-                  >
-                    {t('hero.login_btn', 'Ingresar con Google o Correo')}
-                  </button>
-
-                  {heroEvents.length > 0 && heroEvents[currentSlideIndex] && (
-                    <button
-                      type="button"
-                      id="hero-select-event-btn"
-                      onClick={() => handleSelectHeroEvent(heroEvents[currentSlideIndex].id)}
-                      className="inline-flex items-center gap-2 px-5 py-3 bg-red-700/80 hover:bg-red-700 text-white font-bold text-sm rounded-xl border border-white/20 backdrop-blur-xs shadow-md transition-all cursor-pointer"
-                    >
-                      <Ticket className="w-4 h-4 text-amber-300" />
-                      <span>Comprar para este evento</span>
-                    </button>
-                  )}
-                </div>
               </div>
 
               {/* Indicadores de paginación del ciclo de eventos si hay más de 1 */}
               {heroEvents.length > 1 && (
                 <div className="relative z-20 mt-6 pt-4 border-t border-white/10 flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-white/70 uppercase tracking-wider">
-                    En cartelera ({currentSlideIndex + 1}/{heroEvents.length})
-                  </span>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-white/70 uppercase tracking-wider">
+                      En cartelera ({currentSlideIndex + 1}/{heroEvents.length})
+                    </span>
+                    <span className="text-[10px] text-amber-300/80 font-medium hidden sm:inline">
+                      • Cambia cada 5s
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
                     {heroEvents.map((ev, idx) => (
                       <button
                         key={ev.id}
@@ -310,12 +424,13 @@ function MainLayout() {
                           e.stopPropagation();
                           setCurrentSlideIndex(idx);
                         }}
-                        className={`h-2 rounded-full transition-all cursor-pointer ${
+                        className={`h-2.5 rounded-full transition-all duration-500 cursor-pointer ${
                           idx === currentSlideIndex
-                            ? 'w-7 bg-white shadow-xs'
-                            : 'w-2 bg-white/40 hover:bg-white/70'
+                            ? 'w-8 bg-amber-400 shadow-xs'
+                            : 'w-2.5 bg-white/40 hover:bg-white/75'
                         }`}
                         aria-label={`Ver póster del evento ${ev.name}`}
+                        title={`Ver ${ev.name}`}
                       />
                     ))}
                   </div>
