@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { auth, db } from './lib/firebase';
 import { syncUserProfile } from './lib/auth';
@@ -33,7 +33,7 @@ import {
 } from 'lucide-react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { DEFAULT_VENUE_ID, ensureDefaultVenueExists } from './lib/defaultVenue';
-import { getUpcomingHeroEvents } from './lib/venueEvents';
+import { DEFAULT_FALLBACK_EVENTS, getUpcomingHeroEvents } from './lib/venueEvents';
 
 function MainLayout() {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
@@ -52,7 +52,24 @@ function MainLayout() {
   });
 
   // Eventos activos con póster para el fondo de bienvenida (cartelera previa al login)
-  const [heroEvents, setHeroEvents] = useState<VenueEvent[]>([]);
+  const [heroEvents, setHeroEvents] = useState<VenueEvent[]>(() => {
+    try {
+      const cached = localStorage.getItem('vxp_cached_hero_events');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return DEFAULT_FALLBACK_EVENTS;
+  });
+  const [loadingHeroEvents, setLoadingHeroEvents] = useState<boolean>(() => {
+    try {
+      const cached = localStorage.getItem('vxp_cached_hero_events');
+      return !cached;
+    } catch {
+      return true;
+    }
+  });
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
 
   // Cargar eventos con póster para el carrusel de fondo antes de iniciar sesión (todos los venues activos)
@@ -61,11 +78,20 @@ function MainLayout() {
     getUpcomingHeroEvents(undefined, 6)
       .then((events) => {
         if (isMounted) {
-          setHeroEvents(events);
+          if (events && events.length > 0) {
+            setHeroEvents(events);
+            try {
+              localStorage.setItem('vxp_cached_hero_events', JSON.stringify(events));
+            } catch {}
+          }
+          setLoadingHeroEvents(false);
         }
       })
       .catch((err) => {
         console.warn('Error al cargar eventos para el hero previo al login:', err);
+        if (isMounted) {
+          setLoadingHeroEvents(false);
+        }
       });
 
     return () => {
@@ -83,6 +109,72 @@ function MainLayout() {
 
     return () => clearInterval(interval);
   }, [heroEvents.length, currentSlideIndex]);
+
+  // Lista de módulos de negocio colapsados en un solo carrusel dinámico
+  const [currentFeatureIndex, setCurrentFeatureIndex] = useState(0);
+
+  const businessFeatures = useMemo(
+    () => [
+      {
+        id: 'store_food',
+        icon: ShoppingBag,
+        colorBg: 'bg-red-50 text-red-700 border border-red-200/60',
+        badgeColor: 'bg-red-100/80 text-red-800',
+        badge: t('features.badge.store', 'Experiencia Fan & Alimentos'),
+        title: t('features.store_food.title', 'Tienda & Alimentos'),
+        desc: t(
+          'features.store_food.desc',
+          'Venta de uniformes oficiales, souvenirs y comanda Pickup Express sin filas en butaca.'
+        ),
+      },
+      {
+        id: 'inventory',
+        icon: Boxes,
+        colorBg: 'bg-blue-50 text-blue-700 border border-blue-200/60',
+        badgeColor: 'bg-blue-100/80 text-blue-800',
+        badge: t('features.badge.inventory', 'Operación & Almacén'),
+        title: t('features.inventory.title', 'Gestión de Inventario'),
+        desc: t(
+          'features.inventory.desc',
+          'Control de stock de tienda y almacén, ajuste de piezas, costos y alertas de stock mínimo.'
+        ),
+      },
+      {
+        id: 'shipping',
+        icon: Truck,
+        colorBg: 'bg-purple-50 text-purple-700 border border-purple-200/60',
+        badgeColor: 'bg-purple-100/80 text-purple-800',
+        badge: t('features.badge.shipping', 'Despacho & Rutas'),
+        title: t('features.shipping.title', 'Logística de Envíos'),
+        desc: t(
+          'features.shipping.desc',
+          'Despacho de pedidos, asignación de guías de transportistas (DHL, Estafeta) y tracking.'
+        ),
+      },
+      {
+        id: 'sales',
+        icon: Receipt,
+        colorBg: 'bg-amber-50 text-amber-700 border border-amber-200/60',
+        badgeColor: 'bg-amber-100/80 text-amber-800',
+        badge: t('features.badge.sales', 'Finanzas & Auditoría'),
+        title: t('features.sales.title', 'Auditoría de Ventas'),
+        desc: t(
+          'features.sales.desc',
+          'Consolidación financiera y métricas de ingresos multicanal en tiempo real.'
+        ),
+      },
+    ],
+    [t]
+  );
+
+  // Ciclo automático para el carrusel de módulos de negocio (cada 5 segundos)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentFeatureIndex((prev) => (prev + 1) % businessFeatures.length);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [businessFeatures.length, currentFeatureIndex]);
 
   // Si el usuario autenticado tiene un rol distinto a aficionado, descartar pendingEventId
   useEffect(() => {
@@ -198,14 +290,14 @@ function MainLayout() {
 
       {/* Contenido Principal */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
-        {loadingAuth ? (
+        {loadingAuth || (!userProfile && loadingHeroEvents && heroEvents.length === 0) ? (
           <div className="min-h-[50vh] flex items-center justify-center">
-            <LoadingSpinner message={t('hero.loading_session', 'Verificando sesión en Firebase...')} />
+            <LoadingSpinner message={t('hero.loading_session', 'Cargando eventos y experiencia VXP...')} />
           </div>
         ) : !userProfile ? (
-          /* Pantalla de Bienvenida cuando no hay sesión iniciada */
+          /* Pantalla de Bienvenida con Cartelera Oficial e Imágenes (única pantalla de inicio) */
           <div className="max-w-5xl mx-auto space-y-8 py-6">
-            {/* Banner Principal con Cartelera Dinámica o Hero Genérico */}
+            {/* Banner Principal con Cartelera Dinámica */}
             <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-red-950 via-red-900 to-slate-950 text-white p-6 sm:p-10 lg:p-12 shadow-xl border border-red-800/40 text-center sm:text-left min-h-[400px] flex flex-col justify-between">
               {/* Fondo ambiental suave basado en el póster del evento activo */}
               {heroEvents.length > 0 && (
@@ -241,7 +333,7 @@ function MainLayout() {
               <div className="relative z-20 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-center py-2">
                 {/* Columna izquierda: Información, textos y CTA */}
                 <div className="lg:col-span-7 space-y-4 text-center sm:text-left">
-                  {heroEvents.length > 0 && heroEvents[currentSlideIndex] ? (
+                  {heroEvents[currentSlideIndex] && (
                     <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
                       <button
                         type="button"
@@ -259,11 +351,6 @@ function MainLayout() {
                       <span className="text-xs font-semibold text-amber-300/90 bg-black/40 px-2.5 py-1 rounded-full border border-white/10">
                         📅 {heroEvents[currentSlideIndex].date}
                       </span>
-                    </div>
-                  ) : (
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-white/10 backdrop-blur-xs border border-white/20 text-red-100">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                      {t('hero.tag', 'Tu estadio, en un solo lugar')}
                     </div>
                   )}
 
@@ -287,7 +374,7 @@ function MainLayout() {
                       {t('hero.login_btn', 'Ingresar con Google o Correo')}
                     </button>
 
-                    {heroEvents.length > 0 && heroEvents[currentSlideIndex] && (
+                    {heroEvents[currentSlideIndex] && (
                       <button
                         type="button"
                         id="hero-select-event-btn"
@@ -438,66 +525,105 @@ function MainLayout() {
               )}
             </div>
 
-            {/* Tarjetas de arquitectura de Negocio */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-2.5">
-                <div className="w-9 h-9 rounded-xl bg-red-50 text-red-700 flex items-center justify-center">
-                  <ShoppingBag className="w-5 h-5" />
+            {/* Carrusel unificado colapsado de Módulos del Negocio (avanza cada 5s) */}
+            <div
+              id="business-features-carousel"
+              className="relative bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6 overflow-hidden transition-all"
+            >
+              {/* Contenedor del contenido con transición suave */}
+              <div className="relative min-h-[96px] sm:min-h-[80px]">
+                {businessFeatures.map((feat, idx) => {
+                  const Icon = feat.icon;
+                  const isActive = idx === currentFeatureIndex;
+                  return (
+                    <div
+                      key={feat.id}
+                      className={`transition-all duration-700 ease-in-out ${
+                        isActive
+                          ? 'opacity-100 translate-y-0 relative z-10 pointer-events-auto'
+                          : 'opacity-0 translate-y-2 absolute inset-0 pointer-events-none z-0'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3.5 sm:gap-4">
+                        <div
+                          className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 shadow-xs ${feat.colorBg}`}
+                        >
+                          <Icon className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1 space-y-1 pr-16 sm:pr-20">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span
+                              className={`text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full ${feat.badgeColor}`}
+                            >
+                              {feat.badge}
+                            </span>
+                            <h3 className="font-extrabold text-slate-900 text-sm sm:text-base">
+                              {feat.title}
+                            </h3>
+                          </div>
+                          <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-2xl">
+                            {feat.desc}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Botones de navegación Anterior / Siguiente en la esquina superior derecha */}
+                <div className="absolute top-0 right-0 z-20 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCurrentFeatureIndex(
+                        (prev) => (prev - 1 + businessFeatures.length) % businessFeatures.length
+                      )
+                    }
+                    className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-colors cursor-pointer border border-slate-200/80"
+                    aria-label="Módulo anterior"
+                    title="Anterior"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCurrentFeatureIndex((prev) => (prev + 1) % businessFeatures.length)
+                    }
+                    className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-colors cursor-pointer border border-slate-200/80"
+                    aria-label="Siguiente módulo"
+                    title="Siguiente"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
                 </div>
-                <h3 className="font-extrabold text-slate-900 text-sm">
-                  {t('features.store_food.title', 'Tienda & Alimentos')}
-                </h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  {t(
-                    'features.store_food.desc',
-                    'Venta de uniformes oficiales, souvenirs y comanda Pickup Express sin filas en butaca.'
-                  )}
-                </p>
               </div>
 
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-2.5">
-                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center">
-                  <Boxes className="w-5 h-5" />
+              {/* Barra inferior: Indicadores de posición y tiempo */}
+              <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    Módulos de la Plataforma ({currentFeatureIndex + 1}/{businessFeatures.length})
+                  </span>
+                  <span className="text-[10px] text-slate-400 hidden sm:inline">• Cambia cada 5s</span>
                 </div>
-                <h3 className="font-extrabold text-slate-900 text-sm">
-                  {t('features.inventory.title', 'Gestión de Inventario')}
-                </h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  {t(
-                    'features.inventory.desc',
-                    'Control de stock de tienda y almacén, ajuste de piezas, costos y alertas de stock mínimo.'
-                  )}
-                </p>
-              </div>
 
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-2.5">
-                <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center">
-                  <Truck className="w-5 h-5" />
+                <div className="flex items-center gap-1.5">
+                  {businessFeatures.map((feat, idx) => (
+                    <button
+                      key={feat.id}
+                      type="button"
+                      onClick={() => setCurrentFeatureIndex(idx)}
+                      className={`h-2 rounded-full transition-all duration-500 cursor-pointer ${
+                        idx === currentFeatureIndex
+                          ? 'w-7 bg-red-600 shadow-xs'
+                          : 'w-2 bg-slate-200 hover:bg-slate-300'
+                      }`}
+                      aria-label={`Ver módulo ${feat.title}`}
+                      title={feat.title}
+                    />
+                  ))}
                 </div>
-                <h3 className="font-extrabold text-slate-900 text-sm">
-                  {t('features.shipping.title', 'Logística de Envíos')}
-                </h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  {t(
-                    'features.shipping.desc',
-                    'Despacho de pedidos, asignación de guías de transportistas (DHL, Estafeta) y tracking.'
-                  )}
-                </p>
-              </div>
-
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-2.5">
-                <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
-                  <Receipt className="w-5 h-5" />
-                </div>
-                <h3 className="font-extrabold text-slate-900 text-sm">
-                  {t('features.sales.title', 'Auditoría de Ventas')}
-                </h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  {t(
-                    'features.sales.desc',
-                    'Consolidación financiera y métricas de ingresos multicanal en tiempo real.'
-                  )}
-                </p>
               </div>
             </div>
           </div>
