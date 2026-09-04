@@ -4,12 +4,14 @@
  */
 
 export type UserRole = 'aficionado' | 'admin' | 'taquilla' | 'concesionario' | 'runner' | 'superadmin';
+export type Language = 'es' | 'en';
 
 export interface UserProfile {
   uid: string;
   email: string | null;
   displayName: string | null;
   role: UserRole;
+  language?: Language;
   photoURL?: string | null;
   phoneNumber?: string | null;
   venueId?: string; // Para administradores de sede: ID del recinto asignado (ej: 'venue-teodoro-mariscal')
@@ -56,6 +58,9 @@ export interface VenueEvent {
   ticketsAvailable: boolean; // el admin abre/cierra la venta
   priceTiers: EventPriceTier[];
   createdAt: string;
+  posterUrl?: string; // imagen promocional del evento
+  orderingOpensAt?: string; // ISO datetime — desde cuándo los negocios de la sede aceptan pedidos para este evento
+  orderingClosesAt?: string; // ISO datetime — hasta cuándo aceptan pedidos
 }
 
 // ==========================================

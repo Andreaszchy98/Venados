@@ -155,12 +155,14 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
 
       await createMerchOrder(orderPayload);
 
-      // Intentar reducir stock si se cuenta con permisos directos de inventario
-      for (const item of cart) {
-        try {
-          await adjustProductStock(item.product.id, -item.quantity);
-        } catch {
-          // El stock se descontará por el área de almacén/logística de pedidos
+      // Si es administrador, reducir stock directamente; para aficionados, el almacén lo gestiona en logística
+      if (user.role === 'admin') {
+        for (const item of cart) {
+          try {
+            await adjustProductStock(item.product.id, -item.quantity);
+          } catch {
+            // Manejo silencioso en caso de error
+          }
         }
       }
 

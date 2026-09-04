@@ -1,12 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Ticket, UserProfile, VenueEvent, EventPriceTier, Venue } from '../../types';
 import { subscribeUserTickets, purchaseTicketWithSaleRecord } from '../../lib/tickets';
-import { getActiveEventsForVenue, subscribeVenueEvents } from '../../lib/venueEvents';
+import {
+  getActiveEventsForVenue,
+  subscribeVenueEvents,
+  getEventPosterPlaceholder,
+  getVenueEventById,
+} from '../../lib/venueEvents';
 import { subscribeVenues, getAllVenues } from '../../lib/venues';
 import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
 import { TicketCard } from '../../components/shared/TicketCard';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { SeatMapSelector } from './SeatMapSelector';
+import { useLanguage } from '../../context/LanguageContext';
 import {
   Ticket as TicketIcon,
   PlusCircle,
@@ -29,9 +35,16 @@ import {
 
 interface MisBoletosProps {
   user: UserProfile;
+  initialEventId?: string | null;
+  onClearInitialEvent?: () => void;
 }
 
-export const MisBoletos: React.FC<MisBoletosProps> = ({ user }) => {
+export const MisBoletos: React.FC<MisBoletosProps> = ({
+  user,
+  initialEventId,
+  onClearInitialEvent,
+}) => {
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'mis-boletos' | 'comprar'>('mis-boletos');
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loadingTickets, setLoadingTickets] = useState(true);
@@ -53,6 +66,7 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({ user }) => {
   const [purchasing, setPurchasing] = useState(false);
   const [purchaseSuccessMsg, setPurchaseSuccessMsg] = useState<string | null>(null);
   const [showSeatMap, setShowSeatMap] = useState<boolean>(false);
+  const [quickBuyEvent, setQuickBuyEvent] = useState<VenueEvent | null>(null);
 
   // Escuchar boletos del aficionado
   useEffect(() => {
@@ -164,6 +178,52 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({ user }) => {
     }
   }, [selectedEvent]);
 
+  // Redirección directa al evento seleccionado antes de iniciar sesión (saltando cartelera interna)
+  useEffect(() => {
+    if (!initialEventId) return;
+
+    let isMounted = true;
+
+    async function routeToPendingEvent() {
+      // 1. Buscar si ya está en los eventos cargados
+      const inActive = activeEvents.find((e) => e.id === initialEventId);
+      if (inActive) {
+        setSelectedVenueId(inActive.venueId);
+        setSelectedEvent(inActive);
+        if (inActive.priceTiers && inActive.priceTiers.length > 0) {
+          setSelectedTier(inActive.priceTiers[0]);
+        }
+        setActiveTab('comprar');
+        setShowSeatMap(true);
+        onClearInitialEvent?.();
+        return;
+      }
+
+      // 2. Si activeEvents aún está cargando o pertenece a otra sede, cargarlo por ID
+      try {
+        const ev = await getVenueEventById(initialEventId);
+        if (ev && isMounted) {
+          setSelectedVenueId(ev.venueId);
+          setSelectedEvent(ev);
+          if (ev.priceTiers && ev.priceTiers.length > 0) {
+            setSelectedTier(ev.priceTiers[0]);
+          }
+          setActiveTab('comprar');
+          setShowSeatMap(true);
+          onClearInitialEvent?.();
+        }
+      } catch (err) {
+        console.warn('Error redirigiendo al evento pendiente:', err);
+      }
+    }
+
+    routeToPendingEvent();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [initialEventId, activeEvents, onClearInitialEvent]);
+
   const currentVenue = venues.find((v) => v.id === selectedVenueId) || null;
   const stadiumName = currentVenue ? currentVenue.name : 'Estadio Teodoro Mariscal';
 
@@ -176,8 +236,8 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({ user }) => {
     }
   };
 
-  const handleConfirmPurchase = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleConfirmPurchase = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!selectedEvent || !selectedTier) return;
 
     setPurchasing(true);
@@ -279,10 +339,10 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({ user }) => {
         <div>
           <h2 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2 tracking-tight">
             <TicketIcon className="w-5 h-5 text-red-700" />
-            <span>Boletos & Entradas al Estadio</span>
+            <span>{t('tickets.title', 'Boletos & Entradas al Estadio')}</span>
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Acceso digital con código QR de seguridad y compra de entradas para partidos programados.
+            {t('tickets.qr_hint', 'Acceso digital con código QR de seguridad y compra de entradas para partidos programados.')}
           </p>
         </div>
 
@@ -296,7 +356,7 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({ user }) => {
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            Mis Boletos ({tickets.length})
+            {t('aficionado.tab.tickets', 'Mis Boletos')} ({tickets.length})
           </button>
           <button
             id="tab-comprar-boletos"
@@ -308,7 +368,7 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({ user }) => {
             }`}
           >
             <PlusCircle className="w-3.5 h-3.5" />
-            <span>Comprar Boleto</span>
+            <span>{t('tickets.buy_btn', 'Comprar Boleto')}</span>
           </button>
         </div>
       </div>
@@ -327,7 +387,7 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({ user }) => {
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Todos ({tickets.length})
+                {t('tickets.filter.all', 'Todos')} ({tickets.length})
               </button>
               <button
                 onClick={() => setFilter('activo')}
@@ -337,7 +397,7 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({ user }) => {
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Activos ({tickets.filter((t) => t.status === 'activo').length})
+                {t('tickets.filter.active', 'Activos')} ({tickets.filter((t) => t.status === 'activo').length})
               </button>
               <button
                 onClick={() => setFilter('usado')}
@@ -347,7 +407,7 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({ user }) => {
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Usados ({tickets.filter((t) => t.status === 'usado').length})
+                {t('tickets.filter.used', 'Utilizados')} ({tickets.filter((t) => t.status === 'usado').length})
               </button>
             </div>
 
@@ -356,7 +416,7 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({ user }) => {
               className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-extrabold shadow-xs transition-colors cursor-pointer"
             >
               <PlusCircle className="w-3.5 h-3.5" />
-              <span>Nueva Entrada</span>
+              <span>{t('tickets.buy_btn', 'Nueva Entrada')}</span>
             </button>
           </div>
 
@@ -524,255 +584,258 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({ user }) => {
               onCancel={() => setShowSeatMap(false)}
             />
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* Columna Izquierda: Lista de Eventos Disponibles */}
-              <div className="lg:col-span-7 space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-black uppercase tracking-wider text-slate-500">
-                    1. Elige el Partido o Espectáculo ({activeEvents.length})
-                  </span>
-                  <span className="text-[11px] font-medium text-slate-500 flex items-center gap-1">
-                    <MapPin className="w-3.5 h-3.5 text-red-600" />
-                    {stadiumName}
-                  </span>
+            <div className="space-y-6">
+              {/* Encabezado de Cartelera */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 sm:p-5 rounded-3xl border border-slate-200 shadow-xs">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-red-600" />
+                    <span className="text-xs font-black uppercase tracking-wider text-red-700">
+                      Cartelera Oficial
+                    </span>
+                  </div>
+                  <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight mt-0.5">
+                    Próximos Partidos & Espectáculos en {stadiumName}
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Elige el evento para ingresar a la selección de butacas en el mapa interactivo del estadio.
+                  </p>
                 </div>
 
-                <div className="space-y-3">
-                  {activeEvents.map((ev) => {
-                    const isSelected = selectedEvent?.id === ev.id;
-                    const minPrice =
-                      ev.priceTiers && ev.priceTiers.length > 0
-                        ? Math.min(...ev.priceTiers.map((t) => t.price))
-                        : 0;
+                <div className="flex items-center gap-2 self-start sm:self-center">
+                  <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
+                    {activeEvents.length} eventos en venta
+                  </span>
+                </div>
+              </div>
 
-                    return (
-                      <div
-                        key={ev.id}
-                        onClick={() => handleSelectEvent(ev)}
-                        className={`w-full p-4 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-3 ${
-                          isSelected
-                            ? 'border-red-600 bg-red-50/50 shadow-sm ring-2 ring-red-600'
-                            : 'border-slate-200 hover:border-slate-300 bg-white shadow-xs'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3 w-full">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-100 text-red-800">
-                                {ev.type}
-                              </span>
-                              <span className="text-[11px] font-semibold text-emerald-700 flex items-center gap-1">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                Venta Abierta
-                              </span>
-                            </div>
+              {/* Grid de Cartelera de Eventos */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {activeEvents.map((ev) => {
+                  const minPrice =
+                    ev.priceTiers && ev.priceTiers.length > 0
+                      ? Math.min(...ev.priceTiers.map((t) => t.price))
+                      : 0;
+                  const posterSrc = ev.posterUrl || getEventPosterPlaceholder(ev.type);
 
-                            <h3 className="text-sm sm:text-base font-extrabold text-slate-900 leading-snug">
-                              {ev.name}
-                            </h3>
+                  return (
+                    <div
+                      key={ev.id}
+                      className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col justify-between group"
+                    >
+                      <div>
+                        {/* Póster Promocional del Evento */}
+                        <div className="relative aspect-4/3 sm:aspect-3/4 overflow-hidden bg-slate-900">
+                          <img
+                            src={posterSrc}
+                            alt={ev.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            referrerPolicy="no-referrer"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-slate-950/30 to-black/20" />
 
-                            {ev.opponent && (
-                              <p className="text-xs text-slate-500">
-                                Rival: <span className="font-semibold text-slate-700">{ev.opponent}</span>
-                              </p>
-                            )}
+                          {/* Badges superiores */}
+                          <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-2">
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-700/90 backdrop-blur-xs text-white border border-red-500/50 shadow-xs">
+                              {ev.type}
+                            </span>
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-600/90 backdrop-blur-xs text-white border border-emerald-400/50 shadow-xs flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />
+                              Venta Abierta
+                            </span>
                           </div>
 
-                          <div className="text-right shrink-0">
-                            <span className="text-[10px] text-slate-400 block">Desde</span>
-                            <span className="text-base sm:text-lg font-black text-red-900">
-                              ${minPrice} <span className="text-[10px] font-normal text-slate-500">MXN</span>
-                            </span>
+                          {/* Información superpuesta al pie del póster */}
+                          <div className="absolute bottom-3 left-3 right-3 text-white space-y-1">
+                            <div className="flex items-center gap-2 text-[11px] font-bold text-amber-300">
+                              <Calendar className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                              <span>{ev.date}</span>
+                              <span>•</span>
+                              <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                              <span>{ev.time || '20:00 hrs'}</span>
+                            </div>
+                            <h4 className="text-base font-black text-white leading-snug line-clamp-2">
+                              {ev.name}
+                            </h4>
                           </div>
                         </div>
 
-                        {/* Metadatos del evento y botón de mapa */}
-                        <div className="pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
-                          <div className="flex items-center gap-3">
-                            <span className="flex items-center gap-1.5 font-semibold text-slate-800">
-                              <Calendar className="w-3.5 h-3.5 text-red-600" />
-                              {ev.date}
-                            </span>
-                            <span className="flex items-center gap-1 text-slate-500">
-                              <Clock className="w-3.5 h-3.5" />
-                              {ev.time || '20:00 hrs'}
+                        {/* Metadatos y detalles */}
+                        <div className="p-4 space-y-3">
+                          {ev.opponent && (
+                            <p className="text-xs text-slate-600 font-medium">
+                              Rival: <span className="font-bold text-slate-900">{ev.opponent}</span>
+                            </p>
+                          )}
+
+                          <div className="flex items-center justify-between text-xs text-slate-500 pt-0.5">
+                            <span className="flex items-center gap-1 truncate max-w-[170px]">
+                              <MapPin className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                              <span className="truncate">{stadiumName}</span>
                             </span>
                             {ev.gate && (
-                              <span className="flex items-center gap-1 text-slate-500">
-                                <DoorOpen className="w-3.5 h-3.5" />
+                              <span className="flex items-center gap-1 text-[11px] text-slate-500 shrink-0">
+                                <DoorOpen className="w-3.5 h-3.5 text-slate-400" />
                                 {ev.gate}
                               </span>
                             )}
                           </div>
 
+                          <div className="pt-2 border-t border-slate-100 flex items-baseline justify-between">
+                            <span className="text-xs text-slate-500">Boletos desde</span>
+                            <span className="text-lg font-black text-red-900">
+                              ${minPrice} <span className="text-xs font-normal text-slate-500">MXN</span>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Botón principal: Ver Boletos (Abre Mapa de Asientos) */}
+                      <div className="p-4 pt-0 space-y-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedEvent(ev);
+                            setShowSeatMap(true);
+                          }}
+                          className="w-full py-2.5 px-4 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-black shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          <TicketIcon className="w-4 h-4" />
+                          <span>Ver Boletos</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedEvent(ev);
+                            setSelectedTier(ev.priceTiers?.[0] || null);
+                            setQuickBuyEvent(ev);
+                          }}
+                          className="w-full py-1 text-center text-[11px] font-bold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                        >
+                          O comprar rápido sin mapa
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Modal de Compra Rápida sin mapa (opcional para usuarios rápidos) */}
+              {quickBuyEvent && (
+                <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+                  <div className="bg-white w-full max-w-md rounded-3xl p-6 shadow-xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                      <div>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-red-700 block">
+                          Compra Rápida
+                        </span>
+                        <h3 className="text-base font-black text-slate-900 leading-tight">
+                          {quickBuyEvent.name}
+                        </h3>
+                      </div>
+                      <button
+                        onClick={() => setQuickBuyEvent(null)}
+                        className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 cursor-pointer"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                          Selecciona la sección
+                        </label>
+                        <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                          {quickBuyEvent.priceTiers && quickBuyEvent.priceTiers.length > 0 ? (
+                            quickBuyEvent.priceTiers.map((tier, idx) => {
+                              const isTierSelected = selectedTier?.section === tier.section;
+                              return (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  onClick={() => setSelectedTier(tier)}
+                                  className={`w-full p-2.5 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer text-xs ${
+                                    isTierSelected
+                                      ? 'border-red-600 bg-red-50 text-red-950 font-bold ring-1 ring-red-600'
+                                      : 'border-slate-200 hover:border-slate-300 bg-white'
+                                  }`}
+                                >
+                                  <span>{tier.section}</span>
+                                  <span className="font-black text-red-900">${tier.price} MXN</span>
+                                </button>
+                              );
+                            })
+                          ) : (
+                            <p className="text-xs text-slate-400">Sin secciones disponibles</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Método de pago */}
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                          Método de pago
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedEvent(ev);
-                              setShowSeatMap(true);
-                            }}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-black shadow-xs transition-colors cursor-pointer"
+                            onClick={() => setPaymentMethod('Efectivo / Terminal física en Taquilla')}
+                            className={`p-2 rounded-xl border text-center text-xs font-bold transition-all cursor-pointer ${
+                              paymentMethod === 'Efectivo / Terminal física en Taquilla'
+                                ? 'border-emerald-600 bg-emerald-50 text-emerald-950'
+                                : 'border-slate-200 hover:border-slate-300 bg-white text-slate-600'
+                            }`}
                           >
-                            <Grid className="w-3.5 h-3.5" />
-                            <span>Elegir Butacas en Mapa</span>
+                            💵 Taquilla
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPaymentMethod('Tarjeta en Línea')}
+                            className={`p-2 rounded-xl border text-center text-xs font-bold transition-all cursor-pointer ${
+                              paymentMethod === 'Tarjeta en Línea'
+                                ? 'border-red-600 bg-red-50 text-red-950'
+                                : 'border-slate-200 hover:border-slate-300 bg-white text-slate-600'
+                            }`}
+                          >
+                            💳 En Línea
                           </button>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
 
-              {/* Columna Derecha: Configuración de Compra & Acceso a Mapa */}
-              {selectedEvent && (
-                <div className="lg:col-span-5 bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-5">
-                  {/* Banner para abrir el Mapa de Asientos */}
-                  <div className="bg-gradient-to-br from-red-950 via-slate-900 to-slate-900 text-white p-4 rounded-2xl space-y-2.5 border border-red-800/40 shadow-xs">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-amber-400" />
-                      <span className="text-xs font-black uppercase tracking-wider text-amber-300">
-                        Mapa Interactivo de Asientos
-                      </span>
+                      {/* Total */}
+                      <div className="p-3 bg-slate-50 rounded-2xl flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-600">Total:</span>
+                        <span className="text-base font-black text-red-900">
+                          ${selectedTier?.price || 0} MXN
+                        </span>
+                      </div>
                     </div>
-                    <p className="text-xs text-slate-300 leading-relaxed">
-                      Elige tus butacas exactas por sección, zona, fila y número en el mapa interactivo del Estadio Teodoro Mariscal.
-                    </p>
-                    <button
-                      type="button"
-                      id="btn-open-seat-map"
-                      onClick={() => setShowSeatMap(true)}
-                      className="w-full py-2.5 bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      <Grid className="w-4 h-4" />
-                      <span>Abrir Mapa y Seleccionar Asientos Exactos</span>
-                    </button>
-                  </div>
 
-                  <div>
-                    <span className="text-xs font-black uppercase tracking-wider text-slate-500 block mb-1">
-                      O Compra Rápida por Sección
-                    </span>
-                    <p className="text-xs text-slate-500">
-                      Asignación automática de butaca para{' '}
-                      <strong className="text-slate-800">{selectedEvent.name}</strong>
-                    </p>
-                  </div>
-
-                  {/* Selector de Price Tiers del Evento */}
-                  <div className="space-y-2">
-                    {selectedEvent.priceTiers && selectedEvent.priceTiers.length > 0 ? (
-                      selectedEvent.priceTiers.map((tier, idx) => {
-                        const isTierSelected = selectedTier?.section === tier.section;
-                        return (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => setSelectedTier(tier)}
-                            className={`w-full p-3 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
-                              isTierSelected
-                                ? 'border-red-600 bg-red-50 text-red-950 font-bold ring-1 ring-red-600'
-                                : 'border-slate-200 hover:border-slate-300 bg-white'
-                            }`}
-                          >
-                            <span className="text-xs">{tier.section}</span>
-                            <span className="text-xs font-black text-red-900">
-                              ${tier.price} MXN
-                            </span>
-                          </button>
-                        );
-                      })
-                    ) : (
-                      <p className="text-xs text-slate-400">Sin secciones configuradas</p>
-                    )}
-                  </div>
-
-                  {/* Método de Pago */}
-                  <div className="space-y-2 pt-3 border-t border-slate-100">
-                    <span className="text-xs font-black uppercase tracking-wider text-slate-500 block">
-                      3. Método de Pago Simulado
-                    </span>
-                    <div className="space-y-2">
+                    <div className="flex items-center gap-2 pt-2">
                       <button
                         type="button"
-                        onClick={() => setPaymentMethod('Efectivo / Terminal física en Taquilla')}
-                        className={`w-full p-2.5 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
-                          paymentMethod === 'Efectivo / Terminal física en Taquilla'
-                            ? 'border-emerald-600 bg-emerald-50 text-emerald-950'
-                            : 'border-slate-200 hover:border-slate-300 bg-white'
-                        }`}
+                        onClick={() => {
+                          setQuickBuyEvent(null);
+                          setShowSeatMap(true);
+                        }}
+                        className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition-colors cursor-pointer text-center"
                       >
-                        <div className="flex items-center gap-2">
-                          <span className="text-base">💵</span>
-                          <span className="text-xs font-bold">Efectivo / Terminal en Taquilla</span>
-                        </div>
-                        {paymentMethod === 'Efectivo / Terminal física en Taquilla' && (
-                          <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
-                        )}
+                        Ver Mapa
                       </button>
-
                       <button
                         type="button"
-                        onClick={() => setPaymentMethod('Tarjeta en Línea')}
-                        className={`w-full p-2.5 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
-                          paymentMethod === 'Tarjeta en Línea'
-                            ? 'border-red-600 bg-red-50 text-red-950'
-                            : 'border-slate-200 hover:border-slate-300 bg-white'
-                        }`}
+                        onClick={async () => {
+                          await handleConfirmPurchase();
+                          setQuickBuyEvent(null);
+                        }}
+                        disabled={purchasing || !selectedTier}
+                        className="flex-1 py-2.5 bg-red-700 hover:bg-red-800 disabled:opacity-50 text-white rounded-xl text-xs font-black shadow-xs transition-colors cursor-pointer text-center"
                       >
-                        <div className="flex items-center gap-2">
-                          <span className="text-base">💳</span>
-                          <span className="text-xs font-bold">Tarjeta en Línea (Visa / MC)</span>
-                        </div>
-                        {paymentMethod === 'Tarjeta en Línea' && (
-                          <span className="w-2 h-2 rounded-full bg-red-600"></span>
-                        )}
+                        {purchasing ? 'Emitiendo...' : 'Confirmar'}
                       </button>
                     </div>
-                  </div>
-
-                  {/* Resumen de Monto y Botón de Confirmar */}
-                  <div className="pt-4 border-t border-slate-100 space-y-3 bg-slate-50 p-4 rounded-2xl">
-                    <div className="flex items-center justify-between text-xs text-slate-600">
-                      <span>Evento:</span>
-                      <span className="font-semibold text-slate-800 truncate max-w-[180px]">
-                        {selectedEvent.name}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-slate-600">
-                      <span>Sección seleccionada:</span>
-                      <span className="font-semibold text-slate-800">
-                        {selectedTier?.section || 'Ninguna'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-slate-600">
-                      <span>Ubicación / Sede:</span>
-                      <span className="font-semibold text-slate-800">{stadiumName}</span>
-                    </div>
-
-                    <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
-                      <span className="text-xs font-extrabold text-slate-700">Total a Pagar:</span>
-                      <span className="text-xl font-black text-red-900">
-                        ${selectedTier?.price || 0} <span className="text-xs font-normal">MXN</span>
-                      </span>
-                    </div>
-
-                    <button
-                      id="btn-confirm-ticket-purchase"
-                      type="button"
-                      onClick={handleConfirmPurchase}
-                      disabled={purchasing || !selectedTier}
-                      className="w-full py-3 bg-red-700 hover:bg-red-800 disabled:opacity-50 text-white font-black text-xs sm:text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      {purchasing ? (
-                        'Emitiendo Entrada...'
-                      ) : (
-                        <>
-                          <ShieldCheck className="w-4 h-4" />
-                          <span>Confirmar Compra de Boleto</span>
-                        </>
-                      )}
-                    </button>
                   </div>
                 </div>
               )}

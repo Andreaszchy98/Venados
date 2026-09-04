@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile, VenueEvent, EventType, EventPriceTier } from '../../types';
+import { storage } from '../../lib/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import {
   createVenueEvent,
   updateVenueEvent,
   deleteVenueEvent,
   subscribeVenueEvents,
+  getEventPosterPlaceholder,
+  computeDefaultOrderingWindow,
 } from '../../lib/venueEvents';
 import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
 import { ConfirmationModal } from '../../components/shared/ConfirmationModal';
@@ -26,10 +30,45 @@ import {
   CheckCircle2,
   XCircle,
   Search,
+  Upload,
+  Image as ImageIcon,
+  UtensilsCrossed,
+  RotateCcw,
 } from 'lucide-react';
 
 interface EventsManagerProps {
   user: UserProfile;
+}
+
+function toDateTimeLocal(isoString?: string): string {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const YYYY = d.getFullYear();
+  const MM = pad(d.getMonth() + 1);
+  const DD = pad(d.getDate());
+  const HH = pad(d.getHours());
+  const mm = pad(d.getMinutes());
+  return `${YYYY}-${MM}-${DD}T${HH}:${mm}`;
+}
+
+function toIsoString(dtLocal?: string): string {
+  if (!dtLocal) return '';
+  const d = new Date(dtLocal);
+  return isNaN(d.getTime()) ? '' : d.toISOString();
+}
+
+function formatWindowDateTime(isoString?: string): string {
+  if (!isoString) return 'Sin definir';
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return 'Sin definir';
+  return d.toLocaleString('es-MX', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 const DEFAULT_TIERS: EventPriceTier[] = [
@@ -76,6 +115,10 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user }) => {
   const [formActive, setFormActive] = useState(true);
   const [formTicketsAvailable, setFormTicketsAvailable] = useState(true);
   const [formPriceTiers, setFormPriceTiers] = useState<EventPriceTier[]>(DEFAULT_TIERS);
+  const [formPosterUrl, setFormPosterUrl] = useState('');
+  const [formOrderingOpensAt, setFormOrderingOpensAt] = useState('');
+  const [formOrderingClosesAt, setFormOrderingClosesAt] = useState('');
+  const [uploadingPoster, setUploadingPoster] = useState(false);
 
   // Modal Eliminación
   const [eventToDelete, setEventToDelete] = useState<VenueEvent | null>(null);
@@ -104,16 +147,23 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user }) => {
   };
 
   const handleOpenCreateModal = () => {
+    const defaultDate = new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0];
+    const defaultTime = '20:00 hrs';
+    const defWindow = computeDefaultOrderingWindow(defaultDate, defaultTime);
+
     setEditingEventId(null);
     setFormName('Venados de Mazatlán vs ');
     setFormType('baseball');
     setFormOpponent('');
-    setFormDate(new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0]);
-    setFormTime('20:00 hrs');
+    setFormDate(defaultDate);
+    setFormTime(defaultTime);
     setFormGate('Puertas 1, 2, 4 y 8');
     setFormActive(true);
     setFormTicketsAvailable(true);
     setFormPriceTiers([...DEFAULT_TIERS]);
+    setFormPosterUrl('');
+    setFormOrderingOpensAt(toDateTimeLocal(defWindow.orderingOpensAt));
+    setFormOrderingClosesAt(toDateTimeLocal(defWindow.orderingClosesAt));
     setIsModalOpen(true);
   };
 
@@ -132,7 +182,68 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user }) => {
         ? event.priceTiers.map((t) => ({ ...t }))
         : [...DEFAULT_TIERS]
     );
+
+    let opensAt = event.orderingOpensAt;
+    let closesAt = event.orderingClosesAt;
+    if (!opensAt || !closesAt) {
+      const defWindow = computeDefaultOrderingWindow(event.date, event.time);
+      opensAt = opensAt || defWindow.orderingOpensAt;
+      closesAt = closesAt || defWindow.orderingClosesAt;
+    }
+    setFormPosterUrl(event.posterUrl || '');
+    setFormOrderingOpensAt(toDateTimeLocal(opensAt));
+    setFormOrderingClosesAt(toDateTimeLocal(closesAt));
     setIsModalOpen(true);
+  };
+
+  const handleRecalculateOrderingWindow = () => {
+    if (!formDate) {
+      showNotice('error', 'Selecciona primero una fecha para calcular el horario sugerido.');
+      return;
+    }
+    const defWindow = computeDefaultOrderingWindow(formDate, formTime);
+    setFormOrderingOpensAt(toDateTimeLocal(defWindow.orderingOpensAt));
+    setFormOrderingClosesAt(toDateTimeLocal(defWindow.orderingClosesAt));
+    showNotice('success', 'Ventana sugerida calculada: Abre 2h antes y cierra 4h después.');
+  };
+
+  const handlePosterUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      showNotice('error', 'El archivo no debe exceder los 5 MB.');
+      return;
+    }
+
+    setUploadingPoster(true);
+    try {
+      const fileExt = file.name.split('.').pop() || 'jpg';
+      const targetEventId = editingEventId || `event_${Date.now()}`;
+      const storagePath = `venues/${currentVenueId}/events/${targetEventId}/poster.${fileExt}`;
+      const storageRef = ref(storage, storagePath);
+
+      try {
+        const snap = await uploadBytes(storageRef, file);
+        const downloadUrl = await getDownloadURL(snap.ref);
+        setFormPosterUrl(downloadUrl);
+        showNotice('success', 'Póster promocional subido a Firebase Storage.');
+      } catch (storageErr: any) {
+        console.warn('Firebase Storage offline o con permisos restringidos, usando fallback seguro en memoria:', storageErr);
+        const reader = new FileReader();
+        reader.onload = (loadEvt) => {
+          const result = loadEvt.target?.result as string;
+          setFormPosterUrl(result);
+          showNotice('success', 'Imagen cargada correctamente.');
+        };
+        reader.readAsDataURL(file);
+      }
+    } catch (err: any) {
+      console.error('Error al subir póster:', err);
+      showNotice('error', 'No se pudo subir la imagen.');
+    } finally {
+      setUploadingPoster(false);
+    }
   };
 
   const handleTierChange = (index: number, field: 'section' | 'price', value: any) => {
@@ -174,6 +285,11 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user }) => {
 
     setSaving(true);
     try {
+      const defaultWindow = computeDefaultOrderingWindow(formDate, formTime);
+      const finalOpensAt = toIsoString(formOrderingOpensAt) || defaultWindow.orderingOpensAt;
+      const finalClosesAt = toIsoString(formOrderingClosesAt) || defaultWindow.orderingClosesAt;
+      const finalPosterUrl = formPosterUrl.trim() || getEventPosterPlaceholder(formType);
+
       if (editingEventId) {
         // Actualizar evento existente
         await updateVenueEvent(
@@ -188,6 +304,9 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user }) => {
             active: formActive,
             ticketsAvailable: formTicketsAvailable,
             priceTiers: formPriceTiers,
+            posterUrl: finalPosterUrl,
+            orderingOpensAt: finalOpensAt,
+            orderingClosesAt: finalClosesAt,
           },
           currentVenueId
         );
@@ -206,6 +325,9 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user }) => {
             active: formActive,
             ticketsAvailable: formTicketsAvailable,
             priceTiers: formPriceTiers,
+            posterUrl: finalPosterUrl,
+            orderingOpensAt: finalOpensAt,
+            orderingClosesAt: finalClosesAt,
           },
           currentVenueId
         );
@@ -505,15 +627,27 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user }) => {
                   </div>
                 </div>
 
-                {/* Título y detalles */}
-                <h3 className="font-extrabold text-sm sm:text-base text-slate-900 leading-snug">
-                  {ev.name}
-                </h3>
-                {ev.opponent && (
-                  <p className="text-xs text-slate-600 mt-0.5 font-medium">
-                    Rival: <span className="font-bold text-slate-800">{ev.opponent}</span>
-                  </p>
-                )}
+                {/* Título y detalles con miniatura del póster */}
+                <div className="flex gap-3 items-start">
+                  <div className="w-16 h-22 rounded-xl overflow-hidden bg-slate-200 border border-slate-300 shrink-0 shadow-xs relative">
+                    <img
+                      src={ev.posterUrl || getEventPosterPlaceholder(ev.type)}
+                      alt={ev.name}
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-extrabold text-sm sm:text-base text-slate-900 leading-snug">
+                      {ev.name}
+                    </h3>
+                    {ev.opponent && (
+                      <p className="text-xs text-slate-600 mt-0.5 font-medium">
+                        Rival: <span className="font-bold text-slate-800">{ev.opponent}</span>
+                      </p>
+                    )}
+                  </div>
+                </div>
 
                 <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
                   <div className="flex items-center gap-1.5">
@@ -531,6 +665,40 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user }) => {
                     </div>
                   )}
                 </div>
+
+                {/* Indicador de Estado de Ventana de Pedidos de Alimentos */}
+                {(() => {
+                  const nowIso = new Date().toISOString();
+                  const defW = computeDefaultOrderingWindow(ev.date, ev.time);
+                  const opens = ev.orderingOpensAt || defW.orderingOpensAt;
+                  const closes = ev.orderingClosesAt || defW.orderingClosesAt;
+                  const isOpen = nowIso >= opens && nowIso <= closes;
+                  const isUpcoming = nowIso < opens;
+
+                  return (
+                    <div className="mt-2.5 flex items-center justify-between text-[11px] bg-amber-50/70 p-2 rounded-xl border border-amber-200/80">
+                      <div className="flex items-center gap-1.5 text-amber-900">
+                        <UtensilsCrossed className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                        <span className="font-bold">Pedidos Comida:</span>
+                      </div>
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                          isOpen
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                            : isUpcoming
+                            ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                            : 'bg-slate-200 text-slate-700 border border-slate-300'
+                        }`}
+                      >
+                        {isOpen
+                          ? '🟢 Abiertos Ahora'
+                          : isUpcoming
+                          ? `Abre ${formatWindowDateTime(opens)}`
+                          : 'Ventana Cerrada'}
+                      </span>
+                    </div>
+                  );
+                })()}
 
                 {/* Niveles de Precios (Price Tiers) */}
                 <div className="mt-3.5 space-y-1.5">
@@ -714,6 +882,140 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user }) => {
                     onChange={(e) => setFormGate(e.target.value)}
                     className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-red-600"
                   />
+                </div>
+              </div>
+
+              {/* Sección 1: Subida de Imagen Promocional (Póster para Cartelera) */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="block text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                      <ImageIcon className="w-4 h-4 text-red-600" />
+                      Póster Promocional del Evento (Cartelera)
+                    </label>
+                    <p className="text-[11px] text-slate-500">
+                      Imagen grande que verán los aficionados en la cartelera estilo cine
+                    </p>
+                  </div>
+                  {formPosterUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setFormPosterUrl('')}
+                      className="text-[11px] font-bold text-red-600 hover:text-red-700 underline cursor-pointer"
+                    >
+                      Usar placeholder genérico
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-4 items-start">
+                  {/* Vista previa miniatura del póster */}
+                  <div className="w-24 h-32 sm:w-28 sm:h-36 rounded-xl overflow-hidden bg-slate-200 border border-slate-300 shrink-0 relative shadow-xs">
+                    <img
+                      src={formPosterUrl || getEventPosterPlaceholder(formType)}
+                      alt="Póster preview"
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                    {!formPosterUrl && (
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center p-1 text-center">
+                        <span className="text-[9px] font-bold text-white uppercase leading-tight">
+                          Placeholder por defecto ({formType})
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Acciones de carga */}
+                  <div className="flex-1 space-y-2 w-full">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Subir archivo a Firebase Storage
+                      </label>
+                      <label className="inline-flex items-center gap-2 px-3.5 py-2 bg-white border border-slate-300 hover:border-slate-400 text-slate-700 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer">
+                        <Upload className="w-4 h-4 text-red-600" />
+                        <span>{uploadingPoster ? 'Subiendo imagen...' : 'Seleccionar imagen del evento'}</span>
+                        <input
+                          type="file"
+                          accept="image/png, image/jpeg, image/webp"
+                          disabled={uploadingPoster}
+                          onChange={handlePosterUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                        O pega una URL directa de imagen
+                      </label>
+                      <input
+                        type="url"
+                        placeholder="https://ejemplo.com/poster.jpg"
+                        value={formPosterUrl}
+                        onChange={(e) => setFormPosterUrl(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-red-600"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sección 2: Ventana de Horario de Pedidos de Alimentos */}
+              <div className="p-4 bg-amber-50/60 rounded-2xl border border-amber-200/80 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <label className="block text-xs font-black uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
+                      <UtensilsCrossed className="w-4 h-4 text-amber-700" />
+                      Ventana de Horario de Pedidos (Comida & Bebida)
+                    </label>
+                    <p className="text-[11px] text-amber-900/80">
+                      Horario en que los negocios y concesiones de la sede aceptan órdenes
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRecalculateOrderingWindow}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-xs"
+                    title="Calcular sugerido: 2h antes del evento hasta 4h después"
+                  >
+                    <RotateCcw className="w-3 h-3 text-amber-700" />
+                    <span>Calcular horario sugerido (-2h / +4h)</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-slate-800">
+                      Pedidos abren (orderingOpensAt) *
+                    </label>
+                    <input
+                      type="datetime-local"
+                      required
+                      value={formOrderingOpensAt}
+                      onChange={(e) => setFormOrderingOpensAt(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-amber-600"
+                    />
+                    <span className="text-[10px] text-slate-500 block">
+                      Sugerido: 2 horas antes del inicio del evento
+                    </span>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-slate-800">
+                      Pedidos cierran (orderingClosesAt) *
+                    </label>
+                    <input
+                      type="datetime-local"
+                      required
+                      value={formOrderingClosesAt}
+                      onChange={(e) => setFormOrderingClosesAt(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-amber-600"
+                    />
+                    <span className="text-[10px] text-slate-500 block">
+                      Sugerido: 4 horas después del inicio del evento
+                    </span>
+                  </div>
                 </div>
               </div>
 

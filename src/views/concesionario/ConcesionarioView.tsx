@@ -6,6 +6,7 @@ import {
   FoodOrder,
   FoodOrderStatus,
   MenuItemCategory,
+  VenueEvent,
 } from '../../types';
 import {
   getStadiumStands,
@@ -18,6 +19,8 @@ import {
   listenToStandFoodOrders,
   advanceFoodOrderStatus,
 } from '../../lib/foodOrders';
+import { getActiveOrderingEvent, getNextUpcomingEvent } from '../../lib/venueEvents';
+import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { ConfirmationModal } from '../../components/shared/ConfirmationModal';
 import {
@@ -40,6 +43,8 @@ import {
   Search,
   SlidersHorizontal,
   Flame,
+  Calendar,
+  AlertTriangle,
 } from 'lucide-react';
 
 const PRESET_FOOD_IMAGES = [
@@ -120,6 +125,32 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
   // Modal para confirmar eliminación
   const [itemToDelete, setItemToDelete] = useState<MenuItem | null>(null);
   const [deletingItem, setDeletingItem] = useState(false);
+
+  // Verificación de ventana de evento activo en la sede
+  const [activeEvent, setActiveEvent] = useState<VenueEvent | null>(null);
+  const [upcomingEvent, setUpcomingEvent] = useState<VenueEvent | null>(null);
+  const [checkingEvent, setCheckingEvent] = useState(true);
+
+  const checkEventStatus = async () => {
+    setCheckingEvent(true);
+    try {
+      const vId = user.venueId || DEFAULT_VENUE_ID;
+      const active = await getActiveOrderingEvent(vId);
+      setActiveEvent(active);
+      if (!active) {
+        const next = await getNextUpcomingEvent(vId);
+        setUpcomingEvent(next);
+      }
+    } catch (err) {
+      console.error('Error checking active ordering event in ConcesionarioView:', err);
+    } finally {
+      setCheckingEvent(false);
+    }
+  };
+
+  useEffect(() => {
+    checkEventStatus();
+  }, [user.venueId]);
 
   useEffect(() => {
     const fetchStands = async () => {
@@ -302,6 +333,86 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
           </div>
         )}
       </div>
+
+      {/* Banner de Estado de Evento en Sede */}
+      {!checkingEvent && !activeEvent && (
+        <div className="p-4 sm:p-5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300/80 rounded-2xl shadow-xs space-y-2">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2 text-amber-900 font-extrabold text-sm">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+              <span>No hay evento en curso en este momento</span>
+            </div>
+            <button
+              onClick={checkEventStatus}
+              className="inline-flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-xs"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-amber-700" />
+              <span>Actualizar estado</span>
+            </button>
+          </div>
+          <p className="text-xs text-amber-950/80 leading-relaxed">
+            La recepción de nuevos pedidos de comida y bebida por parte de aficionados está pausada hasta que inicie la ventana del próximo evento programado en el estadio. Puedes seguir administrando los platillos, precios y disponibilidad de tu menú en la pestaña <strong>"Catálogo de Platillos"</strong>.
+          </p>
+          {upcomingEvent && (
+            <div className="mt-2 pt-2 border-t border-amber-200/80 flex items-center gap-2 text-xs text-amber-900 font-medium">
+              <Calendar className="w-4 h-4 text-amber-700 shrink-0" />
+              <span>
+                Próximo evento: <strong>{upcomingEvent.name}</strong> ({upcomingEvent.date} {upcomingEvent.time || '20:00 hrs'}) — Apertura de pedidos:{' '}
+                <strong>
+                  {(() => {
+                    if (!upcomingEvent.orderingOpensAt) return '2 horas antes del juego';
+                    try {
+                      return (
+                        new Date(upcomingEvent.orderingOpensAt).toLocaleTimeString('es-MX', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        }) + ' hrs'
+                      );
+                    } catch {
+                      return '2h antes';
+                    }
+                  })()}
+                </strong>
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {!checkingEvent && activeEvent && (
+        <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-2xl shadow-xs flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-2.5">
+            <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+            <div>
+              <p className="text-xs font-extrabold text-emerald-950">
+                🟢 Evento en Curso: {activeEvent.name}
+              </p>
+              <p className="text-[11px] text-emerald-800 font-medium">
+                La ventana de pedidos está abierta para los aficionados de la sede hasta las{' '}
+                {(() => {
+                  if (!activeEvent.orderingClosesAt) return 'finalizar el evento';
+                  try {
+                    return (
+                      new Date(activeEvent.orderingClosesAt).toLocaleTimeString('es-MX', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      }) + ' hrs'
+                    );
+                  } catch {
+                    return 'cierre del evento';
+                  }
+                })()}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={checkEventStatus}
+            className="text-xs text-emerald-800 hover:text-emerald-950 underline font-bold cursor-pointer"
+          >
+            Actualizar
+          </button>
+        </div>
+      )}
 
       {/* Tarjetas KPI de Cocina */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">

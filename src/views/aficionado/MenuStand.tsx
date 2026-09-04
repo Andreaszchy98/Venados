@@ -7,11 +7,14 @@ import {
   OrderType,
   Ticket,
   Zone,
+  VenueEvent,
 } from '../../types';
 import { getStadiumStands, getMenuItemsByStand } from '../../lib/stands';
 import { createFoodOrder } from '../../lib/foodOrders';
 import { subscribeUserTickets } from '../../lib/tickets';
 import { getZoneBySection, getZones } from '../../lib/zones';
+import { getActiveOrderingEvent, getNextUpcomingEvent } from '../../lib/venueEvents';
+import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import {
   Utensils,
@@ -30,14 +33,17 @@ import {
   ChevronRight,
   X,
   AlertCircle,
+  Calendar,
+  RefreshCw,
 } from 'lucide-react';
 
 interface MenuStandProps {
   user: UserProfile;
   onOrderSuccess?: () => void;
+  onGoToTickets?: () => void;
 }
 
-export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess }) => {
+export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGoToTickets }) => {
   const [stands, setStands] = useState<StadiumStand[]>([]);
   const [selectedStand, setSelectedStand] = useState<StadiumStand | null>(null);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -45,6 +51,32 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess }) =>
   const [loadingMenu, setLoadingMenu] = useState(false);
   const [cart, setCart] = useState<{ item: MenuItem; quantity: number }[]>([]);
   const [placingOrder, setPlacingOrder] = useState(false);
+
+  // Verificación de ventana de pedidos activa
+  const [checkingOrderingWindow, setCheckingOrderingWindow] = useState(true);
+  const [activeOrderingEvent, setActiveOrderingEvent] = useState<VenueEvent | null>(null);
+  const [upcomingEvent, setUpcomingEvent] = useState<VenueEvent | null>(null);
+
+  const checkOrderingWindow = async () => {
+    setCheckingOrderingWindow(true);
+    try {
+      const vId = user.venueId || DEFAULT_VENUE_ID;
+      const active = await getActiveOrderingEvent(vId);
+      setActiveOrderingEvent(active);
+      if (!active) {
+        const next = await getNextUpcomingEvent(vId);
+        setUpcomingEvent(next);
+      }
+    } catch (err) {
+      console.error('Error al verificar pedidos activos:', err);
+    } finally {
+      setCheckingOrderingWindow(false);
+    }
+  };
+
+  useEffect(() => {
+    checkOrderingWindow();
+  }, [user.venueId]);
   
   // Modal de confirmación y tipo de entrega
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
@@ -246,6 +278,135 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess }) =>
       setPlacingOrder(false);
     }
   };
+
+  if (checkingOrderingWindow) {
+    return (
+      <div className="py-16">
+        <LoadingSpinner message="Verificando eventos y horarios de servicio en el estadio..." />
+      </div>
+    );
+  }
+
+  if (!activeOrderingEvent) {
+    return (
+      <div className="space-y-6">
+        {/* Banner Fuera de Horario */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white p-6 sm:p-8 border border-slate-700/60 shadow-lg">
+          <div className="relative z-10 space-y-2">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 border border-amber-400/30 text-amber-300">
+              <Clock className="w-3.5 h-3.5" /> Fuera de Horario de Evento
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
+              Servicio de Alimentos No Disponible
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
+              No hay ningún evento en curso en este momento. Los pedidos de comida y bebida solo están disponibles durante el horario de eventos en el estadio.
+            </p>
+          </div>
+        </div>
+
+        {/* Tarjeta Explicativa con Próximo Evento */}
+        <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-xs text-center space-y-6 max-w-2xl mx-auto">
+          <div className="w-16 h-16 rounded-3xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto border border-amber-200">
+            <Utensils className="w-8 h-8" />
+          </div>
+
+          <div className="space-y-2">
+            <h3 className="text-lg sm:text-xl font-black text-slate-900">
+              Cocinas y Concesiones en Pausa
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-lg mx-auto">
+              No hay ningún evento en curso en este momento. Los pedidos de comida y bebida solo están disponibles durante el horario de eventos.
+            </p>
+          </div>
+
+          {upcomingEvent ? (
+            <div className="p-4 sm:p-5 bg-gradient-to-br from-amber-50/80 to-orange-50/50 rounded-2xl border border-amber-200 text-left space-y-3">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-red-600 shrink-0" />
+                <span className="text-xs font-black uppercase tracking-wider text-amber-900">
+                  Próximo Evento Programado
+                </span>
+              </div>
+              <div className="flex gap-4 items-center">
+                {upcomingEvent.posterUrl && (
+                  <img
+                    src={upcomingEvent.posterUrl}
+                    alt={upcomingEvent.name}
+                    className="w-16 h-20 object-cover rounded-xl border border-amber-200 shadow-xs shrink-0"
+                    referrerPolicy="no-referrer"
+                  />
+                )}
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-extrabold text-sm sm:text-base text-slate-900 leading-snug">
+                    {upcomingEvent.name}
+                  </h4>
+                  <p className="text-xs text-slate-600 mt-1 font-medium">
+                    Fecha: <strong className="text-slate-800">{upcomingEvent.date}</strong> ({upcomingEvent.time || '20:00 hrs'})
+                  </p>
+                  <p className="text-xs text-amber-900 mt-1.5 font-bold flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                    <span>
+                      Los pedidos abren:{' '}
+                      {(() => {
+                        const opens = upcomingEvent.orderingOpensAt;
+                        if (!opens) return '2 horas antes del evento';
+                        try {
+                          const d = new Date(opens);
+                          return (
+                            d.toLocaleDateString('es-MX', {
+                              weekday: 'short',
+                              day: 'numeric',
+                              month: 'short',
+                            }) +
+                            ' a las ' +
+                            d.toLocaleTimeString('es-MX', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            }) +
+                            ' hrs'
+                          );
+                        } catch {
+                          return '2 horas antes del evento';
+                        }
+                      })()}
+                    </span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-500">
+              No hay eventos futuros programados inmediatamente en el calendario de la sede.
+            </div>
+          )}
+
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+            {onGoToTickets && (
+              <button
+                onClick={onGoToTickets}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 bg-red-700 hover:bg-red-800 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+              >
+                <TicketIcon className="w-4 h-4" />
+                <span>Ver Cartelera y Comprar Boletos</span>
+              </button>
+            )}
+            <button
+              onClick={checkOrderingWindow}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+            >
+              <RefreshCw className="w-4 h-4 text-slate-500" />
+              <span>Comprobar de Nuevo</span>
+            </button>
+          </div>
+
+          <p className="text-[11px] text-slate-400">
+            * La compra de boletos para cualquier partido o concierto sigue disponible en todo momento.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

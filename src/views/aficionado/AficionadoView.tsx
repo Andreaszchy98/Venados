@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserProfile } from '../../types';
 import { MisBoletos } from './MisBoletos';
 import { MiMembresia } from './MiMembresia';
 import { TiendaMerch } from './TiendaMerch';
 import { MenuStand } from './MenuStand';
 import { MisPedidos } from './MisPedidos';
+import { useLanguage } from '../../context/LanguageContext';
 import {
   Ticket,
   Award,
@@ -16,10 +17,24 @@ import {
 
 interface AficionadoViewProps {
   user: UserProfile;
+  pendingEventId?: string | null;
+  onClearPendingEvent?: () => void;
 }
 
-export const AficionadoView: React.FC<AficionadoViewProps> = ({ user }) => {
+export const AficionadoView: React.FC<AficionadoViewProps> = ({
+  user,
+  pendingEventId,
+  onClearPendingEvent,
+}) => {
   const [activeTab, setActiveTab] = useState<'boletos' | 'membresia' | 'tienda' | 'comida' | 'pedidos'>('boletos');
+  const { t } = useLanguage();
+
+  // Si hay un pendingEventId al montar o cambiar, asegurarse de mostrar la pestaña de boletos
+  useEffect(() => {
+    if (pendingEventId) {
+      setActiveTab('boletos');
+    }
+  }, [pendingEventId]);
 
   return (
     <div className="space-y-6">
@@ -27,10 +42,10 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({ user }) => {
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-2 border-b border-slate-200">
         <div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-            Hola, {user.displayName || 'Aficionado'}
+            {t('aficionado.hello', 'Hola,')} {user.displayName || 'Aficionado'}
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Portal de Experiencia del Aficionado • Boletos, eventos, consumos y tienda en tu sede
+            {t('aficionado.tagline', 'Portal de Experiencia del Aficionado • Boletos, eventos, consumos y tienda en tu sede')}
           </p>
         </div>
 
@@ -45,7 +60,7 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({ user }) => {
             }`}
           >
             <Ticket className="w-4 h-4 text-red-700" />
-            Mis Boletos
+            {t('aficionado.tab.tickets', 'Mis Boletos')}
           </button>
 
           <button
@@ -57,7 +72,7 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({ user }) => {
             }`}
           >
             <Award className="w-4 h-4 text-amber-600" />
-            Membresía & Abonos
+            {t('aficionado.tab.membership', 'Membresía & Abonos')}
           </button>
 
           <button
@@ -69,7 +84,7 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({ user }) => {
             }`}
           >
             <ShoppingBag className="w-4 h-4 text-red-700" />
-            Tienda Oficial
+            {t('aficionado.tab.store', 'Tienda Oficial')}
           </button>
 
           <button
@@ -81,7 +96,7 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({ user }) => {
             }`}
           >
             <Utensils className="w-4 h-4 text-amber-700" />
-            Comida & Bebidas
+            {t('aficionado.tab.food', 'Comida & Bebidas')}
           </button>
 
           <button
@@ -93,16 +108,28 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({ user }) => {
             }`}
           >
             <Package className="w-4 h-4 text-slate-800" />
-            Mis Pedidos
+            {t('aficionado.tab.orders', 'Mis Pedidos')}
           </button>
         </div>
       </div>
 
       {/* Contenido de la vista según pestaña */}
-      {activeTab === 'boletos' && <MisBoletos user={user} />}
+      {activeTab === 'boletos' && (
+        <MisBoletos
+          user={user}
+          initialEventId={pendingEventId}
+          onClearInitialEvent={onClearPendingEvent}
+        />
+      )}
       {activeTab === 'membresia' && <MiMembresia user={user} />}
       {activeTab === 'tienda' && <TiendaMerch user={user} onOrderCompleted={() => setActiveTab('pedidos')} />}
-      {activeTab === 'comida' && <MenuStand user={user} onOrderSuccess={() => setActiveTab('pedidos')} />}
+      {activeTab === 'comida' && (
+        <MenuStand
+          user={user}
+          onOrderSuccess={() => setActiveTab('pedidos')}
+          onGoToTickets={() => setActiveTab('boletos')}
+        />
+      )}
       {activeTab === 'pedidos' && <MisPedidos user={user} />}
     </div>
   );

@@ -266,9 +266,9 @@ service cloud.firestore {
       allow create, update, delete: if isSuperAdmin();
     }
 
-    // 12. Eventos por Recinto (Venue Events - Scoped por Admin de Sede)
+    // 12. Eventos por Recinto (Venue Events - Scoped por Admin de Sede, lectura pública para cartelera previa al login)
     match /venueEvents/{eventId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create: if isVenueAdmin(request.resource.data.venueId);
       allow update, delete: if isVenueAdmin(resource.data.venueId);
     }

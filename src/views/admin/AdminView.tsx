@@ -7,6 +7,7 @@ import { LogisticaAdmin } from './LogisticaAdmin';
 import { PersonalAdmin } from './PersonalAdmin';
 import { NegociosAdmin } from './NegociosAdmin';
 import { EventsManager } from './EventsManager';
+import { useLanguage } from '../../context/LanguageContext';
 import {
   ShieldAlert,
   TrendingUp,
@@ -25,6 +26,7 @@ interface AdminViewProps {
 
 export const AdminView: React.FC<AdminViewProps> = ({ user }) => {
   const [activeTab, setActiveTab] = useState<'resumen' | 'eventos' | 'ventas' | 'inventario' | 'logistica' | 'personal' | 'negocios'>('resumen');
+  const { t } = useLanguage();
 
   // El superadmin NO debe tener acceso a esta vista ni a la gestión de eventos
   if (user.role === 'superadmin') {
@@ -68,7 +70,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ user }) => {
             }`}
           >
             <LayoutDashboard className="w-4 h-4 text-red-700" />
-            Resumen
+            {t('admin.tabs.overview', 'Resumen')}
           </button>
 
           <button
@@ -81,7 +83,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ user }) => {
             }`}
           >
             <Calendar className="w-4 h-4 text-red-700" />
-            Eventos & Partidos
+            {t('admin.tabs.events', 'Eventos & Partidos')}
           </button>
 
           <button
@@ -94,7 +96,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ user }) => {
             }`}
           >
             <Store className="w-4 h-4 text-amber-700" />
-            Negocios Estadio
+            {t('admin.tabs.business', 'Negocios Estadio')}
           </button>
 
           <button
@@ -107,7 +109,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ user }) => {
             }`}
           >
             <Users className="w-4 h-4 text-emerald-700" />
-            Personal & Roles
+            {t('admin.tabs.staff', 'Personal & Roles')}
           </button>
 
           <button
@@ -119,7 +121,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ user }) => {
             }`}
           >
             <Receipt className="w-4 h-4 text-red-700" />
-            Ventas
+            {t('admin.tabs.sales', 'Ventas')}
           </button>
 
           <button
@@ -131,7 +133,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ user }) => {
             }`}
           >
             <Boxes className="w-4 h-4 text-blue-700" />
-            Inventario
+            {t('admin.tabs.inventory', 'Inventario')}
           </button>
 
           <button
@@ -143,7 +145,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ user }) => {
             }`}
           >
             <Truck className="w-4 h-4 text-purple-700" />
-            Logística
+            {t('admin.tabs.logistics', 'Logística')}
           </button>
         </div>
       </div>

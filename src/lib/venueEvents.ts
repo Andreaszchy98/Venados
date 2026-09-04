@@ -11,12 +11,62 @@ import {
   onSnapshot,
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
-import { VenueEvent, EventPriceTier } from '../types';
+import { VenueEvent, EventPriceTier, EventType } from '../types';
 import { DEFAULT_VENUE_ID } from './defaultVenue';
 import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
 import { generateEventSeats } from './seatMap';
 
 const COLLECTION_NAME = 'venueEvents';
+
+export function getEventPosterPlaceholder(type?: EventType): string {
+  switch (type) {
+    case 'baseball':
+      return 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?auto=format&fit=crop&w=800&q=80';
+    case 'concert':
+      return 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=800&q=80';
+    case 'football':
+      return 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=800&q=80';
+    case 'basketball':
+      return 'https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=800&q=80';
+    case 'other':
+    default:
+      return 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&q=80';
+  }
+}
+
+/**
+ * Calcula la ventana sugerida por defecto:
+ * - orderingOpensAt: 2 horas antes de date + time
+ * - orderingClosesAt: 4 horas después de date + time
+ */
+export function computeDefaultOrderingWindow(dateStr: string, timeStr?: string): { orderingOpensAt: string; orderingClosesAt: string } {
+  let hours = 20;
+  let minutes = 0;
+  if (timeStr) {
+    const match = timeStr.match(/(\d{1,2}):(\d{2})/);
+    if (match) {
+      hours = parseInt(match[1], 10);
+      minutes = parseInt(match[2], 10);
+    }
+  }
+
+  const dateParts = dateStr.split('-');
+  const year = parseInt(dateParts[0], 10) || 2026;
+  const month = (parseInt(dateParts[1], 10) || 10) - 1;
+  const day = parseInt(dateParts[2], 10) || 15;
+
+  const eventStart = new Date(year, month, day, hours, minutes, 0);
+
+  // 2 horas antes
+  const opens = new Date(eventStart.getTime() - 2 * 60 * 60 * 1000);
+  // 4 horas después
+  const closes = new Date(eventStart.getTime() + 4 * 60 * 60 * 1000);
+
+  return {
+    orderingOpensAt: opens.toISOString(),
+    orderingClosesAt: closes.toISOString(),
+  };
+}
 
 export const DEFAULT_FALLBACK_EVENTS: VenueEvent[] = [
   {
@@ -30,6 +80,8 @@ export const DEFAULT_FALLBACK_EVENTS: VenueEvent[] = [
     gate: 'Puertas 1, 2, 4 y 8',
     active: true,
     ticketsAvailable: true,
+    posterUrl: getEventPosterPlaceholder('baseball'),
+    ...computeDefaultOrderingWindow('2026-10-15', '20:00 hrs'),
     priceTiers: [
       { section: 'Platea Baja Central', price: 450 },
       { section: 'Preferente Lateral', price: 320 },
@@ -49,6 +101,8 @@ export const DEFAULT_FALLBACK_EVENTS: VenueEvent[] = [
     gate: 'Puertas 1, 2, 4 y 8',
     active: true,
     ticketsAvailable: true,
+    posterUrl: getEventPosterPlaceholder('baseball'),
+    ...computeDefaultOrderingWindow('2026-10-22', '19:30 hrs'),
     priceTiers: [
       { section: 'Platea Baja Central', price: 450 },
       { section: 'Preferente Lateral', price: 320 },
@@ -68,6 +122,8 @@ export const DEFAULT_FALLBACK_EVENTS: VenueEvent[] = [
     gate: 'Puertas 1, 2, 4 y 8',
     active: true,
     ticketsAvailable: true,
+    posterUrl: getEventPosterPlaceholder('baseball'),
+    ...computeDefaultOrderingWindow('2026-10-29', '20:00 hrs'),
     priceTiers: [
       { section: 'Platea Baja Central', price: 450 },
       { section: 'Preferente Lateral', price: 320 },
@@ -120,6 +176,8 @@ export async function createVenueEvent(
       ? doc(db, COLLECTION_NAME, eventData.id)
       : doc(collection(db, COLLECTION_NAME));
 
+    const defaultWindow = computeDefaultOrderingWindow(eventData.date, eventData.time);
+
     const newEvent: VenueEvent = {
       id: docRef.id,
       venueId: adminVenueId, // Forzado estricto al del admin
@@ -131,6 +189,9 @@ export async function createVenueEvent(
       gate: eventData.gate || 'Puertas Generales',
       active: eventData.active !== undefined ? eventData.active : true,
       ticketsAvailable: eventData.ticketsAvailable !== undefined ? eventData.ticketsAvailable : true,
+      posterUrl: eventData.posterUrl || getEventPosterPlaceholder(eventData.type || 'baseball'),
+      orderingOpensAt: eventData.orderingOpensAt || defaultWindow.orderingOpensAt,
+      orderingClosesAt: eventData.orderingClosesAt || defaultWindow.orderingClosesAt,
       priceTiers: eventData.priceTiers && eventData.priceTiers.length > 0
         ? eventData.priceTiers
         : [
@@ -283,4 +344,144 @@ export function subscribeVenueEvents(
       else handleFirestoreError(error, OperationType.GET, COLLECTION_NAME);
     }
   );
+}
+
+/**
+ * 4. Función para saber si hay pedidos activos ahora
+ * Busca, entre los eventos active de esa sede, si el momento actual (new Date().toISOString())
+ * cae dentro de [orderingOpensAt, orderingClosesAt] de alguno.
+ * Si no hay ninguno, regresa null.
+ */
+export async function getActiveOrderingEvent(venueId: string): Promise<VenueEvent | null> {
+  const targetVenueId = venueId || DEFAULT_VENUE_ID;
+  try {
+    const q = query(
+      collection(db, COLLECTION_NAME),
+      where('venueId', '==', targetVenueId)
+    );
+    const snap = await getDocs(q);
+    let events = snap.docs.map((d) => ({ id: d.id, ...d.data() } as VenueEvent));
+    if (events.length === 0 && targetVenueId === DEFAULT_VENUE_ID) {
+      events = [...DEFAULT_FALLBACK_EVENTS];
+    }
+
+    const now = new Date().toISOString();
+
+    const activeEvent = events.find((e) => {
+      if (!e.active) return false;
+      let opens = e.orderingOpensAt;
+      let closes = e.orderingClosesAt;
+      if (!opens || !closes) {
+        const computed = computeDefaultOrderingWindow(e.date, e.time);
+        opens = opens || computed.orderingOpensAt;
+        closes = closes || computed.orderingClosesAt;
+      }
+      return now >= opens && now <= closes;
+    });
+
+    return activeEvent || null;
+  } catch (err) {
+    console.error('Error al verificar pedidos activos:', err);
+    return null;
+  }
+}
+
+/**
+ * Obtener el próximo evento programado cuya ventana de pedidos abrirá en el futuro
+ */
+export async function getNextUpcomingEvent(venueId: string): Promise<VenueEvent | null> {
+  const targetVenueId = venueId || DEFAULT_VENUE_ID;
+  try {
+    const q = query(
+      collection(db, COLLECTION_NAME),
+      where('venueId', '==', targetVenueId)
+    );
+    const snap = await getDocs(q);
+    let events = snap.docs.map((d) => ({ id: d.id, ...d.data() } as VenueEvent));
+    if (events.length === 0 && targetVenueId === DEFAULT_VENUE_ID) {
+      events = [...DEFAULT_FALLBACK_EVENTS];
+    }
+
+    const now = new Date().toISOString();
+    const upcoming = events
+      .filter((e) => {
+        if (!e.active) return false;
+        let opens = e.orderingOpensAt;
+        let closes = e.orderingClosesAt;
+        if (!opens || !closes) {
+          const computed = computeDefaultOrderingWindow(e.date, e.time);
+          opens = opens || computed.orderingOpensAt;
+          closes = closes || computed.orderingClosesAt;
+        }
+        return closes >= now;
+      })
+      .sort((a, b) => {
+        const aOpen = a.orderingOpensAt || computeDefaultOrderingWindow(a.date, a.time).orderingOpensAt;
+        const bOpen = b.orderingOpensAt || computeDefaultOrderingWindow(b.date, b.time).orderingOpensAt;
+        return aOpen.localeCompare(bOpen);
+      });
+
+    return upcoming[0] || null;
+  } catch (err) {
+    console.error('Error al obtener próximo evento:', err);
+    return null;
+  }
+}
+
+/**
+ * Obtener un evento específico por su ID (usado para redirección directa post-login)
+ */
+export async function getVenueEventById(eventId: string): Promise<VenueEvent | null> {
+  try {
+    const docRef = doc(db, COLLECTION_NAME, eventId);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      return { id: snap.id, ...snap.data() } as VenueEvent;
+    }
+    const fallback = DEFAULT_FALLBACK_EVENTS.find((e) => e.id === eventId);
+    return fallback || null;
+  } catch (err) {
+    console.warn('Error al buscar evento por ID:', err);
+    const fallback = DEFAULT_FALLBACK_EVENTS.find((e) => e.id === eventId);
+    return fallback || null;
+  }
+}
+
+/**
+ * Consulta los eventos active: true de DEFAULT_VENUE_ID con fecha futura, ordenados por date, límite 6.
+ * Filtra solo aquellos que tengan un posterUrl real para el carrusel de fondo del hero previo al login.
+ */
+export async function getUpcomingHeroEvents(
+  venueId: string = DEFAULT_VENUE_ID,
+  limitCount: number = 6
+): Promise<VenueEvent[]> {
+  const targetVenueId = venueId || DEFAULT_VENUE_ID;
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  try {
+    const q = query(
+      collection(db, COLLECTION_NAME),
+      where('venueId', '==', targetVenueId)
+    );
+    const snap = await getDocs(q);
+    let events = snap.docs.map((d) => ({ id: d.id, ...d.data() } as VenueEvent));
+
+    if (events.length === 0 && targetVenueId === DEFAULT_VENUE_ID) {
+      events = [...DEFAULT_FALLBACK_EVENTS];
+    }
+
+    const filtered = events
+      .filter((e) => {
+        const isFuture = e.date >= todayStr;
+        const hasPoster = typeof e.posterUrl === 'string' && e.posterUrl.trim().length > 0;
+        return e.active === true && isFuture && hasPoster;
+      })
+      .sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : 0))
+      .slice(0, limitCount);
+
+    return filtered;
+  } catch (err) {
+    console.error('Error al obtener eventos para el hero de bienvenida:', err);
+    return [];
+  }
 }
