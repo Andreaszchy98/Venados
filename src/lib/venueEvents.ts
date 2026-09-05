@@ -15,24 +15,24 @@ import { VenueEvent, EventPriceTier, EventType, HeroSlide, Venue } from '../type
 import { DEFAULT_VENUE_ID } from './defaultVenue';
 import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
 import { generateEventSeats } from './seatMap';
-import { normalizeGoogleDriveImageUrl, DEFAULT_STORE_PROMO_BANNER } from './imageUtils';
+import { normalizeGoogleDriveImageUrl, DEFAULT_STORE_PROMO_BANNER, getEventPosterPlaceholder } from './imageUtils';
+
+export { getEventPosterPlaceholder };
 
 const COLLECTION_NAME = 'venueEvents';
 
-export function getEventPosterPlaceholder(type?: EventType): string {
-  switch (type) {
-    case 'baseball':
-      return 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?auto=format&fit=crop&w=800&q=80';
-    case 'concert':
-      return 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=800&q=80';
-    case 'football':
-      return 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=800&q=80';
-    case 'basketball':
-      return 'https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=800&q=80';
-    case 'other':
-    default:
-      return 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&q=80';
-  }
+/**
+ * Parsea y normaliza un documento de evento asegurando que su posterUrl
+ * esté normalizado (Google Drive a directo CDN) y tenga respaldo garantizado.
+ */
+export function parseVenueEventDoc(id: string, data: any): VenueEvent {
+  const rawPoster = typeof data.posterUrl === 'string' ? data.posterUrl.trim() : '';
+  const resolvedPoster = normalizeGoogleDriveImageUrl(rawPoster) || getEventPosterPlaceholder(data.type || 'baseball');
+  return {
+    id,
+    ...data,
+    posterUrl: resolvedPoster,
+  } as VenueEvent;
 }
 
 /**
@@ -295,27 +295,28 @@ export async function getActiveEventsForVenue(venueId: string): Promise<VenueEve
       where('venueId', '==', venueId)
     );
     const snap = await getDocs(q);
-    const all = snap.docs.map((d) => {
-      const data = d.data();
-      return {
-        id: d.id,
-        ...data,
-        posterUrl: normalizeGoogleDriveImageUrl(data.posterUrl),
-      } as VenueEvent;
-    });
+    const all = snap.docs.map((d) => parseVenueEventDoc(d.id, d.data()));
 
     const activeEvents = all
       .filter((e) => e.active === true && e.ticketsAvailable === true)
       .sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : 0));
 
     if (activeEvents.length === 0 && venueId === DEFAULT_VENUE_ID) {
-      return DEFAULT_FALLBACK_EVENTS.filter((e) => e.active && e.ticketsAvailable);
+      return DEFAULT_FALLBACK_EVENTS.map((e) => ({
+        ...e,
+        posterUrl: normalizeGoogleDriveImageUrl(e.posterUrl) || getEventPosterPlaceholder(e.type),
+      })).filter((e) => e.active && e.ticketsAvailable);
     }
 
     return activeEvents;
   } catch (err) {
     handleFirestoreError(err, OperationType.LIST, COLLECTION_NAME);
-    return venueId === DEFAULT_VENUE_ID ? DEFAULT_FALLBACK_EVENTS : [];
+    return venueId === DEFAULT_VENUE_ID
+      ? DEFAULT_FALLBACK_EVENTS.map((e) => ({
+          ...e,
+          posterUrl: normalizeGoogleDriveImageUrl(e.posterUrl) || getEventPosterPlaceholder(e.type),
+        }))
+      : [];
   }
 }
 
@@ -337,19 +338,17 @@ export function subscribeVenueEvents(
     q,
     async (snapshot) => {
       if (snapshot.empty && targetVenueId === DEFAULT_VENUE_ID) {
-        onUpdate(DEFAULT_FALLBACK_EVENTS);
+        onUpdate(
+          DEFAULT_FALLBACK_EVENTS.map((e) => ({
+            ...e,
+            posterUrl: normalizeGoogleDriveImageUrl(e.posterUrl) || getEventPosterPlaceholder(e.type),
+          }))
+        );
         return;
       }
 
       const events: VenueEvent[] = snapshot.docs
-        .map((docSnap) => {
-          const data = docSnap.data();
-          return {
-            id: docSnap.id,
-            ...data,
-            posterUrl: normalizeGoogleDriveImageUrl(data.posterUrl),
-          } as VenueEvent;
-        })
+        .map((docSnap) => parseVenueEventDoc(docSnap.id, docSnap.data()))
         .sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : 0));
 
       onUpdate(events);
@@ -360,6 +359,54 @@ export function subscribeVenueEvents(
       else handleFirestoreError(error, OperationType.GET, COLLECTION_NAME);
     }
   );
+}
+
+/**
+ * Evalúa una lista de eventos y determina el evento activo y el próximo evento programado.
+ * Garantiza que siempre se extraiga la imagen auténtica o su placeholder adecuado.
+ */
+export function evaluateActiveAndUpcomingEvents(events: VenueEvent[]): {
+  activeEvent: VenueEvent | null;
+  upcomingEvent: VenueEvent | null;
+} {
+  const now = new Date().toISOString();
+
+  // 1. Evento activo: está activo y el momento actual cae dentro de la ventana de pedidos
+  const activeEvent =
+    events.find((e) => {
+      if (!e.active) return false;
+      let opens = e.orderingOpensAt;
+      let closes = e.orderingClosesAt;
+      if (!opens || !closes) {
+        const computed = computeDefaultOrderingWindow(e.date, e.time);
+        opens = opens || computed.orderingOpensAt;
+        closes = closes || computed.orderingClosesAt;
+      }
+      return now >= opens && now <= closes;
+    }) || null;
+
+  // 2. Próximo evento programado: no es el activo y su cierre/apertura es futuro
+  const upcomingCandidates = events
+    .filter((e) => {
+      if (!e.active) return false;
+      if (activeEvent && e.id === activeEvent.id) return false;
+      let closes = e.orderingClosesAt;
+      if (!closes) {
+        const computed = computeDefaultOrderingWindow(e.date, e.time);
+        closes = computed.orderingClosesAt;
+      }
+      return closes >= now;
+    })
+    .sort((a, b) => {
+      const aOpen = a.orderingOpensAt || computeDefaultOrderingWindow(a.date, a.time).orderingOpensAt;
+      const bOpen = b.orderingOpensAt || computeDefaultOrderingWindow(b.date, b.time).orderingOpensAt;
+      return aOpen.localeCompare(bOpen);
+    });
+
+  // Si no hay futuros estrictos, usar el primer evento disponible para no dejar la vista sin referencia
+  const upcomingEvent = upcomingCandidates[0] || (!activeEvent && events.length > 0 ? events[0] : null);
+
+  return { activeEvent, upcomingEvent };
 }
 
 /**
@@ -376,26 +423,16 @@ export async function getActiveOrderingEvent(venueId: string): Promise<VenueEven
       where('venueId', '==', targetVenueId)
     );
     const snap = await getDocs(q);
-    let events = snap.docs.map((d) => ({ id: d.id, ...d.data() } as VenueEvent));
+    let events = snap.docs.map((d) => parseVenueEventDoc(d.id, d.data()));
     if (events.length === 0 && targetVenueId === DEFAULT_VENUE_ID) {
-      events = [...DEFAULT_FALLBACK_EVENTS];
+      events = DEFAULT_FALLBACK_EVENTS.map((e) => ({
+        ...e,
+        posterUrl: normalizeGoogleDriveImageUrl(e.posterUrl) || getEventPosterPlaceholder(e.type),
+      }));
     }
 
-    const now = new Date().toISOString();
-
-    const activeEvent = events.find((e) => {
-      if (!e.active) return false;
-      let opens = e.orderingOpensAt;
-      let closes = e.orderingClosesAt;
-      if (!opens || !closes) {
-        const computed = computeDefaultOrderingWindow(e.date, e.time);
-        opens = opens || computed.orderingOpensAt;
-        closes = closes || computed.orderingClosesAt;
-      }
-      return now >= opens && now <= closes;
-    });
-
-    return activeEvent || null;
+    const { activeEvent } = evaluateActiveAndUpcomingEvents(events);
+    return activeEvent;
   } catch (err) {
     console.error('Error al verificar pedidos activos:', err);
     return null;
@@ -413,35 +450,74 @@ export async function getNextUpcomingEvent(venueId: string): Promise<VenueEvent 
       where('venueId', '==', targetVenueId)
     );
     const snap = await getDocs(q);
-    let events = snap.docs.map((d) => ({ id: d.id, ...d.data() } as VenueEvent));
+    let events = snap.docs.map((d) => parseVenueEventDoc(d.id, d.data()));
     if (events.length === 0 && targetVenueId === DEFAULT_VENUE_ID) {
-      events = [...DEFAULT_FALLBACK_EVENTS];
+      events = DEFAULT_FALLBACK_EVENTS.map((e) => ({
+        ...e,
+        posterUrl: normalizeGoogleDriveImageUrl(e.posterUrl) || getEventPosterPlaceholder(e.type),
+      }));
     }
 
-    const now = new Date().toISOString();
-    const upcoming = events
-      .filter((e) => {
-        if (!e.active) return false;
-        let opens = e.orderingOpensAt;
-        let closes = e.orderingClosesAt;
-        if (!opens || !closes) {
-          const computed = computeDefaultOrderingWindow(e.date, e.time);
-          opens = opens || computed.orderingOpensAt;
-          closes = closes || computed.orderingClosesAt;
-        }
-        return closes >= now;
-      })
-      .sort((a, b) => {
-        const aOpen = a.orderingOpensAt || computeDefaultOrderingWindow(a.date, a.time).orderingOpensAt;
-        const bOpen = b.orderingOpensAt || computeDefaultOrderingWindow(b.date, b.time).orderingOpensAt;
-        return aOpen.localeCompare(bOpen);
-      });
-
-    return upcoming[0] || null;
+    const { upcomingEvent } = evaluateActiveAndUpcomingEvents(events);
+    return upcomingEvent;
   } catch (err) {
     console.error('Error al obtener próximo evento:', err);
+    if (targetVenueId === DEFAULT_VENUE_ID) {
+      const fallbackEvents = DEFAULT_FALLBACK_EVENTS.map((e) => ({
+        ...e,
+        posterUrl: normalizeGoogleDriveImageUrl(e.posterUrl) || getEventPosterPlaceholder(e.type),
+      }));
+      return evaluateActiveAndUpcomingEvents(fallbackEvents).upcomingEvent;
+    }
     return null;
   }
+}
+
+/**
+ * Suscripción en tiempo real al estado de la sede (evento activo y próximo evento)
+ * para cocinas, concesiones y el módulo de comida de aficionados.
+ */
+export function subscribeVenueEventStatus(
+  venueId: string,
+  onStatusChange: (status: {
+    activeEvent: VenueEvent | null;
+    upcomingEvent: VenueEvent | null;
+  }) => void,
+  onError?: (error: Error) => void
+): () => void {
+  const targetVenueId = venueId || DEFAULT_VENUE_ID;
+  const q = query(
+    collection(db, COLLECTION_NAME),
+    where('venueId', '==', targetVenueId)
+  );
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      let events: VenueEvent[] = [];
+      if (snapshot.empty && targetVenueId === DEFAULT_VENUE_ID) {
+        events = DEFAULT_FALLBACK_EVENTS.map((e) => ({
+          ...e,
+          posterUrl: normalizeGoogleDriveImageUrl(e.posterUrl) || getEventPosterPlaceholder(e.type),
+        }));
+      } else {
+        events = snapshot.docs.map((docSnap) => parseVenueEventDoc(docSnap.id, docSnap.data()));
+      }
+
+      events.sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : 0));
+      const status = evaluateActiveAndUpcomingEvents(events);
+      onStatusChange(status);
+    },
+    (error) => {
+      console.warn(`Error escuchando estado de eventos para la sede ${targetVenueId}:`, error);
+      const fallbackEvents = DEFAULT_FALLBACK_EVENTS.map((e) => ({
+        ...e,
+        posterUrl: normalizeGoogleDriveImageUrl(e.posterUrl) || getEventPosterPlaceholder(e.type),
+      }));
+      onStatusChange(evaluateActiveAndUpcomingEvents(fallbackEvents));
+      if (onError) onError(error);
+    }
+  );
 }
 
 /**
@@ -452,19 +528,25 @@ export async function getVenueEventById(eventId: string): Promise<VenueEvent | n
     const docRef = doc(db, COLLECTION_NAME, eventId);
     const snap = await getDoc(docRef);
     if (snap.exists()) {
-      const data = snap.data();
-      return {
-        id: snap.id,
-        ...data,
-        posterUrl: normalizeGoogleDriveImageUrl(data.posterUrl),
-      } as VenueEvent;
+      return parseVenueEventDoc(snap.id, snap.data());
     }
     const fallback = DEFAULT_FALLBACK_EVENTS.find((e) => e.id === eventId);
-    return fallback || null;
+    if (fallback) {
+      return {
+        ...fallback,
+        posterUrl: normalizeGoogleDriveImageUrl(fallback.posterUrl) || getEventPosterPlaceholder(fallback.type),
+      };
+    }
+    return null;
   } catch (err) {
     console.warn('Error al buscar evento por ID:', err);
     const fallback = DEFAULT_FALLBACK_EVENTS.find((e) => e.id === eventId);
-    return fallback || null;
+    return fallback
+      ? {
+          ...fallback,
+          posterUrl: normalizeGoogleDriveImageUrl(fallback.posterUrl) || getEventPosterPlaceholder(fallback.type),
+        }
+      : null;
   }
 }
 

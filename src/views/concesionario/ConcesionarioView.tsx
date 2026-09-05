@@ -19,7 +19,13 @@ import {
   listenToStandFoodOrders,
   advanceFoodOrderStatus,
 } from '../../lib/foodOrders';
-import { getActiveOrderingEvent, getNextUpcomingEvent } from '../../lib/venueEvents';
+import {
+  getActiveOrderingEvent,
+  getNextUpcomingEvent,
+  subscribeVenueEventStatus,
+  getEventPosterPlaceholder,
+} from '../../lib/venueEvents';
+import { normalizeGoogleDriveImageUrl } from '../../lib/imageUtils';
 import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { ConfirmationModal } from '../../components/shared/ConfirmationModal';
@@ -137,10 +143,8 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
       const vId = user.venueId || DEFAULT_VENUE_ID;
       const active = await getActiveOrderingEvent(vId);
       setActiveEvent(active);
-      if (!active) {
-        const next = await getNextUpcomingEvent(vId);
-        setUpcomingEvent(next);
-      }
+      const next = await getNextUpcomingEvent(vId);
+      setUpcomingEvent(next);
     } catch (err) {
       console.error('Error checking active ordering event in ConcesionarioView:', err);
     } finally {
@@ -149,7 +153,20 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
   };
 
   useEffect(() => {
-    checkEventStatus();
+    setCheckingEvent(true);
+    const vId = user.venueId || DEFAULT_VENUE_ID;
+    const unsubscribe = subscribeVenueEventStatus(
+      vId,
+      (status) => {
+        setActiveEvent(status.activeEvent);
+        setUpcomingEvent(status.upcomingEvent);
+        setCheckingEvent(false);
+      },
+      () => {
+        setCheckingEvent(false);
+      }
+    );
+    return () => unsubscribe();
   }, [user.venueId]);
 
   useEffect(() => {
@@ -336,7 +353,7 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
 
       {/* Banner de Estado de Evento en Sede */}
       {!checkingEvent && !activeEvent && (
-        <div className="p-4 sm:p-5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300/80 rounded-2xl shadow-xs space-y-2">
+        <div className="p-4 sm:p-5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300/80 rounded-2xl shadow-xs space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 text-amber-900 font-extrabold text-sm">
               <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
@@ -354,26 +371,68 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
             La recepción de nuevos pedidos de comida y bebida por parte de aficionados está pausada hasta que inicie la ventana del próximo evento programado en el estadio. Puedes seguir administrando los platillos, precios y disponibilidad de tu menú en la pestaña <strong>"Catálogo de Platillos"</strong>.
           </p>
           {upcomingEvent && (
-            <div className="mt-2 pt-2 border-t border-amber-200/80 flex items-center gap-2 text-xs text-amber-900 font-medium">
-              <Calendar className="w-4 h-4 text-amber-700 shrink-0" />
-              <span>
-                Próximo evento: <strong>{upcomingEvent.name}</strong> ({upcomingEvent.date} {upcomingEvent.time || '20:00 hrs'}) — Apertura de pedidos:{' '}
-                <strong>
-                  {(() => {
-                    if (!upcomingEvent.orderingOpensAt) return '2 horas antes del juego';
-                    try {
-                      return (
-                        new Date(upcomingEvent.orderingOpensAt).toLocaleTimeString('es-MX', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        }) + ' hrs'
-                      );
-                    } catch {
-                      return '2h antes';
-                    }
-                  })()}
-                </strong>
-              </span>
+            <div className="mt-3 pt-3 border-t border-amber-200/80">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3.5 bg-white/85 p-3.5 rounded-2xl border border-amber-200 shadow-xs">
+                {(() => {
+                  const posterSrc =
+                    normalizeGoogleDriveImageUrl(upcomingEvent.posterUrl) ||
+                    getEventPosterPlaceholder(upcomingEvent.type || 'baseball');
+                  return (
+                    <div className="w-24 sm:w-28 h-16 sm:h-20 rounded-xl overflow-hidden bg-slate-950 border border-amber-300/90 shadow-xs shrink-0 relative flex items-center justify-center">
+                      <img
+                        src={posterSrc}
+                        alt=""
+                        aria-hidden="true"
+                        className="absolute inset-0 w-full h-full object-cover blur-xs opacity-40 scale-110 pointer-events-none"
+                        referrerPolicy="no-referrer"
+                      />
+                      <img
+                        src={posterSrc}
+                        alt={upcomingEvent.name}
+                        className="relative z-10 max-h-full max-w-full object-contain"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src = getEventPosterPlaceholder(
+                            upcomingEvent.type || 'baseball'
+                          );
+                        }}
+                      />
+                    </div>
+                  );
+                })()}
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex items-center gap-1.5 text-[11px] text-amber-800 font-extrabold uppercase tracking-wider">
+                    <Calendar className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                    <span>Próximo Evento Programado en Sede</span>
+                  </div>
+                  <h4 className="font-extrabold text-sm sm:text-base text-slate-900 leading-snug">
+                    {upcomingEvent.name}
+                  </h4>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600">
+                    <span>
+                      Fecha: <strong className="text-slate-800">{upcomingEvent.date}</strong> ({upcomingEvent.time || '20:00 hrs'})
+                    </span>
+                    <span className="text-amber-900 font-bold flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                      Apertura pedidos:{' '}
+                      {(() => {
+                        const opens = upcomingEvent.orderingOpensAt;
+                        if (!opens) return '2h antes';
+                        try {
+                          return (
+                            new Date(opens).toLocaleTimeString('es-MX', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            }) + ' hrs'
+                          );
+                        } catch {
+                          return '2h antes';
+                        }
+                      })()}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -381,13 +440,42 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
 
       {!checkingEvent && activeEvent && (
         <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-2xl shadow-xs flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-2.5">
-            <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+          <div className="flex items-center gap-3">
+            {(() => {
+              const posterSrc =
+                normalizeGoogleDriveImageUrl(activeEvent.posterUrl) ||
+                getEventPosterPlaceholder(activeEvent.type || 'baseball');
+              return (
+                <div className="w-16 h-12 rounded-xl overflow-hidden bg-slate-950 border border-emerald-300 shadow-xs shrink-0 relative flex items-center justify-center">
+                  <img
+                    src={posterSrc}
+                    alt=""
+                    aria-hidden="true"
+                    className="absolute inset-0 w-full h-full object-cover blur-xs opacity-40 scale-110 pointer-events-none"
+                    referrerPolicy="no-referrer"
+                  />
+                  <img
+                    src={posterSrc}
+                    alt={activeEvent.name}
+                    className="relative z-10 max-h-full max-w-full object-contain"
+                    referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = getEventPosterPlaceholder(
+                        activeEvent.type || 'baseball'
+                      );
+                    }}
+                  />
+                </div>
+              );
+            })()}
             <div>
-              <p className="text-xs font-extrabold text-emerald-950">
-                🟢 Evento en Curso: {activeEvent.name}
-              </p>
-              <p className="text-[11px] text-emerald-800 font-medium">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                <p className="text-xs font-extrabold text-emerald-950">
+                  🟢 Evento en Curso: {activeEvent.name}
+                </p>
+              </div>
+              <p className="text-[11px] text-emerald-800 font-medium mt-0.5">
                 La ventana de pedidos está abierta para los aficionados de la sede hasta las{' '}
                 {(() => {
                   if (!activeEvent.orderingClosesAt) return 'finalizar el evento';

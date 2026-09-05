@@ -1,6 +1,7 @@
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { Venue, VenueEvent } from '../types';
+import { getEventPosterPlaceholder } from './imageUtils';
 
 export const DEFAULT_VENUE_ID = 'venue-teodoro-mariscal';
 export const DEFAULT_EVENT_ID = 'event-temporada-2026';
@@ -16,6 +17,9 @@ export const DEFAULT_FALLBACK_EVENT: VenueEvent = {
   gate: 'Puertas 1, 2, 4 y 8',
   active: true,
   ticketsAvailable: true,
+  posterUrl: getEventPosterPlaceholder('baseball'),
+  orderingOpensAt: '2026-10-15T18:00:00.000Z',
+  orderingClosesAt: '2026-10-16T00:00:00.000Z',
   priceTiers: [
     { section: 'Platea Baja Central', price: 450 },
     { section: 'Preferente Lateral', price: 320 },
@@ -66,6 +70,9 @@ export async function ensureDefaultVenueExists(): Promise<void> {
         gate: 'Puertas 1, 2, 4 y 8',
         active: true,
         ticketsAvailable: true,
+        posterUrl: getEventPosterPlaceholder('baseball'),
+        orderingOpensAt: '2026-10-15T18:00:00.000Z',
+        orderingClosesAt: '2026-10-16T00:00:00.000Z',
         priceTiers: [
           { section: 'Platea Baja Central', price: 450 },
           { section: 'Preferente Lateral', price: 320 },
@@ -75,6 +82,15 @@ export async function ensureDefaultVenueExists(): Promise<void> {
         createdAt: new Date().toISOString(),
       };
       await setDoc(eventRef, defaultEvent);
+    } else {
+      const data = eventSnap.data() as Partial<VenueEvent>;
+      if (!data.posterUrl || !data.orderingOpensAt) {
+        await updateDoc(eventRef, {
+          posterUrl: data.posterUrl || getEventPosterPlaceholder(data.type || 'baseball'),
+          orderingOpensAt: data.orderingOpensAt || '2026-10-15T18:00:00.000Z',
+          orderingClosesAt: data.orderingClosesAt || '2026-10-16T00:00:00.000Z',
+        });
+      }
     }
   } catch (err) {
     // Se captura la advertencia en caso de que el usuario no autenticado o no-admin

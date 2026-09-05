@@ -13,7 +13,13 @@ import { getStadiumStands, getMenuItemsByStand } from '../../lib/stands';
 import { createFoodOrder } from '../../lib/foodOrders';
 import { subscribeUserTickets } from '../../lib/tickets';
 import { getZoneBySection, getZones } from '../../lib/zones';
-import { getActiveOrderingEvent, getNextUpcomingEvent } from '../../lib/venueEvents';
+import {
+  getActiveOrderingEvent,
+  getNextUpcomingEvent,
+  subscribeVenueEventStatus,
+  getEventPosterPlaceholder,
+} from '../../lib/venueEvents';
+import { normalizeGoogleDriveImageUrl } from '../../lib/imageUtils';
 import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import {
@@ -63,10 +69,8 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
       const vId = user.venueId || DEFAULT_VENUE_ID;
       const active = await getActiveOrderingEvent(vId);
       setActiveOrderingEvent(active);
-      if (!active) {
-        const next = await getNextUpcomingEvent(vId);
-        setUpcomingEvent(next);
-      }
+      const next = await getNextUpcomingEvent(vId);
+      setUpcomingEvent(next);
     } catch (err) {
       console.error('Error al verificar pedidos activos:', err);
     } finally {
@@ -75,7 +79,20 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
   };
 
   useEffect(() => {
-    checkOrderingWindow();
+    setCheckingOrderingWindow(true);
+    const vId = user.venueId || DEFAULT_VENUE_ID;
+    const unsubscribe = subscribeVenueEventStatus(
+      vId,
+      (status) => {
+        setActiveOrderingEvent(status.activeEvent);
+        setUpcomingEvent(status.upcomingEvent);
+        setCheckingOrderingWindow(false);
+      },
+      () => {
+        setCheckingOrderingWindow(false);
+      }
+    );
+    return () => unsubscribe();
   }, [user.venueId]);
   
   // Modal de confirmación y tipo de entrega
@@ -321,7 +338,7 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
           </div>
 
           {upcomingEvent ? (
-            <div className="p-4 sm:p-5 bg-gradient-to-br from-amber-50/80 to-orange-50/50 rounded-2xl border border-amber-200 text-left space-y-3">
+            <div className="p-4 sm:p-5 bg-gradient-to-br from-amber-50/90 to-orange-50/70 rounded-2xl border border-amber-200 text-left space-y-3 shadow-xs">
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-red-600 shrink-0" />
                 <span className="text-xs font-black uppercase tracking-wider text-amber-900">
@@ -329,23 +346,33 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
                 </span>
               </div>
               <div className="flex gap-4 items-center">
-                {upcomingEvent.posterUrl && (
-                  <div className="w-24 h-16 rounded-xl overflow-hidden bg-slate-950 border border-amber-200 shadow-xs shrink-0 relative flex items-center justify-center">
-                    <img
-                      src={upcomingEvent.posterUrl}
-                      alt=""
-                      aria-hidden="true"
-                      className="absolute inset-0 w-full h-full object-cover blur-xs opacity-35 scale-110 pointer-events-none"
-                      referrerPolicy="no-referrer"
-                    />
-                    <img
-                      src={upcomingEvent.posterUrl}
-                      alt={upcomingEvent.name}
-                      className="relative z-10 max-h-full max-w-full object-contain"
-                      referrerPolicy="no-referrer"
-                    />
-                  </div>
-                )}
+                {(() => {
+                  const posterSrc =
+                    normalizeGoogleDriveImageUrl(upcomingEvent.posterUrl) ||
+                    getEventPosterPlaceholder(upcomingEvent.type || 'baseball');
+                  return (
+                    <div className="w-24 sm:w-28 h-16 sm:h-20 rounded-xl overflow-hidden bg-slate-950 border border-amber-300 shadow-xs shrink-0 relative flex items-center justify-center">
+                      <img
+                        src={posterSrc}
+                        alt=""
+                        aria-hidden="true"
+                        className="absolute inset-0 w-full h-full object-cover blur-xs opacity-40 scale-110 pointer-events-none"
+                        referrerPolicy="no-referrer"
+                      />
+                      <img
+                        src={posterSrc}
+                        alt={upcomingEvent.name}
+                        className="relative z-10 max-h-full max-w-full object-contain"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src = getEventPosterPlaceholder(
+                            upcomingEvent.type || 'baseball'
+                          );
+                        }}
+                      />
+                    </div>
+                  );
+                })()}
                 <div className="flex-1 min-w-0">
                   <h4 className="font-extrabold text-sm sm:text-base text-slate-900 leading-snug">
                     {upcomingEvent.name}
