@@ -411,14 +411,6 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
                 {t('tickets.filter.used', 'Utilizados')} ({tickets.filter((t) => t.status === 'usado').length})
               </button>
             </div>
-
-            <button
-              onClick={() => setActiveTab('comprar')}
-              className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-extrabold shadow-xs transition-colors cursor-pointer"
-            >
-              <PlusCircle className="w-3.5 h-3.5" />
-              <span>{t('tickets.buy_btn', 'Nueva Entrada')}</span>
-            </button>
           </div>
 
           {/* Listado de Boletos */}

@@ -36,6 +36,28 @@ export interface Venue {
   address: string;
   active: boolean;
   createdAt: string;
+  updatedAt?: string;
+  // Imagen y contenido promocional de la tienda oficial en el hero del login
+  storePromoBannerUrl?: string;
+  storePromoTitle?: string;
+  storePromoSubtitle?: string;
+  storePromoActive?: boolean;
+}
+
+export type HeroSlideType = 'event' | 'store_promo';
+
+export interface HeroSlide {
+  id: string;
+  slideType: HeroSlideType;
+  title: string;
+  subtitle?: string;
+  venueId: string;
+  venueName?: string;
+  imageUrl: string;
+  dateBadge?: string;
+  badgeLabel?: string;
+  targetAction: 'ticket' | 'store';
+  eventId?: string;
 }
 
 export type EventType = 'baseball' | 'football' | 'basketball' | 'concert' | 'other';
@@ -59,6 +81,7 @@ export interface VenueEvent {
   priceTiers: EventPriceTier[];
   createdAt: string;
   posterUrl?: string; // imagen promocional del evento
+  venueName?: string; // Nombre del recinto/estadio
   orderingOpensAt?: string; // ISO datetime — desde cuándo los negocios de la sede aceptan pedidos para este evento
   orderingClosesAt?: string; // ISO datetime — hasta cuándo aceptan pedidos
 }

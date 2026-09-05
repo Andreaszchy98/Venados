@@ -14,6 +14,7 @@ import { db } from './firebase';
 import { InventoryProduct, ProductCost } from '../types';
 import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
 import { DEFAULT_VENUE_ID } from './defaultVenue';
+import { normalizeGoogleDriveImageUrl, getDefaultProductPlaceholder } from './imageUtils';
 
 const COLLECTION_NAME = 'inventory';
 
@@ -152,10 +153,14 @@ export async function getInventoryProducts(venueId?: string): Promise<InventoryP
       }
     }
 
-    let products = snap.docs.map((d) => ({
-      id: d.id,
-      ...d.data(),
-    })) as InventoryProduct[];
+    let products = snap.docs.map((d) => {
+      const data = d.data();
+      return {
+        id: d.id,
+        ...data,
+        image: normalizeGoogleDriveImageUrl(data.image) || getDefaultProductPlaceholder(data.category),
+      };
+    }) as InventoryProduct[];
 
     if (venueId) {
       products = products.filter((p) => (p.venueId || DEFAULT_VENUE_ID) === venueId);
@@ -212,6 +217,7 @@ export async function seedInitialProducts(): Promise<InventoryProduct[]> {
     const docRef = doc(collection(db, COLLECTION_NAME));
     const product: InventoryProduct = {
       ...productData,
+      image: normalizeGoogleDriveImageUrl(productData.image) || getDefaultProductPlaceholder(productData.category),
       id: docRef.id,
       createdAt: now,
       updatedAt: now,
@@ -254,14 +260,23 @@ export async function saveInventoryProduct(
   try {
     let savedProduct: InventoryProduct;
 
+    const normalizedImage = rootData.image !== undefined
+      ? (normalizeGoogleDriveImageUrl(rootData.image) || getDefaultProductPlaceholder(rootData.category as any))
+      : undefined;
+
     if (rootData.id) {
       const docRef = doc(db, COLLECTION_NAME, rootData.id);
       const updatePayload = {
         ...rootData,
+        ...(normalizedImage !== undefined ? { image: normalizedImage } : {}),
         updatedAt: now,
       };
       await updateDoc(docRef, sanitizeFirestoreData(updatePayload));
-      savedProduct = { ...rootData, updatedAt: now } as InventoryProduct;
+      savedProduct = {
+        ...rootData,
+        ...(normalizedImage !== undefined ? { image: normalizedImage } : {}),
+        updatedAt: now,
+      } as InventoryProduct;
     } else {
       const docRef = doc(collection(db, COLLECTION_NAME));
       const newProduct: InventoryProduct = {
@@ -274,7 +289,7 @@ export async function saveInventoryProduct(
         stock: Number(rootData.stock) || 0,
         minStockAlert: Number(rootData.minStockAlert) || 5,
         sizes: rootData.sizes || ['Unitalla'],
-        image: rootData.image || 'https://images.unsplash.com/photo-1577210897949-1f56f943502f?w=600&auto=format&fit=crop&q=80',
+        image: normalizedImage || getDefaultProductPlaceholder(rootData.category as any),
         description: rootData.description || '',
         supplier: rootData.supplier || 'Venados Store',
         active: rootData.active !== undefined ? rootData.active : true,

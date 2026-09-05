@@ -182,7 +182,11 @@
         "state": { "type": "string" },
         "address": { "type": "string" },
         "active": { "type": "boolean" },
-        "createdAt": { "type": "string" }
+        "createdAt": { "type": "string" },
+        "storePromoBannerUrl": { "type": "string" },
+        "storePromoTitle": { "type": "string" },
+        "storePromoSubtitle": { "type": "string" },
+        "storePromoActive": { "type": "boolean" }
       },
       "required": ["name", "city", "state", "address", "active"]
     },

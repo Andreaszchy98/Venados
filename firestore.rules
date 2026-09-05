@@ -260,10 +260,12 @@ service cloud.firestore {
       allow update, delete: if isAdmin() || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal'));
     }
 
-    // 11. Recintos (Venues - Exclusivo de Superadmin)
+    // 11. Recintos (Venues - Lectura pública para información de sedes en cartelera previa al login, administración de Superadmin y Admin de Sede)
     match /venues/{venueId} {
-      allow read: if isAuthenticated();
-      allow create, update, delete: if isSuperAdmin();
+      allow read: if true;
+      allow create: if isSuperAdmin();
+      allow update: if isSuperAdmin() || isVenueAdmin(venueId) || isAdmin();
+      allow delete: if isSuperAdmin();
     }
 
     // 12. Eventos por Recinto (Venue Events - Scoped por Admin de Sede, lectura pública para cartelera previa al login)
@@ -290,6 +292,11 @@ service cloud.firestore {
         && request.resource.data.status == 'vendido'
         && request.resource.data.ticketId is string;
       allow delete: if isVenueAdmin(get(/databases/$(database)/documents/venueEvents/$(resource.data.eventId)).data.venueId);
+    }
+
+    // 15. Verificación de conectividad Firestore
+    match /test/{docId} {
+      allow read: if true;
     }
   }
 }

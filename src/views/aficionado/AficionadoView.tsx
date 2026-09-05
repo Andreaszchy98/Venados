@@ -19,22 +19,30 @@ interface AficionadoViewProps {
   user: UserProfile;
   pendingEventId?: string | null;
   onClearPendingEvent?: () => void;
+  initialTab?: 'boletos' | 'membresia' | 'tienda' | 'comida' | 'pedidos';
 }
 
 export const AficionadoView: React.FC<AficionadoViewProps> = ({
   user,
   pendingEventId,
   onClearPendingEvent,
+  initialTab,
 }) => {
-  const [activeTab, setActiveTab] = useState<'boletos' | 'membresia' | 'tienda' | 'comida' | 'pedidos'>('boletos');
+  const [activeTab, setActiveTab] = useState<'boletos' | 'membresia' | 'tienda' | 'comida' | 'pedidos'>(() => {
+    if (pendingEventId) return 'boletos';
+    if (initialTab) return initialTab;
+    return 'boletos';
+  });
   const { t } = useLanguage();
 
   // Si hay un pendingEventId al montar o cambiar, asegurarse de mostrar la pestaña de boletos
   useEffect(() => {
     if (pendingEventId) {
       setActiveTab('boletos');
+    } else if (initialTab) {
+      setActiveTab(initialTab);
     }
-  }, [pendingEventId]);
+  }, [pendingEventId, initialTab]);
 
   return (
     <div className="space-y-6">

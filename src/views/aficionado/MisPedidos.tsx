@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FoodOrder, MerchOrder, UserProfile } from '../../types';
 import { getUserFoodOrders } from '../../lib/foodOrders';
 import { getUserMerchOrders } from '../../lib/logistics';
+import { normalizeGoogleDriveImageUrl, getDefaultProductPlaceholder } from '../../lib/imageUtils';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import {
   Package,
@@ -252,7 +253,15 @@ export const MisPedidos: React.FC<MisPedidosProps> = ({ user }) => {
                   {order.items.map((item, idx) => (
                     <div key={idx} className="flex items-center gap-3 p-2 bg-slate-50 rounded-xl text-xs">
                       {item.image && (
-                        <img src={item.image} alt={item.name} className="w-10 h-10 rounded-lg object-cover bg-white" />
+                        <img
+                          src={normalizeGoogleDriveImageUrl(item.image) || getDefaultProductPlaceholder()}
+                          alt={item.name}
+                          className="w-10 h-10 rounded-lg object-cover bg-white shrink-0 border border-slate-200"
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src = getDefaultProductPlaceholder();
+                          }}
+                        />
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="font-bold text-slate-900 truncate">{item.name}</p>

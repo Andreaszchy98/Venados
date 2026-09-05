@@ -25,7 +25,20 @@ import {
   TrendingDown,
   X,
   Save,
+  ImageIcon,
+  ExternalLink,
+  Sparkles,
+  ShoppingBag,
+  Eye,
+  Store,
 } from 'lucide-react';
+import {
+  normalizeGoogleDriveImageUrl,
+  isGoogleDriveUrl,
+  getDefaultProductPlaceholder,
+  DEFAULT_STORE_PROMO_BANNER,
+} from '../../lib/imageUtils';
+import { getVenueById, updateVenueStorePromo } from '../../lib/venues';
 
 interface InventarioAdminProps {
   user?: UserProfile;
@@ -46,6 +59,15 @@ export const InventarioAdmin: React.FC<InventarioAdminProps> = ({ user }) => {
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [productToDelete, setProductToDelete] = useState<InventoryProduct | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Estado para la configuración del Banner Promocional de la Tienda Oficial en el Hero de Login
+  const [isStorePromoModalOpen, setIsStorePromoModalOpen] = useState(false);
+  const [storePromoBannerUrl, setStorePromoBannerUrl] = useState('');
+  const [storePromoTitle, setStorePromoTitle] = useState('Tienda Oficial Venados Store');
+  const [storePromoSubtitle, setStorePromoSubtitle] = useState('Jerseys oficiales, gorras y souvenirs con entrega en tu butaca o envío a domicilio.');
+  const [storePromoActive, setStorePromoActive] = useState(true);
+  const [savingPromo, setSavingPromo] = useState(false);
+  const [venueName, setVenueName] = useState('Estadio Teodoro Mariscal');
 
   const fetchInventory = async () => {
     setLoading(true);
@@ -71,9 +93,57 @@ export const InventarioAdmin: React.FC<InventarioAdminProps> = ({ user }) => {
     }
   };
 
+  const fetchVenuePromo = async () => {
+    try {
+      const venue = await getVenueById(venueId);
+      if (venue) {
+        setVenueName(venue.name || 'Estadio Teodoro Mariscal');
+        setStorePromoBannerUrl(venue.storePromoBannerUrl || '');
+        if (venue.storePromoTitle) setStorePromoTitle(venue.storePromoTitle);
+        if (venue.storePromoSubtitle) setStorePromoSubtitle(venue.storePromoSubtitle);
+        setStorePromoActive(venue.storePromoActive !== false);
+      }
+    } catch (err) {
+      console.warn('Error fetching venue promo config:', err);
+    }
+  };
+
   useEffect(() => {
     fetchInventory();
-  }, []);
+    fetchVenuePromo();
+  }, [venueId]);
+
+  const handlePromoBannerChange = (val: string) => {
+    const normalized = normalizeGoogleDriveImageUrl(val);
+    setStorePromoBannerUrl(normalized);
+    if (isGoogleDriveUrl(val) && normalized !== val) {
+      setFeedbackMessage('Enlace de Google Drive detectado y transformado automáticamente a URL directa.');
+    }
+  };
+
+  const handleResetPromoBanner = () => {
+    setStorePromoBannerUrl(DEFAULT_STORE_PROMO_BANNER);
+  };
+
+  const handleSaveStorePromo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingPromo(true);
+    try {
+      await updateVenueStorePromo(venueId, {
+        storePromoBannerUrl: storePromoBannerUrl.trim(),
+        storePromoTitle: storePromoTitle.trim(),
+        storePromoSubtitle: storePromoSubtitle.trim(),
+        storePromoActive,
+      });
+      setFeedbackMessage('¡Póster promocional de la Tienda Oficial actualizado exitosamente para el Hero de bienvenida!');
+      setIsStorePromoModalOpen(false);
+    } catch (err) {
+      console.error('Error saving store promo:', err);
+      setFeedbackMessage('Error al actualizar la promoción de la tienda oficial.');
+    } finally {
+      setSavingPromo(false);
+    }
+  };
 
   const handleStockDelta = async (productId: string, delta: number) => {
     try {
@@ -95,7 +165,7 @@ export const InventarioAdmin: React.FC<InventarioAdminProps> = ({ user }) => {
       stock: 20,
       minStockAlert: 5,
       sizes: ['S', 'M', 'L', 'XL'],
-      image: 'https://images.unsplash.com/photo-1577210897949-1f56f943502f?w=600&auto=format&fit=crop&q=80',
+      image: getDefaultProductPlaceholder('Jerseys'),
       description: '',
       supplier: 'Venados Store Oficial',
       active: true,
@@ -105,10 +175,27 @@ export const InventarioAdmin: React.FC<InventarioAdminProps> = ({ user }) => {
   };
 
   const handleOpenEditModal = async (product: InventoryProduct) => {
-    setEditingProduct({ ...product });
+    const normalizedImg = normalizeGoogleDriveImageUrl(product.image) || getDefaultProductPlaceholder(product.category);
+    setEditingProduct({
+      ...product,
+      image: normalizedImg,
+    });
     const currentCost = costsMap[product.id] ?? (await getProductCost(product.id)) ?? 0;
     setEditingCostPrice(currentCost);
     setIsModalOpen(true);
+  };
+
+  const handleImageUrlChange = (val: string) => {
+    const normalized = normalizeGoogleDriveImageUrl(val);
+    setEditingProduct((prev) => (prev ? { ...prev, image: normalized } : null));
+    if (isGoogleDriveUrl(val) && normalized !== val) {
+      setFeedbackMessage('Enlace de Google Drive detectado y transformado automáticamente a URL directa.');
+    }
+  };
+
+  const handleResetPlaceholder = () => {
+    const defaultImg = getDefaultProductPlaceholder(editingProduct?.category);
+    setEditingProduct((prev) => (prev ? { ...prev, image: defaultImg } : null));
   };
 
   const handleSaveProduct = async (e: React.FormEvent) => {
@@ -186,13 +273,37 @@ export const InventarioAdmin: React.FC<InventarioAdminProps> = ({ user }) => {
           </p>
         </div>
 
-        <button
-          onClick={handleOpenCreateModal}
-          className="px-4 py-2.5 bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-2 self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Nuevo Producto</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            id="btn-store-hero-promo-open"
+            type="button"
+            onClick={() => setIsStorePromoModalOpen(true)}
+            className="px-3.5 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold text-xs rounded-xl shadow-xs flex items-center gap-2 transition-colors cursor-pointer"
+            title="Configurar el póster o imagen promocional de la tienda oficial para el Hero del login"
+          >
+            <Sparkles className="w-4 h-4 text-amber-600" />
+            <span>Póster Hero de Tienda</span>
+            {storePromoActive ? (
+              <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-sm">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Activo
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-sm">
+                Pausado
+              </span>
+            )}
+          </button>
+
+          <button
+            id="btn-create-product"
+            onClick={handleOpenCreateModal}
+            className="px-4 py-2.5 bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-2 self-start sm:self-auto cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Nuevo Producto</span>
+          </button>
+        </div>
       </div>
 
       {feedbackMessage && (
@@ -309,10 +420,13 @@ export const InventarioAdmin: React.FC<InventarioAdminProps> = ({ user }) => {
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-3">
                           <img
-                            src={prod.image}
+                            src={normalizeGoogleDriveImageUrl(prod.image) || getDefaultProductPlaceholder(prod.category)}
                             alt={prod.name}
                             className="w-10 h-10 rounded-lg object-cover bg-slate-100 shrink-0 border border-slate-200"
                             referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).src = getDefaultProductPlaceholder(prod.category);
+                            }}
                           />
                           <div>
                             <p className="font-extrabold text-slate-900 leading-snug">{prod.name}</p>
@@ -501,15 +615,66 @@ export const InventarioAdmin: React.FC<InventarioAdminProps> = ({ user }) => {
                 </div>
               </div>
 
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">URL de Imagen</label>
-                <input
-                  type="url"
-                  value={editingProduct.image || ''}
-                  onChange={(e) => setEditingProduct({ ...editingProduct, image: e.target.value })}
-                  placeholder="https://..."
-                  className="w-full p-2 border border-slate-300 rounded-xl text-[11px] focus:outline-hidden focus:ring-2 focus:ring-red-600"
-                />
+              {/* Sección de Imagen con soporte Google Drive y Vista Previa */}
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="block font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                    <ImageIcon className="w-4 h-4 text-red-700" />
+                    <span>Fotografía del Producto (Soporta Google Drive)</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleResetPlaceholder}
+                    className="text-[11px] font-bold text-red-600 hover:text-red-700 underline cursor-pointer"
+                  >
+                    Usar placeholder de categoría
+                  </button>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3 items-start">
+                  {/* Vista previa miniatura */}
+                  <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-xl overflow-hidden bg-slate-950 border border-slate-300 shrink-0 relative shadow-xs flex items-center justify-center">
+                    <img
+                      src={editingProduct.image || getDefaultProductPlaceholder(editingProduct.category)}
+                      alt=""
+                      aria-hidden="true"
+                      className="absolute inset-0 w-full h-full object-cover blur-xs opacity-35 scale-110 pointer-events-none"
+                      referrerPolicy="no-referrer"
+                    />
+                    <img
+                      src={editingProduct.image || getDefaultProductPlaceholder(editingProduct.category)}
+                      alt="Vista previa del producto"
+                      className="relative z-10 max-h-full max-w-full object-contain p-1"
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = getDefaultProductPlaceholder(editingProduct.category);
+                      }}
+                    />
+                  </div>
+
+                  {/* Campo de URL con detección automática */}
+                  <div className="flex-1 space-y-1.5 w-full">
+                    <label className="block text-[11px] font-semibold text-slate-600">
+                      Pega un enlace compartido de Google Drive o URL web directa:
+                    </label>
+                    <input
+                      type="url"
+                      value={editingProduct.image || ''}
+                      onChange={(e) => handleImageUrlChange(e.target.value)}
+                      placeholder="https://drive.google.com/file/d/... o https://..."
+                      className="w-full p-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-red-600"
+                    />
+                    {editingProduct.image && editingProduct.image.includes('googleusercontent.com/d/') && (
+                      <p className="text-[10px] text-emerald-700 font-semibold flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Enlace de Google Drive optimizado automáticamente con URL directa CDN.</span>
+                      </p>
+                    )}
+                    <p className="text-[10px] text-slate-400">
+                      Formatos compatibles: Enlace de compartir de Drive (`drive.google.com/file/d/...`), carpetas públicas, o URLs de imagen HTTPS.
+                    </p>
+                  </div>
+                </div>
               </div>
 
               <div>
@@ -543,6 +708,199 @@ export const InventarioAdmin: React.FC<InventarioAdminProps> = ({ user }) => {
           </div>
         </div>
       )}
+      {/* Modal de Configuración del Banner de la Tienda Oficial en el Hero de Login */}
+      {isStorePromoModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 my-8">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-amber-50 text-amber-700 rounded-2xl border border-amber-200">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-slate-900">
+                    Póster de Tienda Oficial en el Hero
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Aparece en el carrusel principal de bienvenida antes de iniciar sesión ({venueName})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsStorePromoModalOpen(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveStorePromo} className="mt-4 space-y-4 text-xs">
+              {/* Activar / Desactivar promoción en el Hero */}
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between">
+                <div>
+                  <label htmlFor="store-promo-active-toggle" className="font-bold text-slate-800 text-xs block cursor-pointer">
+                    Mostrar en el carrusel de bienvenida (Hero)
+                  </label>
+                  <p className="text-[11px] text-slate-500">
+                    Los aficionados podrán ver este póster y acceder directo a la tienda oficial.
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    id="store-promo-active-toggle"
+                    type="checkbox"
+                    checked={storePromoActive}
+                    onChange={(e) => setStorePromoActive(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
+                </label>
+              </div>
+
+              {/* URL de Imagen Promocional (Soporta Google Drive) */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label htmlFor="store-promo-banner-input" className="font-bold text-slate-700">
+                    URL de la Imagen Promocional / Póster (Soporta Google Drive) *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleResetPromoBanner}
+                    className="text-[10px] text-amber-700 hover:underline font-bold"
+                  >
+                    Usar imagen oficial por defecto
+                  </button>
+                </div>
+
+                <div className="relative">
+                  <ImageIcon className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    id="store-promo-banner-input"
+                    type="url"
+                    placeholder="https://drive.google.com/file/d/... o https://..."
+                    value={storePromoBannerUrl}
+                    onChange={(e) => handlePromoBannerChange(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+
+                {storePromoBannerUrl && storePromoBannerUrl.includes('googleusercontent.com/d/') && (
+                  <p className="mt-1.5 text-[11px] text-emerald-700 font-semibold flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Enlace de Google Drive detectado y transformado automáticamente a CDN directo.</span>
+                  </p>
+                )}
+
+                <p className="mt-1 text-[10px] text-slate-500">
+                  Puedes pegar un enlace de archivo compartido de Google Drive, Google Photos, o cualquier enlace HTTPS público.
+                </p>
+              </div>
+
+              {/* Vista previa en tiempo real idéntica al Hero */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                  <Eye className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Vista Previa en Vivo (Formato Hero del Login)</span>
+                </label>
+                <div className="relative w-full aspect-16/9 rounded-2xl overflow-hidden bg-slate-950 border border-slate-700 shadow-inner flex items-center justify-center">
+                  {storePromoBannerUrl ? (
+                    <>
+                      {/* Fondo ambiental difuminado */}
+                      <img
+                        src={storePromoBannerUrl}
+                        alt=""
+                        aria-hidden="true"
+                        className="absolute inset-0 w-full h-full object-cover blur-md opacity-35 scale-110 pointer-events-none"
+                        referrerPolicy="no-referrer"
+                      />
+                      {/* Imagen principal limpia */}
+                      <img
+                        src={storePromoBannerUrl}
+                        alt="Vista previa póster tienda"
+                        className="relative z-10 max-h-full max-w-full object-contain p-2 drop-shadow-md"
+                        referrerPolicy="no-referrer"
+                      />
+                      {/* Badge superior */}
+                      <div className="absolute top-2 left-2 z-20">
+                        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md shadow-md bg-amber-400 text-slate-950 flex items-center gap-1">
+                          <ShoppingBag className="w-3 h-3 text-slate-950" />
+                          Tienda Oficial
+                        </span>
+                      </div>
+                      {/* Overlay con títulos */}
+                      <div className="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-3 text-white">
+                        <p className="font-black text-xs sm:text-sm text-amber-300 drop-shadow-xs line-clamp-1">
+                          {storePromoTitle || 'Tienda Oficial Venados Store'}
+                        </p>
+                        <p className="text-[10px] sm:text-[11px] text-slate-200 line-clamp-1 mt-0.5">
+                          {storePromoSubtitle || 'Jerseys, gorras y souvenirs oficiales.'}
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-center p-4 text-slate-400">
+                      <ImageIcon className="w-8 h-8 mx-auto mb-1 opacity-50" />
+                      <p className="text-xs font-semibold">Ingresa una URL de imagen o presiona &quot;Usar imagen oficial por defecto&quot;</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Título promocional */}
+              <div>
+                <label htmlFor="store-promo-title-input" className="block font-bold text-slate-700 mb-1">
+                  Título Destacado en el Hero
+                </label>
+                <input
+                  id="store-promo-title-input"
+                  type="text"
+                  value={storePromoTitle}
+                  onChange={(e) => setStorePromoTitle(e.target.value)}
+                  placeholder="Ej. Tienda Oficial Venados Store"
+                  className="w-full p-2 border border-slate-300 rounded-xl text-xs focus:outline-hidden focus:ring-2 focus:ring-amber-500 font-semibold"
+                />
+              </div>
+
+              {/* Subtítulo / Descripción */}
+              <div>
+                <label htmlFor="store-promo-subtitle-input" className="block font-bold text-slate-700 mb-1">
+                  Mensaje Promocional / Subtítulo
+                </label>
+                <textarea
+                  id="store-promo-subtitle-input"
+                  rows={2}
+                  value={storePromoSubtitle}
+                  onChange={(e) => setStorePromoSubtitle(e.target.value)}
+                  placeholder="Ej. Jerseys oficiales, gorras y souvenirs con entrega en tu butaca o envío express a domicilio."
+                  className="w-full p-2 border border-slate-300 rounded-xl text-xs focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              {/* Acciones */}
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsStorePromoModalOpen(false)}
+                  className="px-4 py-2 border border-slate-300 rounded-xl font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer text-xs"
+                >
+                  Cancelar
+                </button>
+                <button
+                  id="btn-save-store-promo"
+                  type="submit"
+                  disabled={savingPromo}
+                  className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow-xs flex items-center gap-1.5 disabled:opacity-50 transition-colors cursor-pointer text-xs"
+                >
+                  <Save className="w-4 h-4" />
+                  {savingPromo ? 'Guardando...' : 'Guardar en Pantalla de Bienvenida'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Modal de Confirmación para Eliminar Producto */}
       <ConfirmationModal
         isOpen={!!productToDelete}

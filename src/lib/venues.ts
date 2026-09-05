@@ -15,6 +15,7 @@ import { db } from './firebase';
 import { Venue, VenueEvent, EventType } from '../types';
 import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
 import { DEFAULT_VENUE_ID, DEFAULT_EVENT_ID, DEFAULT_FALLBACK_EVENT } from './defaultVenue';
+import { normalizeGoogleDriveImageUrl, DEFAULT_STORE_PROMO_BANNER } from './imageUtils';
 
 const VENUES_COLLECTION = 'venues';
 const EVENTS_COLLECTION = 'venueEvents';
@@ -127,6 +128,39 @@ export async function createVenue(venueData: Omit<Venue, 'id' | 'createdAt'> & {
 export async function updateVenue(venueId: string, updates: Partial<Venue>): Promise<void> {
   try {
     const docRef = doc(db, VENUES_COLLECTION, venueId);
+    await updateDoc(docRef, sanitizeFirestoreData(updates));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `${VENUES_COLLECTION}/${venueId}`);
+    throw err;
+  }
+}
+
+/**
+ * Actualizar la promoción de la tienda oficial de un recinto para el Hero de bienvenida / login.
+ * Permite a los Administradores de Sede y Superadmins configurar un póster/banner oficial (con soporte para Google Drive).
+ */
+export async function updateVenueStorePromo(
+  venueId: string,
+  promoData: {
+    storePromoBannerUrl?: string;
+    storePromoTitle?: string;
+    storePromoSubtitle?: string;
+    storePromoActive?: boolean;
+  }
+): Promise<void> {
+  try {
+    const docRef = doc(db, VENUES_COLLECTION, venueId);
+    const normalizedBanner = promoData.storePromoBannerUrl !== undefined
+      ? normalizeGoogleDriveImageUrl(promoData.storePromoBannerUrl)
+      : undefined;
+
+    const updates: Partial<Venue> = {
+      ...(normalizedBanner !== undefined ? { storePromoBannerUrl: normalizedBanner } : {}),
+      ...(promoData.storePromoTitle !== undefined ? { storePromoTitle: promoData.storePromoTitle } : {}),
+      ...(promoData.storePromoSubtitle !== undefined ? { storePromoSubtitle: promoData.storePromoSubtitle } : {}),
+      ...(promoData.storePromoActive !== undefined ? { storePromoActive: promoData.storePromoActive } : {}),
+      updatedAt: new Date().toISOString(),
+    };
     await updateDoc(docRef, sanitizeFirestoreData(updates));
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `${VENUES_COLLECTION}/${venueId}`);

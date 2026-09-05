@@ -115,17 +115,33 @@ export async function getAllUsers(): Promise<UserProfile[]> {
   }
 }
 
+let activeGoogleSignInPromise: Promise<UserProfile> | null = null;
+
 /**
  * Iniciar sesión con Google
  */
 export async function signInWithGoogle(): Promise<UserProfile> {
-  try {
-    const result = await signInWithPopup(auth, googleProvider);
-    return await syncUserProfile(result.user);
-  } catch (error: any) {
-    const message = getFriendlyAuthErrorMessage(error?.code || '');
-    throw new Error(message);
+  if (activeGoogleSignInPromise) {
+    return activeGoogleSignInPromise;
   }
+  activeGoogleSignInPromise = (async () => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      return await syncUserProfile(result.user);
+    } catch (error: any) {
+      // Si el usuario ya completó la autenticación en segundo plano
+      if (auth.currentUser) {
+        try {
+          return await syncUserProfile(auth.currentUser);
+        } catch {}
+      }
+      const message = getFriendlyAuthErrorMessage(error?.code || '');
+      throw new Error(message);
+    } finally {
+      activeGoogleSignInPromise = null;
+    }
+  })();
+  return activeGoogleSignInPromise;
 }
 
 /**

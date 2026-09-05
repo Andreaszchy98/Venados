@@ -11,11 +11,11 @@ import {
   onSnapshot,
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
-import { VenueEvent, EventPriceTier, EventType } from '../types';
+import { VenueEvent, EventPriceTier, EventType, HeroSlide, Venue } from '../types';
 import { DEFAULT_VENUE_ID } from './defaultVenue';
 import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
 import { generateEventSeats } from './seatMap';
-import { normalizeGoogleDriveImageUrl } from './imageUtils';
+import { normalizeGoogleDriveImageUrl, DEFAULT_STORE_PROMO_BANNER } from './imageUtils';
 
 const COLLECTION_NAME = 'venueEvents';
 
@@ -469,72 +469,242 @@ export async function getVenueEventById(eventId: string): Promise<VenueEvent | n
 }
 
 /**
- * Consulta los eventos active: true con fecha futura, ordenados por date, límite limitCount.
- * Si se pasa venueId, prioriza los de ese venue o incluye todos para la vista previa previa al login.
- * Filtra solo aquellos que tengan un posterUrl real para el carrusel de bienvenida.
+ * Consulta los eventos activos con fecha futura para la cartelera de bienvenida.
+ * Permite mostrar los carteles de los eventos de todas las sedes disponibles de la ciudad actual
+ * (ej. Estadio Teodoro Mariscal, Estadio El Encanto, etc.) para que los clientes puedan decidir
+ * comprar boletos para eventos de cualquiera de ellas.
  */
 export async function getUpcomingHeroEvents(
   venueId?: string,
-  limitCount: number = 6
+  limitCount: number = 8
 ): Promise<VenueEvent[]> {
   const todayStr = new Date().toISOString().split('T')[0];
 
   try {
-    const q = venueId
+    // 1. Obtener información de todas las sedes registradas para asociar nombres de estadio
+    const venuesMap = new Map<string, { name: string; city: string }>();
+    try {
+      const venuesSnap = await getDocs(collection(db, 'venues'));
+      venuesSnap.docs.forEach((d) => {
+        const data = d.data();
+        venuesMap.set(d.id, {
+          name: data.name || 'Recinto Deportivo',
+          city: data.city || 'Mazatlán',
+        });
+      });
+    } catch (err) {
+      console.warn('No se pudieron precargar sedes para la cartelera hero:', err);
+    }
+
+    // 2. Si se especifica un venueId puntual, se busca primero en ese venue;
+    // si no se especifica venueId (pantalla de inicio/login), se consultan todos los eventos disponibles.
+    const eventsQuery = venueId
       ? query(collection(db, COLLECTION_NAME), where('venueId', '==', venueId))
-      : collection(db, COLLECTION_NAME);
-    const snap = await getDocs(q);
+      : query(collection(db, COLLECTION_NAME));
+
+    const snap = await getDocs(eventsQuery);
     let events = snap.docs.map((d) => {
       const data = d.data();
+      const vInfo = venuesMap.get(data.venueId);
+      const fallbackVenueName =
+        data.venueId === DEFAULT_VENUE_ID ? 'Estadio Teodoro Mariscal' : undefined;
+
       return {
         id: d.id,
         ...data,
-        posterUrl: normalizeGoogleDriveImageUrl(data.posterUrl),
+        venueName: data.venueName || vInfo?.name || fallbackVenueName,
+        posterUrl:
+          normalizeGoogleDriveImageUrl(data.posterUrl) ||
+          getEventPosterPlaceholder(data.type),
       } as VenueEvent;
     });
 
+    // Si la base de datos está vacía, usar eventos por defecto de respaldo
     if (events.length === 0) {
-      events = [...DEFAULT_FALLBACK_EVENTS];
+      events = [...DEFAULT_FALLBACK_EVENTS].map((e) => ({
+        ...e,
+        venueName: e.venueName || 'Estadio Teodoro Mariscal',
+      }));
     }
 
-    const filtered = events
-      .filter((e) => {
-        const isFuture = e.date >= todayStr;
+    // Filtrar eventos activos y futuros con cartel disponible
+    let filtered = events.filter((e) => {
+      const isFuture = e.date >= todayStr;
+      const hasPoster = typeof e.posterUrl === 'string' && e.posterUrl.trim().length > 0;
+      return e.active !== false && isFuture && hasPoster;
+    });
+
+    // Si no hay eventos estrictamente futuros, relajar la restricción de fecha para que nunca quede vacía la cartelera
+    if (filtered.length === 0) {
+      filtered = events.filter((e) => {
         const hasPoster = typeof e.posterUrl === 'string' && e.posterUrl.trim().length > 0;
-        return e.active === true && isFuture && hasPoster;
-      })
-      .sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : 0))
-      .slice(0, limitCount);
-
-    // Si con el filtro de venueId quedó vacío o con un solo evento y se pidió un venue específico,
-    // intentar buscar en todos los venues para no dejar el carrusel sin eventos
-    if (filtered.length < 2 && venueId) {
-      const allSnap = await getDocs(collection(db, COLLECTION_NAME));
-      const allEvents = allSnap.docs.map((d) => {
-        const data = d.data();
-        return {
-          id: d.id,
-          ...data,
-          posterUrl: normalizeGoogleDriveImageUrl(data.posterUrl),
-        } as VenueEvent;
+        return e.active !== false && hasPoster;
       });
-      const allFiltered = allEvents
-        .filter((e) => {
-          const isFuture = e.date >= todayStr;
-          const hasPoster = typeof e.posterUrl === 'string' && e.posterUrl.trim().length > 0;
-          return e.active === true && isFuture && hasPoster;
-        })
-        .sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : 0))
-        .slice(0, limitCount);
+    }
 
-      if (allFiltered.length > 0) {
-        return allFiltered;
+    // Ordenar cronológicamente
+    filtered.sort((a, b) => a.date.localeCompare(b.date));
+
+    // Si se solicitó un venueId específico pero quedaron menos de 2 eventos,
+    // complementar con eventos de otras sedes disponibles
+    if (venueId && filtered.length < 2) {
+      try {
+        const allSnap = await getDocs(collection(db, COLLECTION_NAME));
+        const otherEvents = allSnap.docs
+          .map((d) => {
+            const data = d.data();
+            const vInfo = venuesMap.get(data.venueId);
+            return {
+              id: d.id,
+              ...data,
+              venueName: data.venueName || vInfo?.name,
+              posterUrl:
+                normalizeGoogleDriveImageUrl(data.posterUrl) ||
+                getEventPosterPlaceholder(data.type),
+            } as VenueEvent;
+          })
+          .filter((e) => {
+            const isFuture = e.date >= todayStr;
+            const hasPoster = typeof e.posterUrl === 'string' && e.posterUrl.trim().length > 0;
+            return e.active !== false && isFuture && hasPoster && !filtered.some((f) => f.id === e.id);
+          });
+
+        otherEvents.sort((a, b) => a.date.localeCompare(b.date));
+        filtered = [...filtered, ...otherEvents];
+      } catch (err) {
+        console.warn('Error al complementar eventos con otras sedes:', err);
       }
     }
 
-    return filtered;
+    return filtered.slice(0, limitCount);
   } catch (err) {
     console.error('Error al obtener eventos para el hero de bienvenida:', err);
+    return DEFAULT_FALLBACK_EVENTS.slice(0, limitCount);
+  }
+}
+
+/**
+ * Consulta unificada para el Hero de Bienvenida / Login.
+ * Integra los eventos estelares de la cartelera con los banners promocionales
+ * de la Tienda Oficial configurados por los administradores de sede (soporta Google Drive).
+ */
+export async function getHeroSlides(
+  venueId?: string,
+  limitCount: number = 8
+): Promise<HeroSlide[]> {
+  try {
+    // 1. Obtener eventos de cartelera
+    const events = await getUpcomingHeroEvents(venueId, limitCount);
+
+    // 2. Obtener sedes con promoción activa de tienda oficial
+    const storeSlides: HeroSlide[] = [];
+    try {
+      const venuesSnap = await getDocs(collection(db, 'venues'));
+      const venuesList = venuesSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Venue));
+
+      const candidateVenues = venueId
+        ? venuesList.filter((v) => v.id === venueId && v.active !== false)
+        : venuesList.filter((v) => v.active !== false);
+
+      for (const v of candidateVenues) {
+        if (v.storePromoActive === false) continue;
+
+        // Si tiene banner configurado o es la sede principal
+        const hasCustomBanner = typeof v.storePromoBannerUrl === 'string' && v.storePromoBannerUrl.trim().length > 0;
+        const bannerUrl = hasCustomBanner
+          ? (normalizeGoogleDriveImageUrl(v.storePromoBannerUrl) || DEFAULT_STORE_PROMO_BANNER)
+          : (v.id === DEFAULT_VENUE_ID ? DEFAULT_STORE_PROMO_BANNER : null);
+
+        if (bannerUrl) {
+          storeSlides.push({
+            id: `store-promo-${v.id}`,
+            slideType: 'store_promo',
+            title: v.storePromoTitle || 'Tienda Oficial Venados Store',
+            subtitle:
+              v.storePromoSubtitle ||
+              'Jerseys oficiales, gorras y souvenirs con entrega en tu butaca o envío a domicilio.',
+            venueId: v.id,
+            venueName: v.name || 'Estadio Teodoro Mariscal',
+            imageUrl: bannerUrl,
+            dateBadge: 'TIENDA OFICIAL',
+            badgeLabel: '🛍️ TIENDA OFICIAL',
+            targetAction: 'store',
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('Error al cargar banners de tienda oficial para el hero:', err);
+    }
+
+    // 3. Convertir eventos a HeroSlides
+    const eventSlides: HeroSlide[] = events.map((ev) => ({
+      id: ev.id,
+      slideType: 'event',
+      title: ev.name,
+      subtitle: ev.opponent ? `vs ${ev.opponent}` : undefined,
+      venueId: ev.venueId,
+      venueName: ev.venueName || 'Estadio Teodoro Mariscal',
+      imageUrl: ev.posterUrl || getEventPosterPlaceholder(ev.type),
+      dateBadge: ev.date,
+      badgeLabel: '🎟️ EVENTO DESTACADO',
+      targetAction: 'ticket',
+      eventId: ev.id,
+    }));
+
+    // 4. Intercalar armónicamente: si hay eventos y banners de tienda, poner el primer evento,
+    // luego el banner de tienda oficial, luego el resto de eventos
+    const combined: HeroSlide[] = [];
+    if (eventSlides.length > 0) {
+      combined.push(eventSlides[0]);
+      if (storeSlides.length > 0) {
+        combined.push(storeSlides[0]);
+      }
+      for (let i = 1; i < eventSlides.length; i++) {
+        combined.push(eventSlides[i]);
+      }
+      // Agregar tiendas adicionales si hubiera múltiples sedes
+      for (let j = 1; j < storeSlides.length; j++) {
+        combined.push(storeSlides[j]);
+      }
+    } else if (storeSlides.length > 0) {
+      combined.push(...storeSlides);
+    }
+
+    // Si aún estuviera vacío por alguna anomalía, fallback con evento y tienda por defecto
+    if (combined.length === 0) {
+      combined.push(
+        {
+          id: 'default-event-1',
+          slideType: 'event',
+          title: 'Temporada Regular Venados 2026',
+          subtitle: 'vs Tomateros de Culiacán',
+          venueId: DEFAULT_VENUE_ID,
+          venueName: 'Estadio Teodoro Mariscal',
+          imageUrl: 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?auto=format&fit=crop&w=800&q=80',
+          dateBadge: '2026-10-15',
+          badgeLabel: '🎟️ EVENTO DESTACADO',
+          targetAction: 'ticket',
+          eventId: 'default-event-1',
+        },
+        {
+          id: `store-promo-${DEFAULT_VENUE_ID}`,
+          slideType: 'store_promo',
+          title: 'Tienda Oficial Venados Store',
+          subtitle: 'Jerseys oficiales, gorras y souvenirs con entrega en tu butaca o envío a domicilio.',
+          venueId: DEFAULT_VENUE_ID,
+          venueName: 'Estadio Teodoro Mariscal',
+          imageUrl: DEFAULT_STORE_PROMO_BANNER,
+          dateBadge: 'TIENDA OFICIAL',
+          badgeLabel: '🛍️ TIENDA OFICIAL',
+          targetAction: 'store',
+        }
+      );
+    }
+
+    return combined.slice(0, limitCount);
+  } catch (err) {
+    console.error('Error al generar slides unificados para el hero:', err);
     return [];
   }
 }
+

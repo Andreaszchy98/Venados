@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { InventoryProduct, UserProfile, OrderItem, ShippingAddress } from '../../types';
 import { getInventoryProducts, adjustProductStock } from '../../lib/inventory';
 import { createMerchOrder } from '../../lib/logistics';
+import { normalizeGoogleDriveImageUrl, getDefaultProductPlaceholder } from '../../lib/imageUtils';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { ErrorMessage } from '../../components/shared/ErrorMessage';
 import {
@@ -116,7 +117,7 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
         price: item.product.price,
         quantity: item.quantity,
         size: item.size,
-        image: item.product.image,
+        image: normalizeGoogleDriveImageUrl(item.product.image) || getDefaultProductPlaceholder(item.product.category),
       }));
 
       const orderPayload: Parameters<typeof createMerchOrder>[0] = {
@@ -262,10 +263,13 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
               <div>
                 <div className="relative h-52 bg-slate-100 overflow-hidden">
                   <img
-                    src={prod.image}
+                    src={normalizeGoogleDriveImageUrl(prod.image) || getDefaultProductPlaceholder(prod.category)}
                     alt={prod.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = getDefaultProductPlaceholder(prod.category);
+                    }}
                   />
                   <div className="absolute top-3 left-3 bg-slate-900/80 backdrop-blur-xs text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">
                     {prod.category}
@@ -587,7 +591,15 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                 <div className="space-y-3">
                   {cart.map((item, idx) => (
                     <div key={`${item.product.id}-${item.size}`} className="flex gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
-                      <img src={item.product.image} alt={item.product.name} className="w-16 h-16 object-cover rounded-lg bg-white" />
+                      <img
+                        src={normalizeGoogleDriveImageUrl(item.product.image) || getDefaultProductPlaceholder(item.product.category)}
+                        alt={item.product.name}
+                        className="w-16 h-16 object-cover rounded-lg bg-white"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src = getDefaultProductPlaceholder(item.product.category);
+                        }}
+                      />
                       <div className="flex-1 space-y-1">
                         <p className="text-xs font-bold text-slate-900 leading-snug line-clamp-1">{item.product.name}</p>
                         <p className="text-[11px] text-slate-500">Talla: <strong className="text-slate-800">{item.size}</strong></p>
