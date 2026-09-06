@@ -8,10 +8,11 @@ interface MiMembresiaProps {
 }
 
 export const MiMembresia: React.FC<MiMembresiaProps> = ({ user }) => {
-  // Obtenemos la identidad y branding del estadio que se está visualizando
+  // Obtenemos la identidad y branding del estadio que se está visualizando (browsingVenueId)
+  const activeVenueId = user.browsingVenueId || user.venueId;
   const storeProfile = useMemo(() => {
-    return getStadiumStoreProfile(user.venueId);
-  }, [user.venueId]);
+    return getStadiumStoreProfile(activeVenueId);
+  }, [activeVenueId]);
 
   return (
     <div className="space-y-6">
@@ -67,7 +68,7 @@ export const MiMembresia: React.FC<MiMembresiaProps> = ({ user }) => {
             <span className="flex items-center gap-1.5 text-slate-800">
               <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Enlace de Datos Activo
             </span>
-            <span className="text-[11px] font-mono text-slate-500">{user.venueId || 'venue-teodoro-mariscal'}</span>
+            <span className="text-[11px] font-mono text-slate-500">{activeVenueId || 'venue-teodoro-mariscal'}</span>
           </div>
 
           <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 pt-1">

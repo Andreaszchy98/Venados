@@ -60,7 +60,7 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
   const [venues, setVenues] = useState<Venue[]>([]);
   const [loadingVenues, setLoadingVenues] = useState(true);
   const [selectedVenueId, setSelectedVenueId] = useState<string>(
-    propSelectedVenueId || user.venueId || DEFAULT_VENUE_ID
+    propSelectedVenueId || user.browsingVenueId || user.venueId || DEFAULT_VENUE_ID
   );
 
   // Sincronizar si la sede cambia desde la pantalla principal
@@ -115,8 +115,9 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
             if (prev && venuesList.some((v) => v.id === prev)) {
               return prev;
             }
-            return user.venueId && venuesList.some((v) => v.id === user.venueId)
-              ? user.venueId
+            const preferred = user.browsingVenueId || user.venueId;
+            return preferred && venuesList.some((v) => v.id === preferred)
+              ? preferred
               : venuesList[0].id;
           });
         }
@@ -141,7 +142,7 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
     );
 
     return () => unsubscribe();
-  }, [user.venueId, propSelectedVenueId]);
+  }, [user.browsingVenueId, user.venueId, propSelectedVenueId]);
 
   // Escuchar eventos en tiempo real de la sede seleccionada
   useEffect(() => {

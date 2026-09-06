@@ -51,15 +51,16 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
   const [paymentMethod, setPaymentMethod] = useState<'Efectivo / Terminal física' | 'Tarjeta' | 'Transferencia SPEI' | 'MercadoPago' | 'Efectivo en Tienda'>('Efectivo / Terminal física');
   const [submittingOrder, setSubmittingOrder] = useState(false);
 
-  // Perfil de marca e identidad de la tienda del estadio actual
+  // Perfil de marca e identidad de la tienda del estadio actual (usa browsingVenueId de navegación)
+  const activeVenueId = user.browsingVenueId || user.venueId;
   const storeProfile = useMemo(() => {
-    return getStadiumStoreProfile(user.venueId);
-  }, [user.venueId]);
+    return getStadiumStoreProfile(activeVenueId);
+  }, [activeVenueId]);
 
   const fetchProducts = async () => {
     setLoading(true);
     try {
-      const data = await getInventoryProducts(user.venueId);
+      const data = await getInventoryProducts(activeVenueId);
       setProducts(data);
     } catch (err: any) {
       console.error('Error cargando catálogo:', err);
@@ -70,7 +71,7 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
 
   useEffect(() => {
     fetchProducts();
-  }, [user.venueId]);
+  }, [activeVenueId]);
 
   const categories = ['Todos', 'Jerseys', 'Gorras', 'Sudaderas', 'Souvenirs', 'Coleccionables'];
 
@@ -127,7 +128,7 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
       }));
 
       const orderPayload: Parameters<typeof createMerchOrder>[0] = {
-        venueId: user.venueId || 'venue-teodoro-mariscal',
+        venueId: activeVenueId || 'venue-teodoro-mariscal',
         userId: user.uid,
         customerName: address.recipientName?.trim() || user.displayName || 'Aficionado Venados',
         customerEmail: user.email || 'aficionado@venados.com',

@@ -65,6 +65,8 @@ export async function syncUserProfile(
     const currentRole: UserRole = data.role || 'aficionado';
     const venueId = data.venueId || undefined;
     const venueName = data.venueName || undefined;
+    const browsingVenueId = data.browsingVenueId || undefined;
+    const browsingVenueName = data.browsingVenueName || undefined;
 
     return {
       uid: fbUser.uid,
@@ -73,6 +75,8 @@ export async function syncUserProfile(
       role: currentRole,
       photoURL: data.photoURL || fbUser.photoURL,
       phoneNumber: data.phoneNumber || fbUser.phoneNumber,
+      browsingVenueId,
+      browsingVenueName,
       venueId,
       venueName,
       standId: data.standId,
@@ -83,14 +87,16 @@ export async function syncUserProfile(
       updatedAt: data.updatedAt,
     };
   } else {
-    // Crear nuevo perfil en Firestore
+    // Crear nuevo perfil en Firestore (siempre con rol seguro 'aficionado' y sede de navegación inicial)
     const newProfile: UserProfile = {
       uid: fbUser.uid,
       email: fbUser.email,
       displayName: fbUser.displayName || (fbUser.email ? fbUser.email.split('@')[0] : 'Aficionado Venados'),
-      role: initialRole,
+      role: 'aficionado',
       photoURL: fbUser.photoURL || null,
       phoneNumber: fbUser.phoneNumber || null,
+      browsingVenueId: 'venue-teodoro-mariscal',
+      browsingVenueName: 'Estadio Teodoro Mariscal',
       createdAt: new Date().toISOString(),
     };
 

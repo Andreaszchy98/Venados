@@ -66,7 +66,7 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
   const checkOrderingWindow = async () => {
     setCheckingOrderingWindow(true);
     try {
-      const vId = user.venueId || DEFAULT_VENUE_ID;
+      const vId = user.browsingVenueId || user.venueId || DEFAULT_VENUE_ID;
       const active = await getActiveOrderingEvent(vId);
       setActiveOrderingEvent(active);
       const next = await getNextUpcomingEvent(vId);
@@ -80,7 +80,7 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
 
   useEffect(() => {
     setCheckingOrderingWindow(true);
-    const vId = user.venueId || DEFAULT_VENUE_ID;
+    const vId = user.browsingVenueId || user.venueId || DEFAULT_VENUE_ID;
     const unsubscribe = subscribeVenueEventStatus(
       vId,
       (status) => {
@@ -93,7 +93,7 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
       }
     );
     return () => unsubscribe();
-  }, [user.venueId]);
+  }, [user.browsingVenueId, user.venueId]);
   
   // Modal de confirmación y tipo de entrega
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
@@ -123,7 +123,7 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
     const fetchStands = async () => {
       setLoadingStands(true);
       try {
-        const vId = user.venueId || DEFAULT_VENUE_ID;
+        const vId = user.browsingVenueId || user.venueId || DEFAULT_VENUE_ID;
         const data = await getStadiumStands(vId);
         setStands(data);
         if (data.length > 0) {
@@ -138,7 +138,7 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
       }
     };
     fetchStands();
-  }, [user.venueId]);
+  }, [user.browsingVenueId, user.venueId]);
 
   // Cargar tickets del aficionado para autocompletar butaca
   useEffect(() => {

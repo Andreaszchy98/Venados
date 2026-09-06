@@ -14,6 +14,10 @@ export interface UserProfile {
   language?: Language;
   photoURL?: string | null;
   phoneNumber?: string | null;
+  // Sede de navegación elegida por el aficionado para visualizar tienda, eventos y menú
+  browsingVenueId?: string;
+  browsingVenueName?: string;
+  // Ámbito de administración exclusivo para administradores de sede (scope operativo)
   venueId?: string; // Para administradores de sede: ID del recinto asignado (ej: 'venue-teodoro-mariscal')
   venueName?: string; // Nombre del recinto asignado
   standId?: string; // Si el usuario es operador de un puesto de comida/concesionario

@@ -75,11 +75,22 @@ service cloud.firestore {
     }
 
     // 1. Usuarios y Perfiles
-    // superadmin o admin puede actualizar usuarios (para gestión de roles/personal)
+    // El dueño solo puede actualizar campos seguros; role, venueId (admin), standId y zoneId están restringidos.
+    // browsingVenueId de navegación aficionado queda libre.
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.auth.uid == userId;
-      allow update: if isOwner(userId) || isSuperAdmin() || isAdmin();
+      allow create: if (
+        isAuthenticated() &&
+        request.auth.uid == userId &&
+        request.resource.data.role == 'aficionado'
+      ) || isSuperAdmin() || isAdmin();
+      allow update: if (
+        isOwner(userId) &&
+        request.resource.data.role == resource.data.role &&
+        request.resource.data.get('venueId', null) == resource.data.get('venueId', null) &&
+        request.resource.data.get('standId', null) == resource.data.get('standId', null) &&
+        request.resource.data.get('zoneId', null) == resource.data.get('zoneId', null)
+      ) || isSuperAdmin() || isAdmin();
       allow delete: if isSuperAdmin();
     }
 
@@ -264,7 +275,7 @@ service cloud.firestore {
     match /venues/{venueId} {
       allow read: if true;
       allow create: if isSuperAdmin();
-      allow update: if isSuperAdmin() || isVenueAdmin(venueId) || isAdmin();
+      allow update: if isSuperAdmin() || isVenueAdmin(venueId);
       allow delete: if isSuperAdmin();
     }
 

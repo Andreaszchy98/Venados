@@ -49,9 +49,9 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
   const [loadingVenues, setLoadingVenues] = useState<boolean>(true);
   const [selectedVenueId, setSelectedVenueId] = useState<string>(() => {
     try {
-      return localStorage.getItem('vxp_selected_venue_id') || user.venueId || DEFAULT_VENUE_ID;
+      return localStorage.getItem('vxp_selected_venue_id') || user.browsingVenueId || user.venueId || DEFAULT_VENUE_ID;
     } catch {
-      return user.venueId || DEFAULT_VENUE_ID;
+      return user.browsingVenueId || user.venueId || DEFAULT_VENUE_ID;
     }
   });
 
@@ -66,8 +66,9 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
             if (prev && venuesList.some((v) => v.id === prev)) {
               return prev;
             }
-            return user.venueId && venuesList.some((v) => v.id === user.venueId)
-              ? user.venueId
+            const preferred = user.browsingVenueId || user.venueId;
+            return preferred && venuesList.some((v) => v.id === preferred)
+              ? preferred
               : venuesList[0].id;
           });
         }
@@ -79,9 +80,9 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
     );
 
     return () => unsubscribe();
-  }, [user.venueId]);
+  }, [user.browsingVenueId, user.venueId]);
 
-  // Manejar cambio de sede desde el selector principal
+  // Manejar cambio de sede desde el selector principal (Guarda browsingVenueId seguro para aficionado)
   const handleSelectVenue = (newVenueId: string) => {
     setSelectedVenueId(newVenueId);
     try {
@@ -92,8 +93,8 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
     if (user.uid) {
       try {
         updateDoc(doc(db, 'users', user.uid), {
-          venueId: newVenueId,
-          venueName: chosen?.name || 'Recinto Deportivo',
+          browsingVenueId: newVenueId,
+          browsingVenueName: chosen?.name || 'Recinto Deportivo',
         }).catch(() => {});
       } catch {}
     }
@@ -108,6 +109,8 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
   const effectiveUser = useMemo(
     () => ({
       ...user,
+      browsingVenueId: selectedVenueId,
+      browsingVenueName: currentVenue?.name || user.browsingVenueName || 'Estadio Teodoro Mariscal',
       venueId: selectedVenueId,
       venueName: currentVenue?.name || user.venueName || 'Estadio Teodoro Mariscal',
     }),
