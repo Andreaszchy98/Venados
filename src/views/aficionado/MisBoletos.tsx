@@ -38,23 +38,37 @@ interface MisBoletosProps {
   user: UserProfile;
   initialEventId?: string | null;
   onClearInitialEvent?: () => void;
+  selectedVenueId?: string;
+  onSelectVenue?: (venueId: string) => void;
 }
 
 export const MisBoletos: React.FC<MisBoletosProps> = ({
   user,
   initialEventId,
   onClearInitialEvent,
+  selectedVenueId: propSelectedVenueId,
+  onSelectVenue,
 }) => {
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'mis-boletos' | 'comprar'>('mis-boletos');
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loadingTickets, setLoadingTickets] = useState(true);
   const [filter, setFilter] = useState<'todos' | 'activo' | 'usado'>('todos');
+  const [venueFilter, setVenueFilter] = useState<'todas' | 'sede_actual'>('todas');
 
   // Sedes disponibles
   const [venues, setVenues] = useState<Venue[]>([]);
   const [loadingVenues, setLoadingVenues] = useState(true);
-  const [selectedVenueId, setSelectedVenueId] = useState<string>(user.venueId || DEFAULT_VENUE_ID);
+  const [selectedVenueId, setSelectedVenueId] = useState<string>(
+    propSelectedVenueId || user.venueId || DEFAULT_VENUE_ID
+  );
+
+  // Sincronizar si la sede cambia desde la pantalla principal
+  useEffect(() => {
+    if (propSelectedVenueId && propSelectedVenueId !== selectedVenueId) {
+      setSelectedVenueId(propSelectedVenueId);
+    }
+  }, [propSelectedVenueId]);
 
   // Eventos activos en venta para la sede seleccionada
   const [activeEvents, setActiveEvents] = useState<VenueEvent[]>([]);
@@ -95,6 +109,9 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
         setLoadingVenues(false);
         if (venuesList.length > 0) {
           setSelectedVenueId((prev) => {
+            if (propSelectedVenueId && venuesList.some((v) => v.id === propSelectedVenueId)) {
+              return propSelectedVenueId;
+            }
             if (prev && venuesList.some((v) => v.id === prev)) {
               return prev;
             }
@@ -110,6 +127,9 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
           setLoadingVenues(false);
           if (venuesList.length > 0) {
             setSelectedVenueId((prev) => {
+              if (propSelectedVenueId && venuesList.some((v) => v.id === propSelectedVenueId)) {
+                return propSelectedVenueId;
+              }
               if (prev && venuesList.some((v) => v.id === prev)) {
                 return prev;
               }
@@ -121,7 +141,7 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
     );
 
     return () => unsubscribe();
-  }, [user.venueId]);
+  }, [user.venueId, propSelectedVenueId]);
 
   // Escuchar eventos en tiempo real de la sede seleccionada
   useEffect(() => {
@@ -278,8 +298,12 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
   };
 
   const filteredTickets = tickets.filter((t) => {
-    if (filter === 'todos') return true;
-    return t.status === filter;
+    const statusMatch = filter === 'todos' || t.status === filter;
+    if (!statusMatch) return false;
+    if (venueFilter === 'sede_actual') {
+      return (t.venueId || DEFAULT_VENUE_ID) === selectedVenueId;
+    }
+    return true;
   });
 
   // Agrupación visual de boletos comprados juntos mediante purchaseId
@@ -378,9 +402,10 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
       {activeTab === 'mis-boletos' && (
         <div className="space-y-4">
           {/* Barra de Filtros */}
-          <div className="flex items-center justify-between bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs">
             <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200 text-xs">
               <button
+                id="ticket-filter-all"
                 onClick={() => setFilter('todos')}
                 className={`px-3 py-1 font-medium rounded-lg transition-colors cursor-pointer ${
                   filter === 'todos'
@@ -391,6 +416,7 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
                 {t('tickets.filter.all', 'Todos')} ({tickets.length})
               </button>
               <button
+                id="ticket-filter-active"
                 onClick={() => setFilter('activo')}
                 className={`px-3 py-1 font-medium rounded-lg transition-colors cursor-pointer ${
                   filter === 'activo'
@@ -401,6 +427,7 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
                 {t('tickets.filter.active', 'Activos')} ({tickets.filter((t) => t.status === 'activo').length})
               </button>
               <button
+                id="ticket-filter-used"
                 onClick={() => setFilter('usado')}
                 className={`px-3 py-1 font-medium rounded-lg transition-colors cursor-pointer ${
                   filter === 'usado'
@@ -409,6 +436,33 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
                 }`}
               >
                 {t('tickets.filter.used', 'Utilizados')} ({tickets.filter((t) => t.status === 'usado').length})
+              </button>
+            </div>
+
+            {/* Filtro por sede */}
+            <div className="inline-flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs">
+              <span className="text-[11px] font-semibold text-slate-500 pl-2 pr-1">Filtrar Sede:</span>
+              <button
+                id="filter-venue-all"
+                onClick={() => setVenueFilter('todas')}
+                className={`px-2.5 py-1 font-medium rounded-lg transition-colors cursor-pointer ${
+                  venueFilter === 'todas'
+                    ? 'bg-white text-red-700 shadow-xs font-semibold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Todas las sedes
+              </button>
+              <button
+                id="filter-venue-current"
+                onClick={() => setVenueFilter('sede_actual')}
+                className={`px-2.5 py-1 font-medium rounded-lg transition-colors cursor-pointer ${
+                  venueFilter === 'sede_actual'
+                    ? 'bg-white text-red-700 shadow-xs font-semibold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {venues.find((v) => v.id === selectedVenueId)?.name || 'Sede actual'}
               </button>
             </div>
           </div>
@@ -502,7 +556,13 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
                 <select
                   id="select-venue-tickets"
                   value={selectedVenueId}
-                  onChange={(e) => setSelectedVenueId(e.target.value)}
+                  onChange={(e) => {
+                    const newId = e.target.value;
+                    setSelectedVenueId(newId);
+                    if (onSelectVenue) {
+                      onSelectVenue(newId);
+                    }
+                  }}
                   disabled={loadingVenues || venues.length === 0}
                   className="w-full pl-10 pr-10 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 transition-colors appearance-none cursor-pointer"
                 >

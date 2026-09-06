@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { auth, db } from './lib/firebase';
 import { syncUserProfile } from './lib/auth';
-import { UserProfile, UserRole, VenueEvent, HeroSlide } from './types';
+import { UserProfile, UserRole, VenueEvent, HeroSlide, Venue } from './types';
 import { Header } from './components/shared/Header';
 import { AuthModal } from './components/shared/AuthModal';
 import { AficionadoView } from './views/aficionado/AficionadoView';
@@ -31,10 +31,13 @@ import {
   ChevronLeft,
   ChevronRight,
   Store,
+  Building2,
+  MapPin,
 } from 'lucide-react';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { DEFAULT_VENUE_ID, ensureDefaultVenueExists } from './lib/defaultVenue';
+import { DEFAULT_VENUE_ID, DEFAULT_VENUES, ensureDefaultVenueExists } from './lib/defaultVenue';
 import { DEFAULT_FALLBACK_EVENTS, getHeroSlides } from './lib/venueEvents';
+import { subscribeVenues } from './lib/venues';
 import { DEFAULT_STORE_PROMO_BANNER } from './lib/imageUtils';
 
 function MainLayout() {
@@ -108,14 +111,47 @@ function MainLayout() {
   });
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
 
+  // Sedes disponibles para la cartelera pública
+  const [publicVenues, setPublicVenues] = useState<Venue[]>(DEFAULT_VENUES);
+  const [selectedPublicVenueId, setSelectedPublicVenueId] = useState<string>(() => {
+    try {
+      return localStorage.getItem('vxp_selected_venue_id') || '';
+    } catch {
+      return '';
+    }
+  });
+
+  // Escuchar sedes en tiempo real
+  useEffect(() => {
+    const unsub = subscribeVenues((venuesList) => {
+      if (venuesList && venuesList.length > 0) {
+        setPublicVenues(venuesList);
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  const handleSelectPublicVenue = (venueId: string) => {
+    setSelectedPublicVenueId(venueId);
+    try {
+      if (venueId) {
+        localStorage.setItem('vxp_selected_venue_id', venueId);
+      } else {
+        localStorage.removeItem('vxp_selected_venue_id');
+      }
+    } catch {}
+  };
+
   // Cargar slides (eventos y banners promocionales de tienda oficial) para el hero
   useEffect(() => {
     let isMounted = true;
-    getHeroSlides(undefined, 8)
+    setLoadingHeroEvents(true);
+    getHeroSlides(selectedPublicVenueId || undefined, 8)
       .then((slides) => {
         if (isMounted) {
           if (slides && slides.length > 0) {
             setHeroSlides(slides);
+            setCurrentSlideIndex(0);
             try {
               localStorage.setItem('vxp_cached_hero_slides', JSON.stringify(slides));
             } catch {}
@@ -124,7 +160,7 @@ function MainLayout() {
         }
       })
       .catch((err) => {
-        console.warn('Error al cargar slides para el hero previo al login:', err);
+        console.warn('Error al cargar slides para el hero:', err);
         if (isMounted) {
           setLoadingHeroEvents(false);
         }
@@ -133,7 +169,7 @@ function MainLayout() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [selectedPublicVenueId]);
 
   // Ciclo automático de fondo y póster: exactamente cada 5 segundos avanza a la siguiente imagen con fade suave
   useEffect(() => {
@@ -365,7 +401,49 @@ function MainLayout() {
           </div>
         ) : !userProfile ? (
           /* Pantalla de Bienvenida con Cartelera Oficial e Imágenes (única pantalla de inicio) */
-          <div className="max-w-5xl mx-auto space-y-5 sm:space-y-8 py-2 sm:py-6">
+          <div className="max-w-5xl mx-auto space-y-4 sm:space-y-6 py-2 sm:py-6">
+            {/* Barra de Selección de Sede / Recinto Deportivo */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 sm:p-4 rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-red-50 text-red-700 flex items-center justify-center shrink-0 border border-red-100">
+                  <Building2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                </div>
+                <div>
+                  <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 flex items-center gap-1.5">
+                    Sede Deportiva
+                    {selectedPublicVenueId && (
+                      <span className="text-[10px] font-bold text-red-700 bg-red-100/70 px-2 py-0.5 rounded-full">
+                        Filtrado
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-[11px] sm:text-xs text-slate-500">
+                    Elige el estadio del que deseas ver partidos, boletos y accesos
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                <div className="relative w-full sm:w-auto min-w-[240px]">
+                  <select
+                    id="public-landing-venue-select"
+                    value={selectedPublicVenueId}
+                    onChange={(e) => handleSelectPublicVenue(e.target.value)}
+                    className="w-full pl-9 pr-8 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-600 appearance-none cursor-pointer"
+                  >
+                    <option value="">Todas las Sedes (Cartelera General)</option>
+                    {publicVenues.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.name} ({v.city})
+                      </option>
+                    ))}
+                  </select>
+                  <Building2 className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none rotate-90" />
+                </div>
+              </div>
+            </div>
+
             {/* Banner Principal con Cartelera Dinámica y Tienda Oficial */}
             <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-red-950 via-red-900 to-slate-950 text-white p-5 sm:p-8 lg:p-10 shadow-xl border border-red-800/40 text-center sm:text-left min-h-0 sm:min-h-[380px] flex flex-col justify-between">
               {/* Fondo ambiental suave basado en el póster/banner activo */}

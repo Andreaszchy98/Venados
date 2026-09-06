@@ -37,6 +37,8 @@ export interface Venue {
   active: boolean;
   createdAt: string;
   updatedAt?: string;
+  teamName?: string;
+  storeName?: string;
   // Imagen y contenido promocional de la tienda oficial en el hero del login
   storePromoBannerUrl?: string;
   storePromoTitle?: string;
@@ -150,6 +152,9 @@ export type MembershipStatus = 'activa' | 'vencida' | 'suspendida';
 export interface Membership {
   id: string;
   userId: string;
+  venueId?: string;
+  venueName?: string;
+  clubName?: string;
   memberNumber: string;
   tier: MembershipTier;
   status: MembershipStatus;

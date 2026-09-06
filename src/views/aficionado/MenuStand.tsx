@@ -123,10 +123,13 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
     const fetchStands = async () => {
       setLoadingStands(true);
       try {
-        const data = await getStadiumStands();
+        const vId = user.venueId || DEFAULT_VENUE_ID;
+        const data = await getStadiumStands(vId);
         setStands(data);
         if (data.length > 0) {
           setSelectedStand(data[0]);
+        } else {
+          setSelectedStand(null);
         }
       } catch (err) {
         console.error('Error fetching stands:', err);
@@ -135,7 +138,7 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
       }
     };
     fetchStands();
-  }, []);
+  }, [user.venueId]);
 
   // Cargar tickets del aficionado para autocompletar butaca
   useEffect(() => {

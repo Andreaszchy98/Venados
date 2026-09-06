@@ -133,6 +133,72 @@ export const DEFAULT_FALLBACK_EVENTS: VenueEvent[] = [
     ],
     createdAt: '2026-01-03T00:00:00.000Z',
   },
+  {
+    id: 'event-tomateros-venados-2026',
+    venueId: 'venue-tomateros',
+    type: 'baseball',
+    name: 'Tomateros de Culiacán vs Venados de Mazatlán',
+    opponent: 'Venados de Mazatlán',
+    date: '2026-10-18',
+    time: '19:05 hrs',
+    gate: 'Puertas Principal, Norte y Sur',
+    active: true,
+    ticketsAvailable: true,
+    venueName: 'Estadio Tomateros',
+    posterUrl: getEventPosterPlaceholder('baseball'),
+    ...computeDefaultOrderingWindow('2026-10-18', '19:05 hrs'),
+    priceTiers: [
+      { section: 'Platea Central', price: 480 },
+      { section: 'Preferente Lateral', price: 350 },
+      { section: 'Palco VIP Premier', price: 920 },
+      { section: 'Gradas Generales', price: 160 },
+    ],
+    createdAt: '2026-01-04T00:00:00.000Z',
+  },
+  {
+    id: 'event-tomateros-aguilas-2026',
+    venueId: 'venue-tomateros',
+    type: 'baseball',
+    name: 'Tomateros de Culiacán vs Águilas de Mexicali',
+    opponent: 'Águilas de Mexicali',
+    date: '2026-10-25',
+    time: '18:00 hrs',
+    gate: 'Puertas Principal, Norte y Sur',
+    active: true,
+    ticketsAvailable: true,
+    venueName: 'Estadio Tomateros',
+    posterUrl: getEventPosterPlaceholder('baseball'),
+    ...computeDefaultOrderingWindow('2026-10-25', '18:00 hrs'),
+    priceTiers: [
+      { section: 'Platea Central', price: 480 },
+      { section: 'Preferente Lateral', price: 350 },
+      { section: 'Palco VIP Premier', price: 920 },
+      { section: 'Gradas Generales', price: 160 },
+    ],
+    createdAt: '2026-01-05T00:00:00.000Z',
+  },
+  {
+    id: 'event-toros-sultanes-2026',
+    venueId: 'venue-chevron',
+    type: 'baseball',
+    name: 'Toros de Tijuana vs Sultanes de Monterrey',
+    opponent: 'Sultanes de Monterrey',
+    date: '2026-10-20',
+    time: '19:35 hrs',
+    gate: 'Acceso Central y Preferente',
+    active: true,
+    ticketsAvailable: true,
+    venueName: 'Estadio Chevron',
+    posterUrl: getEventPosterPlaceholder('baseball'),
+    ...computeDefaultOrderingWindow('2026-10-20', '19:35 hrs'),
+    priceTiers: [
+      { section: 'Central VIP Toros', price: 550 },
+      { section: 'Lateral Preferente', price: 380 },
+      { section: 'Palco Corporativo', price: 1100 },
+      { section: 'General', price: 180 },
+    ],
+    createdAt: '2026-01-06T00:00:00.000Z',
+  },
 ];
 
 /**
@@ -337,14 +403,17 @@ export function subscribeVenueEvents(
   return onSnapshot(
     q,
     async (snapshot) => {
-      if (snapshot.empty && targetVenueId === DEFAULT_VENUE_ID) {
-        onUpdate(
-          DEFAULT_FALLBACK_EVENTS.map((e) => ({
-            ...e,
-            posterUrl: normalizeGoogleDriveImageUrl(e.posterUrl) || getEventPosterPlaceholder(e.type),
-          }))
-        );
-        return;
+      if (snapshot.empty) {
+        const fallbacks = DEFAULT_FALLBACK_EVENTS.filter((e) => e.venueId === targetVenueId);
+        if (fallbacks.length > 0) {
+          onUpdate(
+            fallbacks.map((e) => ({
+              ...e,
+              posterUrl: normalizeGoogleDriveImageUrl(e.posterUrl) || getEventPosterPlaceholder(e.type),
+            }))
+          );
+          return;
+        }
       }
 
       const events: VenueEvent[] = snapshot.docs
@@ -601,11 +670,14 @@ export async function getUpcomingHeroEvents(
       } as VenueEvent;
     });
 
-    // Si la base de datos está vacía, usar eventos por defecto de respaldo
+    // Si la base de datos no tiene eventos para la consulta, usar eventos por defecto de respaldo
     if (events.length === 0) {
-      events = [...DEFAULT_FALLBACK_EVENTS].map((e) => ({
+      const fallbacks = venueId
+        ? DEFAULT_FALLBACK_EVENTS.filter((e) => e.venueId === venueId)
+        : DEFAULT_FALLBACK_EVENTS;
+      events = (fallbacks.length > 0 ? fallbacks : DEFAULT_FALLBACK_EVENTS).map((e) => ({
         ...e,
-        venueName: e.venueName || 'Estadio Teodoro Mariscal',
+        venueName: e.venueName || venuesMap.get(e.venueId)?.name || 'Estadio Teodoro Mariscal',
       }));
     }
 
@@ -627,9 +699,9 @@ export async function getUpcomingHeroEvents(
     // Ordenar cronológicamente
     filtered.sort((a, b) => a.date.localeCompare(b.date));
 
-    // Si se solicitó un venueId específico pero quedaron menos de 2 eventos,
+    // Si no se solicitó un venueId específico y quedaron menos de 2 eventos,
     // complementar con eventos de otras sedes disponibles
-    if (venueId && filtered.length < 2) {
+    if (!venueId && filtered.length < 2) {
       try {
         const allSnap = await getDocs(collection(db, COLLECTION_NAME));
         const otherEvents = allSnap.docs

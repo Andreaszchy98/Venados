@@ -201,7 +201,16 @@ export async function getStadiumStands(venueId?: string): Promise<StadiumStand[]
     }
     let stands = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StadiumStand[];
     if (venueId) {
-      stands = stands.filter((s) => (s.venueId || DEFAULT_VENUE_ID) === venueId);
+      const filteredStands = stands.filter((s) => (s.venueId || DEFAULT_VENUE_ID) === venueId);
+      if (filteredStands.length > 0) {
+        return filteredStands;
+      }
+      return INITIAL_STANDS.map((s, idx) => ({
+        ...s,
+        venueId: venueId,
+        id: `stand-${venueId}-${idx + 1}`,
+        createdAt: new Date().toISOString(),
+      }));
     }
     return stands;
   } catch (err) {

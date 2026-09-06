@@ -14,7 +14,7 @@ import {
 import { db } from './firebase';
 import { Venue, VenueEvent, EventType } from '../types';
 import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
-import { DEFAULT_VENUE_ID, DEFAULT_EVENT_ID, DEFAULT_FALLBACK_EVENT } from './defaultVenue';
+import { DEFAULT_VENUE_ID, DEFAULT_EVENT_ID, DEFAULT_FALLBACK_EVENT, DEFAULT_VENUES } from './defaultVenue';
 import { normalizeGoogleDriveImageUrl, DEFAULT_STORE_PROMO_BANNER } from './imageUtils';
 
 const VENUES_COLLECTION = 'venues';
@@ -32,21 +32,18 @@ export function subscribeVenues(
     q,
     (snapshot) => {
       if (snapshot.empty) {
-        onUpdate([
-          {
-            id: DEFAULT_VENUE_ID,
-            name: 'Estadio Teodoro Mariscal',
-            city: 'Mazatlán',
-            state: 'Sinaloa',
-            address: 'Av. Justo Sierra s/n, Estadio, 82140 Mazatlán, Sin.',
-            active: true,
-            createdAt: new Date().toISOString(),
-          },
-        ]);
+        onUpdate(DEFAULT_VENUES);
         return;
       }
       const venuesList = snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) as Venue[];
-      onUpdate(venuesList);
+      // Garantizar que DEFAULT_VENUES estén disponibles como opciones válidas
+      const merged = [...venuesList];
+      for (const defVenue of DEFAULT_VENUES) {
+        if (!merged.some((v) => v.id === defVenue.id)) {
+          merged.push(defVenue);
+        }
+      }
+      onUpdate(merged);
     },
     (err) => {
       console.warn('Error al escuchar sedes en tiempo real:', err);
@@ -63,22 +60,19 @@ export async function getAllVenues(): Promise<Venue[]> {
   try {
     const snap = await getDocs(collection(db, VENUES_COLLECTION));
     if (snap.empty) {
-      return [
-        {
-          id: DEFAULT_VENUE_ID,
-          name: 'Estadio Teodoro Mariscal',
-          city: 'Mazatlán',
-          state: 'Sinaloa',
-          address: 'Av. Justo Sierra s/n, Estadio, 82140 Mazatlán, Sin.',
-          active: true,
-          createdAt: new Date().toISOString(),
-        },
-      ];
+      return DEFAULT_VENUES;
     }
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Venue[];
+    const venuesList = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Venue[];
+    const merged = [...venuesList];
+    for (const defVenue of DEFAULT_VENUES) {
+      if (!merged.some((v) => v.id === defVenue.id)) {
+        merged.push(defVenue);
+      }
+    }
+    return merged;
   } catch (err) {
     handleFirestoreError(err, OperationType.LIST, VENUES_COLLECTION);
-    return [];
+    return DEFAULT_VENUES;
   }
 }
 

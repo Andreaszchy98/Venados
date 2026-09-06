@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { InventoryProduct, UserProfile, OrderItem, ShippingAddress } from '../../types';
 import { getInventoryProducts, adjustProductStock } from '../../lib/inventory';
 import { createMerchOrder } from '../../lib/logistics';
 import { normalizeGoogleDriveImageUrl, getDefaultProductPlaceholder } from '../../lib/imageUtils';
+import { getStadiumStoreProfile } from '../../lib/stadiumStoreProfiles';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { ErrorMessage } from '../../components/shared/ErrorMessage';
 import {
@@ -50,10 +51,15 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
   const [paymentMethod, setPaymentMethod] = useState<'Efectivo / Terminal física' | 'Tarjeta' | 'Transferencia SPEI' | 'MercadoPago' | 'Efectivo en Tienda'>('Efectivo / Terminal física');
   const [submittingOrder, setSubmittingOrder] = useState(false);
 
+  // Perfil de marca e identidad de la tienda del estadio actual
+  const storeProfile = useMemo(() => {
+    return getStadiumStoreProfile(user.venueId);
+  }, [user.venueId]);
+
   const fetchProducts = async () => {
     setLoading(true);
     try {
-      const data = await getInventoryProducts();
+      const data = await getInventoryProducts(user.venueId);
       setProducts(data);
     } catch (err: any) {
       console.error('Error cargando catálogo:', err);
@@ -64,7 +70,7 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
 
   useEffect(() => {
     fetchProducts();
-  }, []);
+  }, [user.venueId]);
 
   const categories = ['Todos', 'Jerseys', 'Gorras', 'Sudaderas', 'Souvenirs', 'Coleccionables'];
 
@@ -121,6 +127,7 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
       }));
 
       const orderPayload: Parameters<typeof createMerchOrder>[0] = {
+        venueId: user.venueId || 'venue-teodoro-mariscal',
         userId: user.uid,
         customerName: address.recipientName?.trim() || user.displayName || 'Aficionado Venados',
         customerEmail: user.email || 'aficionado@venados.com',
@@ -141,7 +148,7 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
 
       if (shippingType === 'domicilio') {
         orderPayload.shippingAddress = {
-          recipientName: address.recipientName?.trim() || user.displayName || 'Aficionado Venados',
+          recipientName: address.recipientName?.trim() || user.displayName || `Aficionado ${storeProfile.teamName}`,
           street: address.street || '',
           neighborhood: address.neighborhood || '',
           city: address.city || 'Mazatlán',
@@ -151,7 +158,7 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
           ...(address.referenceNotes?.trim() ? { referenceNotes: address.referenceNotes.trim() } : {}),
         };
       } else {
-        orderPayload.notes = 'Recoger en tienda oficial Estadio Teodoro Mariscal';
+        orderPayload.notes = `Recoger en ${storeProfile.pickupLocation}`;
       }
 
       await createMerchOrder(orderPayload);
@@ -183,28 +190,28 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
   return (
     <div className="space-y-6">
       {/* Banner de la Tienda Oficial */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-red-950 to-slate-900 text-white p-6 sm:p-8 border border-red-900/40 shadow-lg">
+      <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-r ${storeProfile.headerGradient} text-white p-6 sm:p-8 border shadow-lg`}>
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-red-700/60 text-red-200 border border-red-500/30">
-              <ShoppingBag className="w-3.5 h-3.5" /> Tienda Oficial Venados Store
+            <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border ${storeProfile.accentBadgeClass}`}>
+              <ShoppingBag className="w-3.5 h-3.5" /> {storeProfile.badgeLabel}
             </div>
             <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
-              Equipamiento & Souvenirs Oficiales
+              {storeProfile.headline}
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 max-w-xl">
-              Viste con orgullo los colores del puerto. Envíos a todo México o retiro express en la tienda del Estadio Teodoro Mariscal.
+              {storeProfile.tagline}
             </p>
           </div>
 
           <button
             onClick={() => setIsCartOpen(true)}
-            className="relative px-5 py-3 rounded-xl bg-red-700 hover:bg-red-800 text-white font-bold text-xs sm:text-sm flex items-center gap-2.5 shadow-lg transition-all self-start sm:self-auto"
+            className={`relative px-5 py-3 rounded-xl ${storeProfile.buttonClass} font-bold text-xs sm:text-sm flex items-center gap-2.5 shadow-lg transition-all self-start sm:self-auto cursor-pointer`}
           >
             <ShoppingCart className="w-4 h-4" />
             <span>Mi Carrito</span>
             {totalItemsCount > 0 && (
-              <span className="w-5 h-5 rounded-full bg-white text-red-900 text-xs font-extrabold flex items-center justify-center">
+              <span className="w-5 h-5 rounded-full bg-white text-slate-900 text-xs font-extrabold flex items-center justify-center">
                 {totalItemsCount}
               </span>
             )}
@@ -233,7 +240,7 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
           <button
             key={cat}
             onClick={() => setSelectedCategory(cat)}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
               selectedCategory === cat
                 ? 'bg-red-800 text-white shadow-xs'
                 : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
@@ -246,7 +253,7 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
 
       {/* Catálogo de Productos */}
       {loading ? (
-        <LoadingSpinner message="Cargando catálogo oficial de Venados..." />
+        <LoadingSpinner message={`Cargando catálogo oficial de ${storeProfile.storeName}...`} />
       ) : filteredProducts.length === 0 ? (
         <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center text-slate-500 space-y-2">
           <Package className="w-10 h-10 text-slate-300 mx-auto" />
@@ -387,7 +394,7 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                         }`}
                       >
                         <p className="font-bold">Recoger en Tienda</p>
-                        <span className="text-[10px] text-slate-500 block">Estadio Teodoro M.</span>
+                        <span className="text-[10px] text-slate-500 block truncate">{storeProfile.stadiumName}</span>
                       </button>
                     </div>
                   </div>

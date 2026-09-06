@@ -6,6 +6,48 @@ import { getEventPosterPlaceholder } from './imageUtils';
 export const DEFAULT_VENUE_ID = 'venue-teodoro-mariscal';
 export const DEFAULT_EVENT_ID = 'event-temporada-2026';
 
+export const DEFAULT_VENUES: Venue[] = [
+  {
+    id: DEFAULT_VENUE_ID,
+    name: 'Estadio Teodoro Mariscal',
+    teamName: 'Venados de Mazatlán',
+    storeName: 'Tienda Oficial Venados Store',
+    city: 'Mazatlán',
+    state: 'Sinaloa',
+    address: 'Av. Justo Sierra s/n, Estadio, 82140 Mazatlán, Sin.',
+    active: true,
+    storePromoTitle: 'Tienda Oficial Venados Store',
+    storePromoSubtitle: 'Jerseys originales de juego, gorras New Era y coleccionables oficiales',
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'venue-tomateros',
+    name: 'Estadio Tomateros',
+    teamName: 'Tomateros de Culiacán',
+    storeName: 'Tienda Oficial Tomateros BeisShop',
+    city: 'Culiacán',
+    state: 'Sinaloa',
+    address: 'Constitución y Jesús Andrade, Primer Cuadro, 80000 Culiacán, Sin.',
+    active: true,
+    storePromoTitle: 'Tienda Oficial Tomateros BeisShop',
+    storePromoSubtitle: 'Colección Nación Guinda 2026, jerseys de temporada y gorras exclusivas',
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'venue-chevron',
+    name: 'Estadio Chevron',
+    teamName: 'Toros de Tijuana',
+    storeName: 'Tienda Oficial Toros Shop',
+    city: 'Tijuana',
+    state: 'Baja California',
+    address: 'Misión de Santo Tomás s/n, El Capistrano, 22223 Tijuana, B.C.',
+    active: true,
+    storePromoTitle: 'Tienda Oficial Toros Shop',
+    storePromoSubtitle: 'Equipamiento Toromanía, gorras de juego y souvenirs de la frontera',
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+];
+
 export const DEFAULT_FALLBACK_EVENT: VenueEvent = {
   id: DEFAULT_EVENT_ID,
   venueId: DEFAULT_VENUE_ID,
@@ -39,20 +81,12 @@ export async function ensureDefaultVenueExists(): Promise<void> {
     return;
   }
   try {
-    const venueRef = doc(db, 'venues', DEFAULT_VENUE_ID);
-    const venueSnap = await getDoc(venueRef);
-
-    if (!venueSnap.exists()) {
-      const defaultVenue: Venue = {
-        id: DEFAULT_VENUE_ID,
-        name: 'Estadio Teodoro Mariscal',
-        city: 'Mazatlán',
-        state: 'Sinaloa',
-        address: 'Av. Justo Sierra s/n, Estadio, 82140 Mazatlán, Sin.',
-        active: true,
-        createdAt: new Date().toISOString(),
-      };
-      await setDoc(venueRef, defaultVenue);
+    for (const v of DEFAULT_VENUES) {
+      const venueRef = doc(db, 'venues', v.id);
+      const venueSnap = await getDoc(venueRef);
+      if (!venueSnap.exists()) {
+        await setDoc(venueRef, v);
+      }
     }
 
     const eventRef = doc(db, 'venueEvents', DEFAULT_EVENT_ID);

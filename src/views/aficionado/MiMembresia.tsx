@@ -1,187 +1,91 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo } from 'react';
 import { Membership, UserProfile } from '../../types';
-import {
-  subscribeUserMembership,
-  createSampleMembershipForUser,
-} from '../../lib/memberships';
-import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
-import { Award, Calendar, CheckCircle, ShieldCheck, Sparkles } from 'lucide-react';
+import { getStadiumStoreProfile } from '../../lib/stadiumStoreProfiles';
+import { Award, Building2, ShieldAlert, MapPin, CheckCircle2, Lock } from 'lucide-react';
 
 interface MiMembresiaProps {
   user: UserProfile;
 }
 
 export const MiMembresia: React.FC<MiMembresiaProps> = ({ user }) => {
-  const [membership, setMembership] = useState<Membership | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
-
-  useEffect(() => {
-    setLoading(true);
-    const unsubscribe = subscribeUserMembership(
-      user.uid,
-      (m) => {
-        setMembership(m);
-        setLoading(false);
-      },
-      () => {
-        setLoading(false);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [user.uid]);
-
-  const handleCreateSample = async (tier: 'Oro' | 'Platino' | 'Diamante') => {
-    setGenerating(true);
-    try {
-      await createSampleMembershipForUser(user.uid, tier);
-    } catch (err) {
-      console.error('Error generating membership:', err);
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  if (loading) {
-    return <LoadingSpinner message="Consultando membresía Socio Venados..." />;
-  }
-
-  if (!membership) {
-    return (
-      <div className="bg-white rounded-xl border border-slate-200 p-8 sm:p-10 text-center space-y-5">
-        <div className="w-14 h-14 rounded-full bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto">
-          <Award className="w-8 h-8" />
-        </div>
-        <div className="max-w-md mx-auto">
-          <h3 className="text-lg font-bold text-slate-900">
-            Aún no eres Socio Venados
-          </h3>
-          <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-            El abono Socio Venados te da acceso a toda la temporada, butaca asegurada,
-            preventas exclusivas de playoffs y beneficios en el estadio.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-          <button
-            onClick={() => handleCreateSample('Platino')}
-            disabled={generating}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-red-700 hover:bg-red-800 text-white text-xs font-bold rounded-lg shadow-sm transition-colors uppercase tracking-wider"
-          >
-            <Sparkles className="w-4 h-4" /> Activar Abono Platino (Prueba)
-          </button>
-          <button
-            onClick={() => handleCreateSample('Oro')}
-            disabled={generating}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-lg shadow-sm transition-colors uppercase tracking-wider"
-          >
-            Activar Abono Oro (Prueba)
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const getTierColor = (tier: string) => {
-    switch (tier) {
-      case 'Diamante':
-        return 'from-slate-900 via-indigo-950 to-slate-900 border-indigo-500/50 text-indigo-100';
-      case 'Platino':
-        return 'from-slate-800 via-slate-700 to-slate-900 border-slate-400/40 text-slate-100';
-      case 'Oro':
-      default:
-        return 'from-amber-900 via-amber-800 to-amber-950 border-amber-500/40 text-amber-100';
-    }
-  };
+  // Obtenemos la identidad y branding del estadio que se está visualizando
+  const storeProfile = useMemo(() => {
+    return getStadiumStoreProfile(user.venueId);
+  }, [user.venueId]);
 
   return (
     <div className="space-y-6">
-      {/* Tarjeta de Membresía Digital tipo Credencial */}
-      <div
-        className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${getTierColor(
-          membership.tier
-        )} p-6 sm:p-8 text-white shadow-xl border`}
-      >
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center font-black text-xl border border-white/20">
-              V
+      {/* Banner de Sede Vinculada */}
+      <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-r ${storeProfile.headerGradient} p-6 text-white border shadow-md`}>
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1.5">
+            <div className={`inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-bold border ${storeProfile.accentBadgeClass}`}>
+              <Building2 className="w-3.5 h-3.5" />
+              Sede Vinculada: {storeProfile.stadiumName}
             </div>
-            <div>
-              <span className="text-[10px] uppercase font-bold tracking-widest text-white/70 block">
-                Pase Oficial
-              </span>
-              <h3 className="text-xl font-black tracking-tight">
-                SOCIO VENADOS
-              </h3>
-            </div>
+            <h2 className="text-xl sm:text-2xl font-black tracking-tight">
+              Abonos y Membresías • {storeProfile.teamName}
+            </h2>
+            <p className="text-xs text-slate-300 max-w-xl">
+              Gestión de credenciales digitales de temporada, butacas asignadas y beneficios exclusivos vinculados a {storeProfile.stadiumName}.
+            </p>
           </div>
-          <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-white/20 backdrop-blur-xs border border-white/30">
-            {membership.tier}
-          </span>
-        </div>
 
-        <div className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-white/10">
-          <div>
-            <span className="block text-[10px] uppercase tracking-wider text-white/60">
-              Titular
-            </span>
-            <span className="text-sm font-bold truncate block">
-              {user.displayName || user.email}
-            </span>
-          </div>
-          <div>
-            <span className="block text-[10px] uppercase tracking-wider text-white/60">
-              No. de Socio
-            </span>
-            <span className="text-sm font-mono font-bold">
-              {membership.memberNumber}
-            </span>
-          </div>
-          <div>
-            <span className="block text-[10px] uppercase tracking-wider text-white/60">
-              Estado
-            </span>
-            <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-300">
-              <CheckCircle className="w-3.5 h-3.5" />
-              {membership.status.toUpperCase()}
-            </span>
-          </div>
-          <div>
-            <span className="block text-[10px] uppercase tracking-wider text-white/60">
-              Renovación
-            </span>
-            <span className="text-xs font-semibold text-white/90">
-              {membership.renewalDate}
-            </span>
+          <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 text-xs font-semibold self-start sm:self-auto">
+            <MapPin className="w-4 h-4 text-amber-300 shrink-0" />
+            <span>{storeProfile.pickupLocation}</span>
           </div>
         </div>
-
-        {membership.seatAssigned && (
-          <div className="mt-4 bg-white/10 rounded-lg p-3 text-xs flex items-center justify-between border border-white/10">
-            <span className="text-white/80">Butaca Reservada para Toda la Temporada:</span>
-            <span className="font-bold text-white">{membership.seatAssigned}</span>
-          </div>
-        )}
       </div>
 
-      {/* Beneficios */}
-      {membership.benefits && membership.benefits.length > 0 && (
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
-          <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-3">
-            <ShieldCheck className="w-4 h-4 text-red-700" />
-            Beneficios de tu Abono {membership.tier}
-          </h4>
-          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-600">
-            {membership.benefits.map((benefit, idx) => (
-              <li key={idx} className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-red-600 shrink-0"></div>
-                <span>{benefit}</span>
-              </li>
-            ))}
-          </ul>
+      {/* Tarjeta Informativa de Estado Deshabilitado Temporalmente */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-8 sm:p-12 text-center space-y-5 shadow-xs">
+        <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto shadow-2xs">
+          <Lock className="w-8 h-8" />
         </div>
-      )}
+
+        <div className="max-w-lg mx-auto space-y-2">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-200">
+            <ShieldAlert className="w-3.5 h-3.5 text-amber-700" />
+            Módulo Deshabilitado Temporalmente
+          </div>
+
+          <h3 className="text-lg sm:text-xl font-black text-slate-900">
+            {storeProfile.membershipTitle}
+          </h3>
+
+          <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
+            La emisión y administración de membresías y abonos para{' '}
+            <strong className="text-slate-800">{storeProfile.stadiumName}</strong> ({storeProfile.teamName})
+            ha sido temporalmente pausada por la administración del recinto.
+          </p>
+        </div>
+
+        {/* Datos de Vinculación Confirmada con el Estadio */}
+        <div className="max-w-md mx-auto p-4 bg-slate-50 border border-slate-200 rounded-xl text-left space-y-2.5">
+          <div className="flex items-center justify-between text-xs font-bold text-slate-700 border-b border-slate-200 pb-2">
+            <span className="flex items-center gap-1.5 text-slate-800">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Enlace de Datos Activo
+            </span>
+            <span className="text-[11px] font-mono text-slate-500">{user.venueId || 'venue-teodoro-mariscal'}</span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 pt-1">
+            <div>
+              <span className="block text-[10px] uppercase font-bold text-slate-400">Recinto Actual</span>
+              <span className="font-semibold text-slate-800">{storeProfile.stadiumName}</span>
+            </div>
+            <div>
+              <span className="block text-[10px] uppercase font-bold text-slate-400">Franquicia</span>
+              <span className="font-semibold text-slate-800">{storeProfile.teamName}</span>
+            </div>
+          </div>
+        </div>
+
+        <p className="text-xs text-slate-400 max-w-sm mx-auto">
+          Cualquier cambio de estadio en la barra superior mantendrá enlazado automáticamente el registro de este recinto.
+        </p>
+      </div>
     </div>
   );
 };

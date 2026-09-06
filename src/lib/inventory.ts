@@ -123,6 +123,240 @@ const INITIAL_VENADOS_PRODUCTS: InitialProductWithCost[] = [
   },
 ];
 
+const INITIAL_TOMATEROS_PRODUCTS: InitialProductWithCost[] = [
+  {
+    sku: 'TOM-JER-GUI-26',
+    name: 'Jersey Oficial Tomateros de Culiacán Guinda 2026',
+    category: 'Jerseys',
+    price: 1699,
+    initialCost: 850,
+    stock: 40,
+    minStockAlert: 10,
+    sizes: ['S', 'M', 'L', 'XL', '2XL'],
+    image: 'https://images.unsplash.com/photo-1577210897949-1f56f943502f?w=600&auto=format&fit=crop&q=80',
+    description: 'Jersey oficial de juego con tecnología transpirable y escudo bordado de Tomateros Nación Guinda.',
+    supplier: 'Tomateros BeisShop Oficial',
+    active: true,
+  },
+  {
+    sku: 'TOM-JER-BLA-26',
+    name: 'Jersey Retro Campeón Blanco Tomateros',
+    category: 'Jerseys',
+    price: 1749,
+    initialCost: 880,
+    stock: 25,
+    minStockAlert: 8,
+    sizes: ['M', 'L', 'XL'],
+    image: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&auto=format&fit=crop&q=80',
+    description: 'Edición conmemorativa retro en blanco perla con vivos guinda y detalles dorados.',
+    supplier: 'New Era / Tomateros Store',
+    active: true,
+  },
+  {
+    sku: 'TOM-GOR-59F-GUI',
+    name: 'Gorra Oficial New Era 59FIFTY Tomateros Guinda',
+    category: 'Gorras',
+    price: 949,
+    initialCost: 420,
+    stock: 55,
+    minStockAlert: 15,
+    sizes: ['7', '7 1/8', '7 1/4', '7 3/8', '7 1/2', '7 5/8'],
+    image: 'https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=600&auto=format&fit=crop&q=80',
+    description: 'Gorra oficial New Era 59FIFTY con la tradicional "T" frontal bordada en alto relieve.',
+    supplier: 'New Era Cap Co.',
+    active: true,
+  },
+  {
+    sku: 'TOM-GOR-9FO-NEG',
+    name: 'Gorra 9FORTY Snapback Nación Guinda',
+    category: 'Gorras',
+    price: 799,
+    initialCost: 350,
+    stock: 20,
+    minStockAlert: 10,
+    sizes: ['Ajustable / Unitalla'],
+    image: 'https://images.unsplash.com/photo-1575428652377-a2d80e2277fc?w=600&auto=format&fit=crop&q=80',
+    description: 'Corona estructurada en negro mate con logotipo guinda y cierre snapback ajustable.',
+    supplier: 'New Era Cap Co.',
+    active: true,
+  },
+  {
+    sku: 'TOM-SUD-HOO-26',
+    name: 'Sudadera Hoodie Oficial Nación Guinda Culiacán',
+    category: 'Sudaderas',
+    price: 1399,
+    initialCost: 650,
+    stock: 19,
+    minStockAlert: 6,
+    sizes: ['M', 'L', 'XL'],
+    image: 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=600&auto=format&fit=crop&q=80',
+    description: 'Sudadera térmica afelpada con capucha y estampado Tomateros Baseball Club.',
+    supplier: 'Tomateros Apparel',
+    active: true,
+  },
+  {
+    sku: 'TOM-PEL-RAW-LMP',
+    name: 'Pelota Oficial Rawlings LMP Estadio Tomateros',
+    category: 'Coleccionables',
+    price: 380,
+    initialCost: 150,
+    stock: 85,
+    minStockAlert: 20,
+    sizes: ['Oficial'],
+    image: 'https://images.unsplash.com/photo-1508802959524-40759c8f79f4?w=600&auto=format&fit=crop&q=80',
+    description: 'Pelota oficial conmemorativa de juego con caja acrílica de exhibición.',
+    supplier: 'Rawlings Sports',
+    active: true,
+  },
+  {
+    sku: 'TOM-TAR-CER-EST',
+    name: 'Tarro Cervecero Estadio Tomateros 1 Litro',
+    category: 'Souvenirs',
+    price: 249,
+    initialCost: 85,
+    stock: 30,
+    minStockAlert: 15,
+    sizes: ['1 Litro'],
+    image: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=600&auto=format&fit=crop&q=80',
+    description: 'Tarro oficial de acrílico reforzado con logotipo de Tomateros grabado.',
+    supplier: 'Concesiones Culiacán',
+    active: true,
+  },
+];
+
+const INITIAL_TOROS_PRODUCTS: InitialProductWithCost[] = [
+  {
+    sku: 'TOR-JER-TOR-26',
+    name: 'Jersey Oficial Toros de Tijuana Toromanía Negro 2026',
+    category: 'Jerseys',
+    price: 1699,
+    initialCost: 850,
+    stock: 35,
+    minStockAlert: 10,
+    sizes: ['S', 'M', 'L', 'XL', '2XL'],
+    image: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&auto=format&fit=crop&q=80',
+    description: 'Jersey oficial de juego LMB en negro azabache con la tipografía Toros en relieve.',
+    supplier: 'Toros Shop Oficial',
+    active: true,
+  },
+  {
+    sku: 'TOR-JER-ROJ-26',
+    name: 'Jersey Alternativo Toros Tijuana Rojo Carmesí',
+    category: 'Jerseys',
+    price: 1749,
+    initialCost: 880,
+    stock: 22,
+    minStockAlert: 8,
+    sizes: ['M', 'L', 'XL'],
+    image: 'https://images.unsplash.com/photo-1577210897949-1f56f943502f?w=600&auto=format&fit=crop&q=80',
+    description: 'Jersey de gala en rojo carmesí con tecnología de absorción de sudor.',
+    supplier: 'New Era / Toros Store',
+    active: true,
+  },
+  {
+    sku: 'TOR-GOR-59F-OFI',
+    name: 'Gorra New Era 59FIFTY Toros de Tijuana Oficial',
+    category: 'Gorras',
+    price: 949,
+    initialCost: 420,
+    stock: 48,
+    minStockAlert: 12,
+    sizes: ['7', '7 1/8', '7 1/4', '7 3/8', '7 1/2', '7 5/8'],
+    image: 'https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=600&auto=format&fit=crop&q=80',
+    description: 'Gorra oficial cerrada New Era con la "T" cornuda bordada al frente.',
+    supplier: 'New Era Cap Co.',
+    active: true,
+  },
+  {
+    sku: 'TOR-GOR-9FO-AJU',
+    name: 'Gorra 9FORTY Snapback Toromanía Curva',
+    category: 'Gorras',
+    price: 799,
+    initialCost: 350,
+    stock: 18,
+    minStockAlert: 10,
+    sizes: ['Ajustable / Unitalla'],
+    image: 'https://images.unsplash.com/photo-1575428652377-a2d80e2277fc?w=600&auto=format&fit=crop&q=80',
+    description: 'Gorra ajustable snapback de visera curva y parche bordado Toromanía.',
+    supplier: 'New Era Cap Co.',
+    active: true,
+  },
+  {
+    sku: 'TOR-CHA-BOM-26',
+    name: 'Chamarra Bomber Toros de Tijuana LMB',
+    category: 'Sudaderas',
+    price: 1590,
+    initialCost: 750,
+    stock: 15,
+    minStockAlert: 5,
+    sizes: ['M', 'L', 'XL'],
+    image: 'https://images.unsplash.com/photo-1544441893-675973e31985?w=600&auto=format&fit=crop&q=80',
+    description: 'Chamarra bomber de colección con parches conmemorativos y cuello elástico acanalado.',
+    supplier: 'Toros Apparel',
+    active: true,
+  },
+  {
+    sku: 'TOR-PEL-OFI-LMB',
+    name: 'Pelota Oficial Rawlings LMB Toros de Tijuana',
+    category: 'Coleccionables',
+    price: 380,
+    initialCost: 150,
+    stock: 70,
+    minStockAlert: 15,
+    sizes: ['Oficial'],
+    image: 'https://images.unsplash.com/photo-1508802959524-40759c8f79f4?w=600&auto=format&fit=crop&q=80',
+    description: 'Pelota de juego conmemorativa Toros con base acrílica protectora.',
+    supplier: 'Rawlings Sports',
+    active: true,
+  },
+  {
+    sku: 'TOR-TAR-CER-CHEV',
+    name: 'Tarro Cervecero Estadio Chevron 1 Litro',
+    category: 'Souvenirs',
+    price: 249,
+    initialCost: 85,
+    stock: 25,
+    minStockAlert: 10,
+    sizes: ['1 Litro'],
+    image: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=600&auto=format&fit=crop&q=80',
+    description: 'Tarro oficial de acrílico grabado para bebidas en el Estadio Chevron.',
+    supplier: 'Concesiones Tijuana',
+    active: true,
+  },
+];
+
+export function getCuratedProductsForVenue(venueId: string): InventoryProduct[] {
+  let sourceList: InitialProductWithCost[] = INITIAL_VENADOS_PRODUCTS;
+  let prefix = 'ven';
+
+  if (venueId === 'venue-tomateros') {
+    sourceList = INITIAL_TOMATEROS_PRODUCTS;
+    prefix = 'tom';
+  } else if (venueId === 'venue-chevron') {
+    sourceList = INITIAL_TOROS_PRODUCTS;
+    prefix = 'tor';
+  } else if (venueId !== DEFAULT_VENUE_ID) {
+    // Sede personalizada
+    prefix = venueId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4);
+    sourceList = INITIAL_VENADOS_PRODUCTS.map((p) => ({
+      ...p,
+      sku: `${prefix.toUpperCase()}-${p.sku.split('-').slice(1).join('-')}`,
+      name: p.name.replace('Venados de Mazatlán', 'Oficial').replace('Estadio Teodoro Mariscal', 'Estadio Oficial'),
+    }));
+  }
+
+  return sourceList.map((p, idx) => {
+    const { initialCost, ...rest } = p;
+    return {
+      ...rest,
+      id: `prod-${venueId}-${prefix}-${idx + 1}`,
+      venueId: venueId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  });
+}
+
 export async function getInventoryProducts(venueId?: string): Promise<InventoryProduct[]> {
   try {
     const snap = await getDocs(collection(db, COLLECTION_NAME));
@@ -131,29 +365,17 @@ export async function getInventoryProducts(venueId?: string): Promise<InventoryP
       try {
         const seeded = await seedInitialProducts();
         if (venueId) {
-          return seeded.filter((p) => (p.venueId || DEFAULT_VENUE_ID) === venueId);
+          const seededFiltered = seeded.filter((p) => (p.venueId || DEFAULT_VENUE_ID) === venueId);
+          return seededFiltered.length > 0 ? seededFiltered : getCuratedProductsForVenue(venueId);
         }
         return seeded;
       } catch (seedErr) {
-        console.warn('No se pudo sembrar el inventario en Firestore (permiso restringido). Usando catálogo estático:', seedErr);
-        const staticList = INITIAL_VENADOS_PRODUCTS.map((p, idx) => {
-          const { initialCost, ...rest } = p;
-          return {
-            ...rest,
-            id: `prod-init-${idx + 1}`,
-            venueId: DEFAULT_VENUE_ID,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          };
-        });
-        if (venueId) {
-          return staticList.filter((p) => (p.venueId || DEFAULT_VENUE_ID) === venueId);
-        }
-        return staticList;
+        console.warn('No se pudo sembrar el inventario en Firestore. Usando catálogo específico de la sede:', seedErr);
+        return getCuratedProductsForVenue(venueId || DEFAULT_VENUE_ID);
       }
     }
 
-    let products = snap.docs.map((d) => {
+    const products = snap.docs.map((d) => {
       const data = d.data();
       return {
         id: d.id,
@@ -163,12 +385,17 @@ export async function getInventoryProducts(venueId?: string): Promise<InventoryP
     }) as InventoryProduct[];
 
     if (venueId) {
-      products = products.filter((p) => (p.venueId || DEFAULT_VENUE_ID) === venueId);
+      const filtered = products.filter((p) => (p.venueId || DEFAULT_VENUE_ID) === venueId);
+      if (filtered.length > 0) {
+        return filtered;
+      }
+      return getCuratedProductsForVenue(venueId);
     }
 
     return products;
   } catch (err) {
-    handleFirestoreError(err, OperationType.LIST, COLLECTION_NAME);
+    console.warn('Error al cargar inventario desde Firestore, usando catálogo curado de la sede:', err);
+    return getCuratedProductsForVenue(venueId || DEFAULT_VENUE_ID);
   }
 }
 
