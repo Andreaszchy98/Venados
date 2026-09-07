@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { UserProfile } from '../../types';
 import { VenuesManager } from './VenuesManager';
 import { AdminsManager } from './AdminsManager';
-import { VenueMapBuilder } from '../admin/VenueMapBuilder';
 import {
   Building2,
   Users,
@@ -10,7 +9,6 @@ import {
   Crown,
   Sparkles,
   Info,
-  MapPin,
 } from 'lucide-react';
 
 interface SuperAdminViewProps {
@@ -18,7 +16,7 @@ interface SuperAdminViewProps {
 }
 
 export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ user }) => {
-  const [activeTab, setActiveTab] = useState<'venues' | 'admins' | 'mapas'>('venues');
+  const [activeTab, setActiveTab] = useState<'venues' | 'admins'>('venues');
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
@@ -100,25 +98,10 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ user }) => {
           <ShieldCheck className="w-4 h-4 text-amber-500" />
           Administradores de Sede
         </button>
-
-        <button
-          id="tab-mapas"
-          onClick={() => setActiveTab('mapas')}
-          className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all ${
-            activeTab === 'mapas'
-              ? 'bg-slate-900 text-white shadow-sm'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-        >
-          <MapPin className="w-4 h-4 text-emerald-400" />
-          Constructor de Mapas
-        </button>
       </div>
 
       {/* Renderizado de la pestaña activa */}
-      {activeTab === 'venues' && <VenuesManager />}
-      {activeTab === 'admins' && <AdminsManager />}
-      {activeTab === 'mapas' && <VenueMapBuilder />}
+      {activeTab === 'venues' ? <VenuesManager /> : <AdminsManager />}
     </div>
   );
 };

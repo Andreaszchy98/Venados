@@ -286,14 +286,7 @@ service cloud.firestore {
       allow update, delete: if isVenueAdmin(resource.data.venueId);
     }
 
-    // 13. Zonas del recinto (Venue Zones - categorías de precios y colores en el mapa)
-    match /venueZones/{zoneId} {
-      allow read: if isAuthenticated();
-      allow create: if isVenueAdmin(request.resource.data.venueId);
-      allow update, delete: if isVenueAdmin(resource.data.venueId);
-    }
-
-    // 14. Secciones del mapa físico de la sede
+    // 13. Secciones del mapa físico de la sede
     match /seatSections/{sectionId} {
       allow read: if isAuthenticated();
       allow create: if isVenueAdmin(request.resource.data.venueId);

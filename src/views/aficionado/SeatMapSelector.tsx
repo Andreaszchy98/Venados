@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { UserProfile, VenueEvent, SeatSection, EventSeat, EventType, VenueZone, VenueLayoutShape } from '../../types';
+import { UserProfile, VenueEvent, SeatSection, EventSeat, EventType } from '../../types';
 import {
   BaseballFieldGraphic,
   SoccerFieldGraphic,
@@ -10,32 +10,30 @@ import {
 import {
   subscribeSeatSections,
   subscribeEventSeats,
-  generateEventSeats,
   purchaseSeatsTransaction,
   getZonePrice,
   MARISCAL_ZONES,
+  getStadiumZones,
+  isEncantoVenue,
+  ENCANTO_GATES_GUIDE,
   SeatPurchaseItem,
 } from '../../lib/seatMap';
-import { generateSeatMapLayout, SeatMapPosition } from '../../lib/venueLayoutEngine';
-import { subscribeVenueZones } from '../../lib/venueZones';
-import { getVenueById } from '../../lib/venues';
+import { EncantoStadiumMap } from '../../components/stadiumMaps/EncantoStadiumMap';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import {
   MapPin,
   Calendar,
   Clock,
   ArrowLeft,
-  CheckCircle2,
   AlertCircle,
   ShieldCheck,
   CreditCard,
   Banknote,
   X,
-  Info,
-  Sparkles,
   Users,
   Maximize2,
   Layers,
+  DoorOpen,
 } from 'lucide-react';
 
 interface SeatMapSelectorProps {
@@ -68,21 +66,29 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
   onPurchaseSuccess,
   onCancel,
 }) => {
+  const isEncanto = useMemo(
+    () => isEncantoVenue(event.venueId, stadiumName, event.type),
+    [event.venueId, stadiumName, event.type]
+  );
+
+  const stadiumZones = useMemo(
+    () => (isEncanto ? getStadiumZones(event.venueId, stadiumName, event.type) : MARISCAL_ZONES),
+    [isEncanto, event.venueId, stadiumName, event.type]
+  );
+
   // Gráfico central del recinto/cancha según el tipo de evento
   const FieldGraphic = getFieldGraphic(event.type);
 
   const [sections, setSections] = useState<SeatSection[]>([]);
   const [eventSeats, setEventSeats] = useState<EventSeat[]>([]);
   const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
+  const [generating] = useState(false);
 
   // Sección activa para visualizar la cuadrícula
-  const [activeSectionNumber, setActiveSectionNumber] = useState<string>('104');
+  const [activeSectionNumber, setActiveSectionNumber] = useState<string>(
+    isEncanto ? 'PC-1' : '104'
+  );
   const [activeZoneFilter, setActiveZoneFilter] = useState<string>('Todas');
-
-  // Forma del recinto y zonas de precios
-  const [venueLayoutShape, setVenueLayoutShape] = useState<VenueLayoutShape>('baseball_horseshoe');
-  const [venueZones, setVenueZones] = useState<VenueZone[]>([]);
 
   // Asientos seleccionados para la compra conjunta
   const [selectedSeats, setSelectedSeats] = useState<SeatPurchaseItem[]>([]);
@@ -92,25 +98,6 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
   const [purchasing, setPurchasing] = useState(false);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
 
-  // Cargar forma arquitectónica y zonas de la sede
-  useEffect(() => {
-    getVenueById(event.venueId).then((v) => {
-      if (v?.layoutShape) {
-        setVenueLayoutShape(v.layoutShape);
-      }
-    });
-
-    const unsubscribeZones = subscribeVenueZones(
-      event.venueId,
-      (fetchedZones) => {
-        setVenueZones(fetchedZones);
-      },
-      (err) => console.warn('Aviso escuchando zonas del recinto:', err)
-    );
-
-    return () => unsubscribeZones();
-  }, [event.venueId]);
-
   // Cargar y escuchar secciones del estadio
   useEffect(() => {
     setLoading(true);
@@ -118,8 +105,12 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
       event.venueId,
       (fetchedSections) => {
         setSections(fetchedSections);
-        if (fetchedSections.length > 0 && !fetchedSections.some((s) => s.sectionNumber === activeSectionNumber)) {
-          setActiveSectionNumber(fetchedSections[0].sectionNumber);
+        // Ajustar sección activa si no existe en las secciones obtenidas
+        if (fetchedSections.length > 0) {
+          const exists = fetchedSections.some((s) => s.sectionNumber === activeSectionNumber);
+          if (!exists) {
+            setActiveSectionNumber(fetchedSections[0].sectionNumber);
+          }
         }
       },
       (err) => {
@@ -174,11 +165,16 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
 
   // Estadísticas globales de disponibilidad (Capacidad Estadio Teodoro Mariscal: 94 secciones x 30 = 2,820 asientos)
   const globalStats = useMemo(() => {
-    const total = 94 * 30;
+    const total = isEncanto
+      ? sections.reduce(
+          (acc, s) => acc + (s.totalSeats || (s.rows || 3) * (s.seatsPerRow || 10)),
+          0
+        ) || 3120
+      : 94 * 30;
     const sold = eventSeats.filter((s) => s.status === 'vendido').length;
     const available = Math.max(0, total - sold);
     return { total, sold, available };
-  }, [eventSeats]);
+  }, [sections, eventSeats, isEncanto]);
 
   // Alternar selección de un asiento
   const handleToggleSeat = (seat: EventSeat, section: SeatSection) => {
@@ -241,45 +237,16 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
     }
   };
 
-  // Mapa indexado de VenueZones para acceso instantáneo
-  const zonesMap = useMemo(() => {
-    const map: Record<string, VenueZone> = {};
-    for (const z of venueZones) {
-      map[z.id] = z;
-    }
-    return map;
-  }, [venueZones]);
-
-  // Generador dinámico de posiciones espaciales de cada sección
-  const layoutPositions = useMemo(() => {
-    return generateSeatMapLayout(venueLayoutShape, sections, zonesMap);
-  }, [venueLayoutShape, sections, zonesMap]);
-
-  // Resolver color de zona oficial
-  const getSectionColor = (sec: SeatSection | SeatMapPosition) => {
-    if ('color' in sec && sec.color) return sec.color;
-    if (sec.zoneId && zonesMap[sec.zoneId]) return zonesMap[sec.zoneId].color;
-    const name = sec.zoneName || (sec.zoneId && zonesMap[sec.zoneId]?.name);
-    if (name && MARISCAL_ZONES[name]) return MARISCAL_ZONES[name].colorHex;
-    return '#3B82F6';
-  };
-
   // Lista única de zonas para filtrar
   const availableZones = useMemo(() => {
-    if (venueZones.length > 0) {
-      return venueZones.map((z) => z.name);
-    }
-    return Object.keys(MARISCAL_ZONES);
-  }, [venueZones]);
+    return Object.keys(stadiumZones);
+  }, [stadiumZones]);
 
   // Secciones filtradas
   const filteredSections = useMemo(() => {
     if (activeZoneFilter === 'Todas') return sections;
-    return sections.filter((s) => {
-      const zName = s.zoneName || (s.zoneId && zonesMap[s.zoneId]?.name);
-      return zName === activeZoneFilter;
-    });
-  }, [sections, activeZoneFilter, zonesMap]);
+    return sections.filter((s) => s.zoneName === activeZoneFilter);
+  }, [sections, activeZoneFilter]);
 
   if (loading || generating) {
     return (
@@ -288,15 +255,25 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
           message={
             generating
               ? 'Configurando disponibilidad del mapa físico para este partido...'
+              : isEncanto
+              ? `Cargando mapa oficial de asientos de ${stadiumName}...`
               : 'Cargando mapa de asientos del Estadio Teodoro Mariscal...'
           }
         />
         <p className="text-xs text-slate-400">
-          Sincronizando 94 secciones y cuadrículas de butacas en tiempo real desde Firestore.
+          {isEncanto
+            ? 'Sincronizando secciones y cuadrículas de butacas en tiempo real desde Firestore.'
+            : 'Sincronizando 94 secciones y cuadrículas de butacas en tiempo real desde Firestore.'}
         </p>
       </div>
     );
   }
+
+  const activeZoneMeta = currentSection
+    ? isEncanto
+      ? stadiumZones[currentSection.zoneName]
+      : MARISCAL_ZONES[currentSection.zoneName]
+    : null;
 
   return (
     <div className="space-y-6">
@@ -310,12 +287,16 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
             >
               <ArrowLeft className="w-4 h-4" /> Volver a eventos
             </button>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-100 text-red-800">
-              {event.type}
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                isEncanto ? 'bg-purple-100 text-purple-800' : 'bg-red-100 text-red-800'
+              }`}
+            >
+              {isEncanto ? 'Fútbol • Liga MX' : event.type}
             </span>
             <span className="text-xs font-semibold text-emerald-700 flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              Mapa en Vivo
+              {isEncanto ? 'Mapa Oficial en Vivo' : 'Mapa en Vivo'}
             </span>
           </div>
 
@@ -325,15 +306,15 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
 
           <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
             <span className="flex items-center gap-1 font-semibold text-slate-700">
-              <Calendar className="w-3.5 h-3.5 text-red-600" />
+              <Calendar className={`w-3.5 h-3.5 ${isEncanto ? 'text-purple-600' : 'text-red-600'}`} />
               {event.date}
             </span>
             <span className="flex items-center gap-1">
               <Clock className="w-3.5 h-3.5" />
               {event.time || '20:00 hrs'}
             </span>
-            <span className="flex items-center gap-1">
-              <MapPin className="w-3.5 h-3.5 text-red-600" />
+            <span className="flex items-center gap-1 font-bold text-slate-700">
+              <MapPin className={`w-3.5 h-3.5 ${isEncanto ? 'text-purple-600' : 'text-red-600'}`} />
               {stadiumName}
             </span>
           </div>
@@ -362,10 +343,13 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
       <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-xs font-black uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
-            <Layers className="w-4 h-4 text-red-600" /> Zonas Oficiales del Teodoro Mariscal
+            <Layers className={`w-4 h-4 ${isEncanto ? 'text-purple-600' : 'text-red-600'}`} />
+            {isEncanto ? `Zonas Oficiales: ${stadiumName}` : 'Zonas Oficiales del Teodoro Mariscal'}
           </span>
           <span className="text-[11px] text-slate-400">
-            Haz clic en una zona para filtrar secciones o selecciónala en el mapa
+            {isEncanto
+              ? 'Haz clic en una zona para filtrar secciones o selecciónala directamente en el mapa'
+              : 'Haz clic en una zona para filtrar secciones o selecciónala en el mapa'}
           </span>
         </div>
 
@@ -374,7 +358,9 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
             onClick={() => setActiveZoneFilter('Todas')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeZoneFilter === 'Todas'
-                ? 'bg-slate-900 text-white shadow-xs'
+                ? isEncanto
+                  ? 'bg-purple-900 text-white shadow-xs'
+                  : 'bg-slate-900 text-white shadow-xs'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
@@ -382,11 +368,7 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
           </button>
 
           {availableZones.map((zName) => {
-            const zMeta = MARISCAL_ZONES[zName];
-            const zoneColor =
-              venueZones.find((z) => z.name === zName)?.color ||
-              zMeta?.colorHex ||
-              '#3B82F6';
+            const zMeta = stadiumZones[zName];
             const price = getZonePrice(zName, event);
             const isFilterActive = activeZoneFilter === zName;
 
@@ -402,7 +384,7 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
               >
                 <span
                   className="w-2.5 h-2.5 rounded-full shrink-0"
-                  style={{ backgroundColor: zoneColor }}
+                  style={{ backgroundColor: zMeta.colorHex }}
                 ></span>
                 <span>{zName}</span>
                 <span className="text-[10px] font-mono text-slate-400 font-normal">
@@ -414,90 +396,323 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
         </div>
       </div>
 
+      {/* GUÍA DE PUERTAS DE ACCESO (Especial para Estadio El Encanto) */}
+      {isEncanto && (
+        <div className="bg-purple-50/70 border border-purple-200/80 p-3 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="w-6 h-6 rounded-full bg-purple-800 text-white flex items-center justify-center text-xs font-black shrink-0">
+              <DoorOpen className="w-3.5 h-3.5" />
+            </span>
+            <span className="font-black text-purple-950">Guía de Puertas de Acceso Oficiales:</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {ENCANTO_GATES_GUIDE.map((g) => (
+              <span
+                key={g.gate}
+                className="px-2 py-0.5 rounded-lg bg-white border border-purple-200 text-[11px] text-purple-900 font-medium"
+              >
+                <strong className="font-bold text-purple-950">{g.gate}:</strong> {g.zones.join(', ')}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 3. Panel Principal: Mapa Interactivo SVG + Cuadrícula de Asientos */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* LADO IZQUIERDO: Mapa del Estadio (Herradura / Diamante de Béisbol) */}
+        {/* LADO IZQUIERDO: Mapa del Estadio (Herradura / Diamante de Béisbol o Cancha Fútbol Encanto) */}
         <div className="lg:col-span-7 bg-white p-4 sm:p-5 rounded-3xl border border-slate-200 shadow-xs space-y-4 flex flex-col">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                <Maximize2 className="w-4 h-4 text-red-600" />
-                Mapa Físico del Estadio
+              <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                <Maximize2 className={`w-4 h-4 ${isEncanto ? 'text-purple-600' : 'text-red-600'}`} />
+                {isEncanto ? `Distribución Oficial: ${stadiumName}` : 'Mapa Físico del Estadio'}
               </h3>
               <p className="text-[11px] text-slate-500">
-                Selecciona una sección directamente en el estadio o en el listado inferior
+                {isEncanto
+                  ? 'Toca cualquier sección directamente en el mapa para ver sus butacas'
+                  : 'Selecciona una sección directamente en el estadio o en el listado inferior'}
               </p>
             </div>
 
             {currentSection && (
-              <span className="px-2.5 py-1 rounded-xl text-xs font-bold bg-red-50 text-red-800 border border-red-200">
+              <span
+                className={`px-2.5 py-1 rounded-xl text-xs font-bold border ${
+                  isEncanto
+                    ? 'bg-purple-50 text-purple-900 border-purple-200'
+                    : 'bg-red-50 text-red-800 border-red-200'
+                }`}
+              >
                 Sección activa: <strong className="font-black">#{currentSection.sectionNumber}</strong> ({currentSection.zoneName})
               </span>
             )}
           </div>
 
-          {/* Canvas SVG del Recinto / Estadio */}
-          <div className="relative w-full aspect-[4/3] bg-radial from-slate-900 via-slate-950 to-slate-950 rounded-2xl overflow-hidden border border-slate-800 shadow-inner flex items-center justify-center p-2">
-            <svg
-              viewBox="0 0 800 620"
-              className="w-full h-full select-none"
-              style={{ maxHeight: '420px' }}
-            >
-              {/* Gráfico central dinámico según event.type */}
-              <FieldGraphic />
+          {/* RENDERIZADO DEL MAPA */}
+          {isEncanto ? (
+            <EncantoStadiumMap
+              sections={sections}
+              activeSectionNumber={activeSectionNumber}
+              activeZoneFilter={activeZoneFilter === 'Todas' ? null : activeZoneFilter}
+              onSelectSection={setActiveSectionNumber}
+              event={event}
+            />
+          ) : (
+            <div className="relative w-full aspect-[4/3] bg-radial from-slate-900 via-slate-950 to-slate-950 rounded-2xl overflow-hidden border border-slate-800 shadow-inner flex items-center justify-center p-2">
+              <svg
+                viewBox="0 0 800 620"
+                className="w-full h-full select-none"
+                style={{ maxHeight: '420px' }}
+              >
+                {/* Gráfico central dinámico según event.type */}
+                <FieldGraphic />
 
-              {/* SECCIONES DINÁMICAS GENERADAS POR EL MOTOR ARQUITECTÓNICO */}
-              <g id="dynamic-venue-sections">
-                {layoutPositions.map((pos) => {
-                  const isSelected = activeSectionNumber === pos.sectionNumber;
-                  const zoneColor = getSectionColor(pos);
-                  const transform = pos.rotation
-                    ? `rotate(${pos.rotation} ${pos.x + pos.width / 2} ${pos.y + pos.height / 2})`
-                    : undefined;
+                {/* SECCIONES EN HERRADURA ALREDEDOR DEL CAMPO */}
 
-                  return (
-                    <g
-                      key={pos.sectionId || pos.sectionNumber}
-                      onClick={() => setActiveSectionNumber(pos.sectionNumber)}
-                      className="cursor-pointer transition-transform hover:opacity-100"
-                      transform={transform}
-                    >
-                      <rect
-                        x={pos.x}
-                        y={pos.y}
-                        width={pos.width}
-                        height={pos.height}
-                        rx="4"
-                        fill={isSelected ? '#ffffff' : zoneColor}
-                        stroke={isSelected ? '#fbbf24' : '#0f172a'}
-                        strokeWidth={isSelected ? 2.5 : 1}
-                        opacity={isSelected ? 1 : 0.88}
-                      />
-                      <text
-                        x={pos.labelX}
-                        y={pos.labelY}
-                        fill={isSelected ? '#0f172a' : '#ffffff'}
-                        fontSize={pos.width < 28 ? '7' : '8.5'}
-                        fontWeight="900"
-                        textAnchor="middle"
+                {/* ANILLO 3: Nivel 300 - Sky (Arco Superior) */}
+                <g id="tier-sky-300">
+                  {[
+                    { num: '301', x: 80, y: 150 },
+                    { num: '302', x: 110, y: 120 },
+                    { num: '303', x: 150, y: 90 },
+                    { num: '304', x: 195, y: 68 },
+                    { num: '305', x: 245, y: 52 },
+                    { num: '306', x: 300, y: 44 },
+                    { num: '307', x: 355, y: 40 },
+                    { num: '308', x: 410, y: 40 },
+                    { num: '309', x: 465, y: 44 },
+                    { num: '310', x: 520, y: 52 },
+                    { num: '311', x: 570, y: 68 },
+                    { num: '312', x: 615, y: 90 },
+                    { num: '313', x: 655, y: 120 },
+                    { num: '314', x: 685, y: 150 },
+                    { num: '315', x: 705, y: 190 },
+                    { num: '316', x: 715, y: 235 },
+                  ].map((pos) => {
+                    const isSelected = activeSectionNumber === pos.num;
+                    const zoneColor = MARISCAL_ZONES['Sky']?.colorHex || '#6366F1';
+                    return (
+                      <g
+                        key={pos.num}
+                        onClick={() => setActiveSectionNumber(pos.num)}
+                        className="cursor-pointer transition-transform hover:opacity-100"
                       >
-                        {pos.sectionNumber}
-                      </text>
-                    </g>
-                  );
-                })}
-              </g>
-            </svg>
+                        <rect
+                          x={pos.x}
+                          y={pos.y}
+                          width="38"
+                          height="22"
+                          rx="4"
+                          fill={isSelected ? '#ffffff' : zoneColor}
+                          stroke={isSelected ? '#fbbf24' : '#1e1b4b'}
+                          strokeWidth={isSelected ? 3 : 1}
+                          opacity={isSelected ? 1 : 0.85}
+                        />
+                        <text
+                          x={pos.x + 19}
+                          y={pos.y + 15}
+                          fill={isSelected ? '#0f172a' : '#ffffff'}
+                          fontSize="9"
+                          fontWeight="900"
+                          textAnchor="middle"
+                        >
+                          {pos.num}
+                        </text>
+                      </g>
+                    );
+                  })}
+                </g>
 
-            {/* Etiqueta flotante inferior del mapa */}
-            <div className="absolute bottom-2 left-3 right-3 bg-slate-900/80 backdrop-blur-xs px-3 py-1.5 rounded-xl border border-slate-700/50 flex items-center justify-between text-[11px] text-slate-300">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-                Sección activa: <strong className="text-white font-bold">{currentSection?.sectionNumber} ({currentSection?.zoneName})</strong>
-              </span>
-              <span className="text-slate-400">Toca cualquier sección para ver butacas</span>
+                {/* ANILLO 2: Nivel 200 (Gradas Intermedias) */}
+                <g id="tier-level-200">
+                  {[
+                    // Fan Plus & Fan (Jardines laterales 200s)
+                    { num: '233', x: 95, y: 220, zone: 'Fan Plus' },
+                    { num: '232', x: 105, y: 250, zone: 'Fan Plus' },
+                    { num: '231', x: 115, y: 280, zone: 'Fan Plus' },
+                    { num: '227', x: 130, y: 310, zone: 'Fan' },
+                    { num: '226', x: 145, y: 340, zone: 'Fan' },
+                    { num: '225', x: 165, y: 370, zone: 'Fan' },
+
+                    // Plus & Sky Plus (Tercera Base 200s)
+                    { num: '221', x: 190, y: 400, zone: 'Plus' },
+                    { num: '220', x: 215, y: 430, zone: 'Plus' },
+                    { num: '217', x: 245, y: 460, zone: 'Sky Plus' },
+                    { num: '216', x: 275, y: 485, zone: 'Sky Plus' },
+
+                    // Diamante, Oro & Platino 200s (Detrás de Home)
+                    { num: '208', x: 310, y: 510, zone: 'Diamante' },
+                    { num: '203', x: 345, y: 525, zone: 'Oro' },
+                    { num: '207', x: 380, y: 535, zone: 'Platino' },
+                    { num: '204', x: 418, y: 535, zone: 'Platino' },
+                    { num: '202', x: 453, y: 525, zone: 'Oro' },
+                    { num: '201', x: 488, y: 510, zone: 'Diamante' },
+
+                    // Sky Plus & Plus (Primera Base 200s)
+                    { num: '210', x: 523, y: 485, zone: 'Sky Plus' },
+                    { num: '209', x: 553, y: 460, zone: 'Sky Plus' },
+                    { num: '218', x: 583, y: 430, zone: 'Plus' },
+                    { num: '219', x: 608, y: 400, zone: 'Plus' },
+
+                    // Fan & Fan Plus (Jardín Derecho 200s)
+                    { num: '222', x: 633, y: 370, zone: 'Fan' },
+                    { num: '223', x: 653, y: 340, zone: 'Fan' },
+                    { num: '224', x: 668, y: 310, zone: 'Fan' },
+                    { num: '228', x: 683, y: 280, zone: 'Fan Plus' },
+                    { num: '229', x: 693, y: 250, zone: 'Fan Plus' },
+                    { num: '230', x: 703, y: 220, zone: 'Fan Plus' },
+                  ].map((pos) => {
+                    const isSelected = activeSectionNumber === pos.num;
+                    const zoneColor = MARISCAL_ZONES[pos.zone]?.colorHex || '#3B82F6';
+                    return (
+                      <g
+                        key={pos.num}
+                        onClick={() => setActiveSectionNumber(pos.num)}
+                        className="cursor-pointer"
+                      >
+                        <rect
+                          x={pos.x}
+                          y={pos.y}
+                          width="34"
+                          height="20"
+                          rx="3"
+                          fill={isSelected ? '#ffffff' : zoneColor}
+                          stroke={isSelected ? '#fbbf24' : '#0f172a'}
+                          strokeWidth={isSelected ? 2.5 : 1}
+                          opacity={isSelected ? 1 : 0.9}
+                        />
+                        <text
+                          x={pos.x + 17}
+                          y={pos.y + 14}
+                          fill={isSelected ? '#0f172a' : '#ffffff'}
+                          fontSize="8.5"
+                          fontWeight="900"
+                          textAnchor="middle"
+                        >
+                          {pos.num}
+                        </text>
+                      </g>
+                    );
+                  })}
+                </g>
+
+                {/* ANILLO 1: Nivel 100 (Infield Boxes) */}
+                <g id="tier-level-100">
+                  {[
+                    // Fan & Fan Plus (Jardín Izquierdo 100s)
+                    { num: '133', x: 135, y: 240, zone: 'Fan Plus' },
+                    { num: '130', x: 145, y: 270, zone: 'Fan Plus' },
+                    { num: '127', x: 160, y: 300, zone: 'Fan' },
+                    { num: '124', x: 180, y: 335, zone: 'Fan' },
+                    { num: '121', x: 205, y: 370, zone: 'Plus' },
+                    { num: '118', x: 230, y: 405, zone: 'Plus' },
+                    { num: '115', x: 260, y: 440, zone: 'Sky Plus' },
+                    { num: '112', x: 290, y: 470, zone: 'Sky Plus' },
+
+                    // Diamante, Oro & Platino 100s
+                    { num: '108', x: 325, y: 495, zone: 'Diamante' },
+                    { num: '103', x: 355, y: 508, zone: 'Oro' },
+                    { num: '107', x: 385, y: 515, zone: 'Platino' },
+                    { num: '104', x: 415, y: 515, zone: 'Platino' },
+                    { num: '102', x: 445, y: 508, zone: 'Oro' },
+                    { num: '101', x: 475, y: 495, zone: 'Diamante' },
+
+                    // Sky Plus, Plus & Fan (Jardín Derecho 100s)
+                    { num: '109', x: 505, y: 470, zone: 'Sky Plus' },
+                    { num: '113', x: 535, y: 440, zone: 'Sky Plus' },
+                    { num: '119', x: 565, y: 405, zone: 'Plus' },
+                    { num: '120', x: 590, y: 370, zone: 'Plus' },
+                    { num: '122', x: 615, y: 335, zone: 'Fan' },
+                    { num: '125', x: 635, y: 300, zone: 'Fan' },
+                    { num: '128', x: 650, y: 270, zone: 'Fan Plus' },
+                    { num: '131', x: 660, y: 240, zone: 'Fan Plus' },
+                  ].map((pos) => {
+                    const isSelected = activeSectionNumber === pos.num;
+                    const zoneColor = MARISCAL_ZONES[pos.zone]?.colorHex || '#0284C7';
+                    return (
+                      <g
+                        key={pos.num}
+                        onClick={() => setActiveSectionNumber(pos.num)}
+                        className="cursor-pointer"
+                      >
+                        <rect
+                          x={pos.x}
+                          y={pos.y}
+                          width="28"
+                          height="18"
+                          rx="3"
+                          fill={isSelected ? '#ffffff' : zoneColor}
+                          stroke={isSelected ? '#fbbf24' : '#ffffff'}
+                          strokeWidth={isSelected ? 2.5 : 0.8}
+                          opacity={isSelected ? 1 : 0.95}
+                        />
+                        <text
+                          x={pos.x + 14}
+                          y={pos.y + 12.5}
+                          fill={isSelected ? '#0f172a' : '#ffffff'}
+                          fontSize="8"
+                          fontWeight="900"
+                          textAnchor="middle"
+                        >
+                          {pos.num}
+                        </text>
+                      </g>
+                    );
+                  })}
+                </g>
+
+                {/* ANILLO 0: Deluxe Supreme 1 a 12 (Central Baja, pegado a Home Plate) */}
+                <g id="tier-deluxe-supreme">
+                  {[
+                    { num: '12', x: 260, y: 420 },
+                    { num: '11', x: 280, y: 435 },
+                    { num: '10', x: 305, y: 450 },
+                    { num: '9', x: 330, y: 462 },
+                    { num: '8', x: 355, y: 472 },
+                    { num: '7', x: 380, y: 478 },
+                    { num: '6', x: 405, y: 478 },
+                    { num: '5', x: 430, y: 472 },
+                    { num: '4', x: 455, y: 462 },
+                    { num: '3', x: 480, y: 450 },
+                    { num: '2', x: 505, y: 435 },
+                    { num: '1', x: 525, y: 420 },
+                  ].map((pos) => {
+                    const isSelected = activeSectionNumber === pos.num;
+                    const zoneColor = MARISCAL_ZONES['Deluxe Supreme']?.colorHex || '#D97706';
+                    return (
+                      <g
+                        key={pos.num}
+                        onClick={() => setActiveSectionNumber(pos.num)}
+                        className="cursor-pointer"
+                      >
+                        <rect
+                          x={pos.x}
+                          y={pos.y}
+                          width="22"
+                          height="15"
+                          rx="2.5"
+                          fill={isSelected ? '#ffffff' : zoneColor}
+                          stroke={isSelected ? '#fbbf24' : '#fef08a'}
+                          strokeWidth={isSelected ? 2.5 : 1}
+                          opacity="1"
+                        />
+                        <text
+                          x={pos.x + 11}
+                          y={pos.y + 10.5}
+                          fill={isSelected ? '#0f172a' : '#ffffff'}
+                          fontSize="7"
+                          fontWeight="900"
+                          textAnchor="middle"
+                        >
+                          {pos.num}
+                        </text>
+                      </g>
+                    );
+                  })}
+                </g>
+              </svg>
             </div>
-          </div>
+          )}
 
           {/* Selector rápido de secciones en carrusel/rejilla */}
           <div className="space-y-1.5 pt-2">
@@ -509,8 +724,8 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                 const isSelected = activeSectionNumber === sec.sectionNumber;
                 const secSeats = seatsBySection.get(sec.sectionNumber) || [];
                 const soldCount = secSeats.filter((s) => s.status === 'vendido').length;
-                const availableCount = Math.max(0, (sec.totalSeats || 30) - soldCount);
-                const color = getSectionColor(sec);
+                const availableCount = Math.max(0, (sec.totalSeats || (sec.rows || 3) * (sec.seatsPerRow || 10)) - soldCount);
+                const zoneMeta = stadiumZones[sec.zoneName] || (MARISCAL_ZONES[sec.zoneName] || { colorHex: '#64748B' });
 
                 return (
                   <button
@@ -518,18 +733,24 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                     onClick={() => setActiveSectionNumber(sec.sectionNumber)}
                     className={`px-2 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer border ${
                       isSelected
-                        ? 'bg-red-700 text-white border-red-700 shadow-xs ring-1 ring-red-700'
+                        ? isEncanto
+                          ? 'bg-purple-900 text-white border-purple-900 shadow-xs ring-1 ring-purple-900'
+                          : 'bg-red-700 text-white border-red-700 shadow-xs ring-1 ring-red-700'
                         : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
                     }`}
                   >
                     <span
-                      className="w-1.5 h-1.5 rounded-full"
-                      style={{ backgroundColor: color }}
+                      className="w-1.5 h-1.5 rounded-full shrink-0"
+                      style={{ backgroundColor: zoneMeta.colorHex }}
                     ></span>
-                    <span>Sec. {sec.sectionNumber}</span>
+                    <span>{isEncanto ? sec.sectionNumber : `Sec. ${sec.sectionNumber}`}</span>
                     <span
                       className={`text-[10px] font-normal ${
-                        isSelected ? 'text-red-200' : 'text-slate-400'
+                        isSelected
+                          ? isEncanto
+                            ? 'text-purple-200'
+                            : 'text-red-200'
+                          : 'text-slate-400'
                       }`}
                     >
                       ({availableCount})
@@ -552,25 +773,44 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                     <span
                       className="w-3 h-3 rounded-full shrink-0"
                       style={{
-                        backgroundColor: getSectionColor(currentSection),
+                        backgroundColor:
+                          activeZoneMeta?.colorHex ||
+                          MARISCAL_ZONES[currentSection.zoneName]?.colorHex ||
+                          '#D97706',
                       }}
                     ></span>
                     <h3 className="text-base font-black text-slate-900">
-                      Sección {currentSection.sectionNumber}
+                      {isEncanto
+                        ? `Sección ${currentSection.sectionNumber}`
+                        : `Sección #${currentSection.sectionNumber} • ${currentSection.zoneName}`}
                     </h3>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-100 text-slate-700 border border-slate-200">
-                      {currentSection.zoneName || (currentSection.zoneId && zonesMap[currentSection.zoneId]?.name) || 'General'}
-                    </span>
+                    {isEncanto && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-100 text-slate-700 border border-slate-200">
+                        {currentSection.zoneName}
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    {currentSection.ring ? `Nivel / Anillo: ${currentSection.ring}` : 'Excelente visibilidad del evento'}
+                    {isEncanto
+                      ? (activeZoneMeta?.description || 'Excelente visibilidad del terreno de juego')
+                      : (MARISCAL_ZONES[currentSection.zoneName]?.description ||
+                        'Excelente visibilidad del diamante')}
                   </p>
+                  {isEncanto && activeZoneMeta?.gate && (
+                    <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md bg-purple-50 text-[10px] font-bold text-purple-800 border border-purple-200">
+                      <DoorOpen className="w-3 h-3" /> Acceso: {activeZoneMeta.gate}
+                    </span>
+                  )}
                 </div>
 
                 <div className="text-right">
                   <span className="text-[10px] text-slate-400 font-bold uppercase block">Precio</span>
-                  <span className="text-base sm:text-lg font-black text-red-900">
-                    ${getZonePrice(currentSection.zoneName || (currentSection.zoneId && zonesMap[currentSection.zoneId]?.name) || '', event)}{' '}
+                  <span
+                    className={`text-base sm:text-lg font-black ${
+                      isEncanto ? 'text-purple-950' : 'text-red-900'
+                    }`}
+                  >
+                    ${getZonePrice(currentSection.zoneName, event)}{' '}
                     <span className="text-[10px] font-normal text-slate-500">MXN</span>
                   </span>
                 </div>
@@ -588,10 +828,14 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                   <span>Disponible</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <div className="w-4 h-4 rounded-md bg-red-700 text-white flex items-center justify-center text-[9px] font-bold">
+                  <div
+                    className={`w-4 h-4 rounded-md text-white flex items-center justify-center text-[9px] font-bold ${
+                      isEncanto ? 'bg-purple-800' : 'bg-red-700'
+                    }`}
+                  >
                     ✓
                   </div>
-                  <span className="font-bold text-red-950">Seleccionado</span>
+                  <span className="font-bold text-slate-900">Seleccionado</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <div className="w-4 h-4 rounded-md bg-slate-200 border border-slate-300 text-slate-400 flex items-center justify-center text-[10px]">
@@ -601,18 +845,25 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                 </div>
               </div>
 
-              {/* Cuadrícula de Asientos por Fila (A, B, C) */}
+              {/* Cuadrícula de Asientos por Fila */}
               <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                {['A', 'B', 'C'].map((rowLabel) => {
+                {(isEncanto
+                  ? Array.from(
+                      { length: currentSection.rows || 3 },
+                      (_, rIdx) => String.fromCharCode(65 + rIdx)
+                    )
+                  : ['A', 'B', 'C']
+                ).map((rowLabel) => {
                   const rowSeats = currentSectionSeats.filter((s) => s.rowLabel === rowLabel);
-                  const seatsList = Array.from({ length: 10 }, (_, idx) => {
+                  const seatsPerRow = isEncanto ? currentSection.seatsPerRow || 10 : 10;
+                  const seatsList = Array.from({ length: seatsPerRow }, (_, idx) => {
                     const seatNum = idx + 1;
                     const existingSeat = rowSeats.find((s) => s.seatNumber === seatNum);
                     if (existingSeat) {
                       return existingSeat;
                     }
                     return {
-                      id: `${event.id}_${currentSection.sectionNumber}_${rowLabel}_${seatNum}`,
+                      id: `${event.id}_${currentSection.sectionNumber.replace(/\s+/g, '_')}_${rowLabel}_${seatNum}`,
                       eventId: event.id,
                       sectionId: currentSection.id,
                       sectionNumber: currentSection.sectionNumber,
@@ -629,7 +880,12 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                         {rowLabel}
                       </span>
 
-                      <div className="grid grid-cols-10 gap-1.5 flex-1">
+                      <div
+                        className="grid gap-1.5 flex-1"
+                        style={{
+                          gridTemplateColumns: `repeat(${seatsPerRow}, minmax(0, 1fr))`,
+                        }}
+                      >
                         {seatsList.map((seat) => {
                           const isSelected = selectedSeats.some((s) => s.seatId === seat.id);
                           const isSold = seat.status === 'vendido';
@@ -647,7 +903,9 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                                 isSold
                                   ? 'bg-slate-200 border border-slate-300 text-slate-400 cursor-not-allowed line-through'
                                   : isSelected
-                                  ? 'bg-red-700 text-white shadow-xs scale-105 ring-2 ring-red-500'
+                                  ? isEncanto
+                                    ? 'bg-purple-800 text-white shadow-xs scale-105 ring-2 ring-purple-600'
+                                    : 'bg-red-700 text-white shadow-xs scale-105 ring-2 ring-red-500'
                                   : 'bg-white hover:bg-emerald-50 text-slate-800 border-2 border-emerald-500 hover:scale-105'
                               }`}
                             >
@@ -666,10 +924,17 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                   Disponibles en Sec. {currentSection.sectionNumber}:{' '}
                   <strong className="text-slate-800">
                     {currentSectionSeats.filter((s) => s.status === 'disponible').length} de{' '}
-                    {currentSectionSeats.length || 30}
+                    {isEncanto
+                      ? currentSectionSeats.length ||
+                        (currentSection.rows || 3) * (currentSection.seatsPerRow || 10)
+                      : currentSectionSeats.length || 30}
                   </strong>
                 </span>
-                <span className="text-[11px] text-slate-400">Filas A a la C (10 asientos c/u)</span>
+                <span className="text-[11px] text-slate-400">
+                  {isEncanto
+                    ? `${currentSection.rows || 3} filas × ${currentSection.seatsPerRow || 10} asientos`
+                    : 'Filas A a la C (10 asientos c/u)'}
+                </span>
               </div>
             </div>
           ) : (
@@ -695,7 +960,7 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-bold text-slate-700 flex items-center gap-1">
-                  <Users className="w-3.5 h-3.5 text-red-600" />
+                  <Users className={`w-3.5 h-3.5 ${isEncanto ? 'text-purple-600' : 'text-red-600'}`} />
                   Asientos Seleccionados ({selectedSeats.length})
                 </span>
                 {selectedSeats.length > 0 && (
@@ -762,11 +1027,13 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                   onClick={() => setPaymentMethod('Tarjeta en Línea')}
                   className={`p-2.5 rounded-xl border text-left transition-all flex items-center gap-2 cursor-pointer ${
                     paymentMethod === 'Tarjeta en Línea'
-                      ? 'border-red-600 bg-red-50 text-red-950 font-bold ring-1 ring-red-600'
+                      ? isEncanto
+                        ? 'border-purple-600 bg-purple-50 text-purple-950 font-bold ring-1 ring-purple-600'
+                        : 'border-red-600 bg-red-50 text-red-950 font-bold ring-1 ring-red-600'
                       : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
                   }`}
                 >
-                  <CreditCard className="w-4 h-4 text-red-600 shrink-0" />
+                  <CreditCard className={`w-4 h-4 ${isEncanto ? 'text-purple-600' : 'text-red-600'} shrink-0`} />
                   <span className="text-xs truncate">Tarjeta en Línea</span>
                 </button>
               </div>
@@ -782,7 +1049,7 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                   <span className="text-xs text-slate-500">Impuestos y cargos incluidos</span>
                 </div>
                 <div className="text-right">
-                  <span className="text-xl sm:text-2xl font-black text-red-900">
+                  <span className={`text-xl sm:text-2xl font-black ${isEncanto ? 'text-purple-950' : 'text-red-900'}`}>
                     ${totalAmount} <span className="text-xs font-normal text-slate-500">MXN</span>
                   </span>
                 </div>
@@ -793,7 +1060,11 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                 type="button"
                 onClick={handleConfirmPurchase}
                 disabled={purchasing || selectedSeats.length === 0}
-                className="w-full py-3.5 bg-red-700 hover:bg-red-800 disabled:opacity-50 text-white font-black text-xs sm:text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                className={`w-full py-3.5 ${
+                  isEncanto
+                    ? 'bg-purple-900 hover:bg-purple-950'
+                    : 'bg-red-700 hover:bg-red-800'
+                } disabled:opacity-50 text-white font-black text-xs sm:text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer`}
               >
                 {purchasing ? (
                   'Verificando asientos en tiempo real...'
@@ -810,7 +1081,7 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
 
               <p className="text-[10px] text-center text-slate-400 flex items-center justify-center gap-1">
                 <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                Transacción atómica protegida con Firestore • Garantía de no doble venta
+                Transacción atómica protegida • Asignación oficial de butacas
               </p>
             </div>
           </div>

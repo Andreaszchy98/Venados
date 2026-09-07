@@ -67,6 +67,22 @@ export const STADIUM_STORE_PROFILES: Record<string, StadiumStoreProfile> = {
     membershipSubtitle: 'Abono de Temporada Oficial • Estadio Chevron',
     membershipBadge: 'Club Toros de Tijuana',
   },
+  'venue-encanto': {
+    venueId: 'venue-encanto',
+    stadiumName: 'Estadio El Encanto',
+    teamName: 'Mazatlán F.C.',
+    storeName: 'Tienda Oficial Mazatlán F.C.',
+    badgeLabel: 'Tienda Oficial Mazatlán F.C.',
+    headline: 'Colección Cañonera Oficial',
+    tagline: 'Viste los colores morado y negro de los Cañoneros en la Liga MX. Envíos nacionales o retiro express en la tienda del Estadio El Encanto.',
+    pickupLocation: 'Tienda Oficial Estadio El Encanto (Mazatlán, Sin.)',
+    headerGradient: 'from-slate-950 via-purple-950 to-slate-900 border-purple-900/40',
+    accentBadgeClass: 'bg-purple-900/70 text-purple-200 border-purple-700/40',
+    buttonClass: 'bg-purple-800 hover:bg-purple-700 text-white',
+    membershipName: 'Bono Cañonero',
+    membershipSubtitle: 'Abono de Temporada Oficial • Estadio El Encanto',
+    membershipBadge: 'Club Mazatlán F.C.',
+  },
 };
 
 /**
