@@ -140,21 +140,11 @@ export function getZonePrice(zoneName: string, event?: VenueEvent | null): numbe
   return MARISCAL_ZONES[zoneName]?.defaultPrice || 350;
 }
 
+import { getMariscalSectionRingAndOrder } from './seatMapMigration';
+
 /**
  * Generador de las definiciones oficiales del Estadio Teodoro Mariscal
- * tomando la data oficial de venta de boletos del club:
- *
- * Zona            | Secciones
- * ------------------------------------------------------------
- * Deluxe Supreme  | 1-12 (central baja, junto al home)
- * Diamante        | 101, 108, 201, 208
- * Platino         | 104-107, 204-207 (las más cercanas al home)
- * Oro             | 102-103, 202-203
- * Sky Plus        | 109-117, 209-217
- * Plus            | 118-121, 218-221
- * Fan             | 122-127, 222-227
- * Fan Plus        | 128-133, 228-233
- * Sky             | 301-316
+ * tomando la data oficial de venta de boletos del club con rings y zonas mapeadas:
  */
 export function buildMariscalSectionsData(venueId: string): Omit<SeatSection, 'id'>[] {
   const sections: Omit<SeatSection, 'id'>[] = [];
@@ -166,68 +156,76 @@ export function buildMariscalSectionsData(venueId: string): Omit<SeatSection, 'i
     seatsPerRow: 10,
   };
 
-  // 1. Deluxe Supreme: 1 a 12 (central baja, junto al home)
-  for (let i = 1; i <= 12; i++) {
+  const addSec = (num: string, zone: string) => {
+    const { ring, order, zoneId } = getMariscalSectionRingAndOrder(num, zone);
     sections.push({
       ...defaultProps,
-      sectionNumber: String(i),
-      zoneName: 'Deluxe Supreme',
+      sectionNumber: num,
+      zoneName: zone,
+      zoneId,
+      ring,
+      order,
     });
+  };
+
+  // 1. Deluxe Supreme: 1 a 12 (central baja, junto al home)
+  for (let i = 1; i <= 12; i++) {
+    addSec(String(i), 'Deluxe Supreme');
   }
 
-  // 2. Platino: 104-107, 204-207 (las más cercanas al home en niveles 1 y 2)
+  // 2. Platino: 104-107, 204-207
   for (let i = 104; i <= 107; i++) {
-    sections.push({ ...defaultProps, sectionNumber: String(i), zoneName: 'Platino' });
+    addSec(String(i), 'Platino');
   }
   for (let i = 204; i <= 207; i++) {
-    sections.push({ ...defaultProps, sectionNumber: String(i), zoneName: 'Platino' });
+    addSec(String(i), 'Platino');
   }
 
   // 3. Oro: 102-103, 202-203
   for (const s of [102, 103, 202, 203]) {
-    sections.push({ ...defaultProps, sectionNumber: String(s), zoneName: 'Oro' });
+    addSec(String(s), 'Oro');
   }
 
   // 4. Diamante: 101, 108, 201, 208
   for (const s of [101, 108, 201, 208]) {
-    sections.push({ ...defaultProps, sectionNumber: String(s), zoneName: 'Diamante' });
+    addSec(String(s), 'Diamante');
   }
 
   // 5. Sky Plus: 109-117, 209-217
   for (let i = 109; i <= 117; i++) {
-    sections.push({ ...defaultProps, sectionNumber: String(i), zoneName: 'Sky Plus' });
+    addSec(String(i), 'Sky Plus');
   }
   for (let i = 209; i <= 217; i++) {
-    sections.push({ ...defaultProps, sectionNumber: String(i), zoneName: 'Sky Plus' });
+    addSec(String(i), 'Sky Plus');
   }
 
   // 6. Plus: 118-121, 218-221
   for (let i = 118; i <= 121; i++) {
-    sections.push({ ...defaultProps, sectionNumber: String(i), zoneName: 'Plus' });
+    addSec(String(i), 'Plus');
   }
   for (let i = 218; i <= 221; i++) {
-    sections.push({ ...defaultProps, sectionNumber: String(i), zoneName: 'Plus' });
+    addSec(String(i), 'Plus');
   }
 
   // 7. Fan: 122-127, 222-227
   for (let i = 122; i <= 127; i++) {
-    sections.push({ ...defaultProps, sectionNumber: String(i), zoneName: 'Fan' });
+    addSec(String(i), 'Fan');
   }
   for (let i = 222; i <= 227; i++) {
-    sections.push({ ...defaultProps, sectionNumber: String(i), zoneName: 'Fan' });
+    addSec(String(i), 'Fan');
   }
 
   // 8. Fan Plus: 128-133, 228-233
   for (let i = 128; i <= 133; i++) {
-    sections.push({ ...defaultProps, sectionNumber: String(i), zoneName: 'Fan Plus' });
+    addSec(String(i), 'Fan Plus');
   }
   for (let i = 228; i <= 233; i++) {
-    sections.push({ ...defaultProps, sectionNumber: String(i), zoneName: 'Fan Plus' });
+    addSec(String(i), 'Fan Plus');
   }
 
   // 9. Sky: 301-316 (anillo superior)
   for (let i = 301; i <= 316; i++) {
-    sections.push({ ...defaultProps, sectionNumber: String(i), zoneName: 'Sky' });
+    addSec(String(i), 'Sky');
   }
 
   return sections;
@@ -279,14 +277,20 @@ export async function getSeatSectionsForVenue(venueId: string = DEFAULT_VENUE_ID
     const snap = await getDocs(q);
 
     if (snap.empty) {
-      return await seedMariscalSeatMap(venueId);
+      if (venueId === DEFAULT_VENUE_ID) {
+        return await seedMariscalSeatMap(venueId);
+      }
+      return [];
     }
 
     return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<SeatSection, 'id'>) }));
   } catch (err) {
     console.warn('Error fetching seat sections:', err);
-    const localData = buildMariscalSectionsData(venueId);
-    return localData.map((d) => ({ id: `${venueId}_sec_${d.sectionNumber}`, ...d }));
+    if (venueId === DEFAULT_VENUE_ID) {
+      const localData = buildMariscalSectionsData(venueId);
+      return localData.map((d) => ({ id: `${venueId}_sec_${d.sectionNumber}`, ...d }));
+    }
+    return [];
   }
 }
 
@@ -303,8 +307,12 @@ export function subscribeSeatSections(
     q,
     (snap) => {
       if (snap.empty) {
-        const localData = buildMariscalSectionsData(venueId);
-        callback(localData.map((d) => ({ id: `${venueId}_sec_${d.sectionNumber}`, ...d })));
+        if (venueId === DEFAULT_VENUE_ID) {
+          const localData = buildMariscalSectionsData(venueId);
+          callback(localData.map((d) => ({ id: `${venueId}_sec_${d.sectionNumber}`, ...d })));
+        } else {
+          callback([]);
+        }
       } else {
         const sections = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<SeatSection, 'id'>) }));
         callback(sections);
@@ -575,3 +583,149 @@ export async function purchaseSeatsTransaction(params: PurchaseSeatsParams): Pro
 
   return result;
 }
+
+/**
+ * Crea una nueva sección física (SeatSection) para una sede
+ */
+export async function createSeatSection(
+  venueId: string,
+  sectionData: Omit<SeatSection, 'id' | 'venueId'>
+): Promise<SeatSection> {
+  const docId = `${venueId}_sec_${sectionData.sectionNumber.trim().replace(/\s+/g, '_')}`;
+  const docRef = doc(db, 'seatSections', docId);
+
+  const newSection: SeatSection = {
+    id: docId,
+    venueId,
+    sectionNumber: sectionData.sectionNumber.trim(),
+    zoneId: sectionData.zoneId,
+    zoneName: sectionData.zoneName,
+    ring: sectionData.ring.trim() || 'Principal',
+    order: Number(sectionData.order) || 1,
+    totalSeats: Number(sectionData.totalSeats) || 30,
+    rows: Number(sectionData.rows) || 3,
+    seatsPerRow: Number(sectionData.seatsPerRow) || 10,
+  };
+
+  await setDoc(docRef, newSection);
+  return newSection;
+}
+
+export interface BulkSeatSectionsParams {
+  startNum: number;
+  endNum: number;
+  prefix?: string;
+  suffix?: string;
+  zoneId: string;
+  zoneName?: string;
+  ring: string;
+  totalSeats: number;
+  rows: number;
+  seatsPerRow: number;
+  startingOrder?: number;
+}
+
+/**
+ * Crea un rango de secciones en lote (Bulk) en Firestore
+ */
+export async function createBulkSeatSections(
+  venueId: string,
+  params: BulkSeatSectionsParams
+): Promise<SeatSection[]> {
+  const {
+    startNum,
+    endNum,
+    prefix = '',
+    suffix = '',
+    zoneId,
+    zoneName,
+    ring,
+    totalSeats,
+    rows,
+    seatsPerRow,
+    startingOrder = 1,
+  } = params;
+
+  const min = Math.min(startNum, endNum);
+  const max = Math.max(startNum, endNum);
+  const created: SeatSection[] = [];
+
+  const BATCH_SIZE = 400;
+  let batch = writeBatch(db);
+  let batchCount = 0;
+  let orderIndex = startingOrder;
+
+  for (let n = min; n <= max; n++) {
+    const secNum = `${prefix}${n}${suffix}`;
+    const docId = `${venueId}_sec_${secNum.replace(/\s+/g, '_')}`;
+    const docRef = doc(db, 'seatSections', docId);
+
+    const section: SeatSection = {
+      id: docId,
+      venueId,
+      sectionNumber: secNum,
+      zoneId,
+      zoneName,
+      ring: ring.trim() || 'Principal',
+      order: orderIndex++,
+      totalSeats: Number(totalSeats) || 30,
+      rows: Number(rows) || 3,
+      seatsPerRow: Number(seatsPerRow) || 10,
+    };
+
+    batch.set(docRef, section);
+    created.push(section);
+    batchCount++;
+
+    if (batchCount >= BATCH_SIZE) {
+      await batch.commit();
+      batch = writeBatch(db);
+      batchCount = 0;
+    }
+  }
+
+  if (batchCount > 0) {
+    await batch.commit();
+  }
+
+  return created;
+}
+
+/**
+ * Actualiza una sección física existente
+ */
+export async function updateSeatSection(
+  sectionId: string,
+  updates: Partial<Omit<SeatSection, 'id' | 'venueId'>>
+): Promise<void> {
+  const docRef = doc(db, 'seatSections', sectionId);
+  await setDoc(docRef, { ...updates, updatedAt: new Date().toISOString() }, { merge: true });
+}
+
+/**
+ * Elimina una sección física de una sede
+ */
+export async function deleteSeatSection(sectionId: string): Promise<void> {
+  const { deleteDoc } = await import('firebase/firestore');
+  const docRef = doc(db, 'seatSections', sectionId);
+  await deleteDoc(docRef);
+}
+
+/**
+ * Elimina todas las secciones pertenecientes a un ring específico
+ */
+export async function deleteSectionsByRing(venueId: string, ring: string): Promise<number> {
+  const q = query(
+    collection(db, 'seatSections'),
+    where('venueId', '==', venueId),
+    where('ring', '==', ring)
+  );
+  const snap = await getDocs(q);
+  if (snap.empty) return 0;
+
+  const batch = writeBatch(db);
+  snap.docs.forEach((d) => batch.delete(d.ref));
+  await batch.commit();
+  return snap.size;
+}
+

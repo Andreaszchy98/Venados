@@ -8,7 +8,7 @@ export const DEFAULT_EVENT_ID = 'event-temporada-2026';
 
 export const DEFAULT_VENUES: Venue[] = [
   {
-    id: DEFAULT_VENUE_ID,
+    id: DEFAULT_VENUE_ID, // 'venue-teodoro-mariscal'
     name: 'Estadio Teodoro Mariscal',
     teamName: 'Venados de Mazatlán',
     storeName: 'Tienda Oficial Venados Store',
@@ -18,32 +18,21 @@ export const DEFAULT_VENUES: Venue[] = [
     active: true,
     storePromoTitle: 'Tienda Oficial Venados Store',
     storePromoSubtitle: 'Jerseys originales de juego, gorras New Era y coleccionables oficiales',
+    layoutShape: 'baseball_horseshoe',
     createdAt: '2026-01-01T00:00:00.000Z',
   },
   {
-    id: 'venue-tomateros',
-    name: 'Estadio Tomateros',
-    teamName: 'Tomateros de Culiacán',
-    storeName: 'Tienda Oficial Tomateros BeisShop',
-    city: 'Culiacán',
+    id: 'venue-encanto',
+    name: 'Estadio Encanto',
+    teamName: '', // TODO: confirmar dato real (completar si aplica un equipo/marca específica, o dejar vacío si es multiuso)
+    storeName: 'Tienda Oficial Encanto',
+    city: 'Mazatlán',
     state: 'Sinaloa',
-    address: 'Constitución y Jesús Andrade, Primer Cuadro, 80000 Culiacán, Sin.',
+    address: '', // TODO: confirmar dato real (pendiente de confirmar la dirección exacta)
     active: true,
-    storePromoTitle: 'Tienda Oficial Tomateros BeisShop',
-    storePromoSubtitle: 'Colección Nación Guinda 2026, jerseys de temporada y gorras exclusivas',
-    createdAt: '2026-01-01T00:00:00.000Z',
-  },
-  {
-    id: 'venue-chevron',
-    name: 'Estadio Chevron',
-    teamName: 'Toros de Tijuana',
-    storeName: 'Tienda Oficial Toros Shop',
-    city: 'Tijuana',
-    state: 'Baja California',
-    address: 'Misión de Santo Tomás s/n, El Capistrano, 22223 Tijuana, B.C.',
-    active: true,
-    storePromoTitle: 'Tienda Oficial Toros Shop',
-    storePromoSubtitle: 'Equipamiento Toromanía, gorras de juego y souvenirs de la frontera',
+    storePromoTitle: 'Tienda Oficial Encanto',
+    storePromoSubtitle: 'Mercancía y souvenirs del recinto',
+    layoutShape: 'rectangular_bowl',
     createdAt: '2026-01-01T00:00:00.000Z',
   },
 ];
@@ -86,6 +75,11 @@ export async function ensureDefaultVenueExists(): Promise<void> {
       const venueSnap = await getDoc(venueRef);
       if (!venueSnap.exists()) {
         await setDoc(venueRef, v);
+      } else {
+        const currentData = venueSnap.data() as Partial<Venue>;
+        if (!currentData.layoutShape && v.layoutShape) {
+          await updateDoc(venueRef, { layoutShape: v.layoutShape });
+        }
       }
     }
 

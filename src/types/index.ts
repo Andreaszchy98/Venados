@@ -32,6 +32,8 @@ export interface UserProfile {
 // ==========================================
 // 0. RECINTOS & EVENTOS (VENUES & EVENTS)
 // ==========================================
+export type VenueLayoutShape = 'baseball_horseshoe' | 'rectangular_bowl' | 'fan_theater';
+
 export interface Venue {
   id: string;
   name: string;
@@ -48,6 +50,8 @@ export interface Venue {
   storePromoTitle?: string;
   storePromoSubtitle?: string;
   storePromoActive?: boolean;
+  // Motor de dibujo arquitectónico para el mapa de asientos
+  layoutShape: VenueLayoutShape;
 }
 
 export type HeroSlideType = 'event' | 'store_promo';
@@ -119,12 +123,24 @@ export interface Ticket {
   createdAt: string;
 }
 
+// Zonas de precios y categorías físicas por sede
+export interface VenueZone {
+  id: string;
+  venueId: string;
+  name: string; // "Cabecera Superior", "Diamante", "Palcos", etc.
+  color: string; // código hex, para pintar la sección en el mapa (#0284C7, etc.)
+  order: number; // orden de aparición en listados/leyenda
+}
+
 // Mapa físico — pertenece a la SEDE, no cambia entre eventos
 export interface SeatSection {
   id: string;
   venueId: string;
   sectionNumber: string; // "101", "227", etc.
-  zoneName: string; // "Diamante", "Platino", "Sky Plus", "Oro", "Plus", "Sky", "Fan", "Fan Plus", "Deluxe Supreme"
+  zoneId: string; // referencia a VenueZone en vez de texto libre
+  zoneName?: string; // compatibilidad retroactiva con tickets y vistas existentes
+  ring: string; // agrupador de nivel/anillo, ej. "Nivel 1", "Nivel 2", "Palcos", "Tiro de Esquina"
+  order: number; // posición dentro de su ring, para distribuir en el mapa consistentemente
   totalSeats: number; // capacidad total de la sección (ej. 30)
   rows: number; // filas dentro de la sección, para poder generar la cuadrícula de asientos
   seatsPerRow: number;

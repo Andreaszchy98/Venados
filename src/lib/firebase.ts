@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { initializeFirestore, getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { initializeFirestore, getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import firebaseConfigData from '../../firebase-applet-config.json';
 
@@ -16,44 +16,24 @@ const firebaseConfig = {
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 const databaseId = firebaseConfigData.firestoreDatabaseId || undefined;
 
-// Inicializar Firestore con experimentalForceLongPolling para máxima estabilidad en contenedores y redes restringidas
+// Inicializar Firestore con auto-detección de long-polling para máxima estabilidad y compatibilidad
 let firestoreDb;
 try {
   firestoreDb = initializeFirestore(
     app,
     {
-      experimentalForceLongPolling: true,
+      experimentalAutoDetectLongPolling: true,
     },
     databaseId
   );
 } catch {
-  firestoreDb = getFirestore(app, databaseId);
+  firestoreDb = databaseId ? getFirestore(app, databaseId) : getFirestore(app);
 }
 
 export const db = firestoreDb;
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
-
-// Verificación silenciosa y no bloqueante de conexión para permitir fallback offline
-async function checkFirestoreConnection() {
-  try {
-    const testDocRef = doc(db, 'test', 'connection');
-    await getDocFromServer(testDocRef);
-  } catch (err: any) {
-    // Si falla temporalmente por latencia inicial, Firestore opera de forma transparente en modo offline/caché
-    if (err?.code === 'unavailable' || err?.message?.includes('offline')) {
-      // Manejado silenciosamente, la aplicación tiene fallbacks offline completos
-    }
-  }
-}
-
-if (typeof window !== 'undefined') {
-  // Ejecutar verificación retardada para no saturar el inicio de la app
-  setTimeout(() => {
-    checkFirestoreConnection().catch(() => {});
-  }, 2000);
-}
 
 export default app;
 

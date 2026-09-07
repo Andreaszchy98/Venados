@@ -32,6 +32,8 @@ import {
   ChevronDown,
   Users,
   Grid,
+  QrCode,
+  XCircle,
 } from 'lucide-react';
 
 interface MisBoletosProps {
@@ -54,7 +56,7 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loadingTickets, setLoadingTickets] = useState(true);
   const [filter, setFilter] = useState<'todos' | 'activo' | 'usado'>('todos');
-  const [venueFilter, setVenueFilter] = useState<'todas' | 'sede_actual'>('todas');
+  const [ticketVenueFilter, setTicketVenueFilter] = useState<string>('todas');
 
   // Sedes disponibles
   const [venues, setVenues] = useState<Venue[]>([]);
@@ -298,11 +300,24 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
     }
   };
 
+  // Sedes dinámicas donde el usuario realmente tiene boletos registrados
+  const userTicketVenues = useMemo(() => {
+    const map = new Map<string, string>();
+    tickets.forEach((t) => {
+      const vId = t.venueId || DEFAULT_VENUE_ID;
+      const vName = t.stadium || venues.find((v) => v.id === vId)?.name || 'Estadio Deportivo';
+      if (!map.has(vId)) {
+        map.set(vId, vName);
+      }
+    });
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [tickets, venues]);
+
   const filteredTickets = tickets.filter((t) => {
     const statusMatch = filter === 'todos' || t.status === filter;
     if (!statusMatch) return false;
-    if (venueFilter === 'sede_actual') {
-      return (t.venueId || DEFAULT_VENUE_ID) === selectedVenueId;
+    if (ticketVenueFilter !== 'todas') {
+      return (t.venueId || DEFAULT_VENUE_ID) === ticketVenueFilter;
     }
     return true;
   });
@@ -315,6 +330,7 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
       tickets: Ticket[];
       matchTitle: string;
       matchDate: string;
+      matchTime?: string;
       stadium: string;
     }[] = [];
 
@@ -340,6 +356,7 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
           tickets: tList,
           matchTitle: tList[0]?.matchTitle || '',
           matchDate: tList[0]?.matchDate || '',
+          matchTime: tList[0]?.matchTime,
           stadium: tList[0]?.stadium || '',
         });
       } else {
@@ -360,49 +377,63 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
         </div>
       )}
 
-      {/* Selector de Pestañas Superior: Mis Boletos vs Comprar */}
+      {/* Encabezado: Título con contador informativo y Botón de Acción Primario */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-3xl border border-slate-200 shadow-xs">
         <div>
-          <h2 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2 tracking-tight">
-            <TicketIcon className="w-5 h-5 text-red-700" />
-            <span>{t('tickets.title', 'Boletos & Entradas al Estadio')}</span>
-          </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            {t('tickets.qr_hint', 'Acceso digital con código QR de seguridad y compra de entradas para partidos programados.')}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h2 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2 tracking-tight">
+              <TicketIcon className="w-5 h-5 text-red-700" />
+              <span>{activeTab === 'comprar' ? 'Comprar Boletos para Partidos' : 'Mis Boletos Digitales'}</span>
+            </h2>
+
+            {/* Contador informativo discreto (no compite visualmente con el botón de acción) */}
+            <span
+              id="info-counter-mis-boletos"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200"
+              title="Cantidad total de boletos registrados en tu cuenta"
+            >
+              <TicketIcon className="w-3.5 h-3.5 text-slate-400" />
+              <span>{tickets.length} {tickets.length === 1 ? 'boleto registrado' : 'boletos registrados'}</span>
+            </span>
+          </div>
+
+          <p className="text-xs text-slate-500 mt-1">
+            {activeTab === 'comprar'
+              ? 'Selecciona partido, zona y butacas para adquirir nuevas entradas con venta abierta.'
+              : 'Pases de acceso digital con código QR de torniquete para ingresar a los partidos.'}
           </p>
         </div>
 
-        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200 text-xs font-bold">
-          <button
-            id="tab-mis-boletos"
-            onClick={() => setActiveTab('mis-boletos')}
-            className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'mis-boletos'
-                ? 'bg-white text-red-800 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            {t('aficionado.tab.tickets', 'Mis Boletos')} ({tickets.length})
-          </button>
-          <button
-            id="tab-comprar-boletos"
-            onClick={() => setActiveTab('comprar')}
-            className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeTab === 'comprar'
-                ? 'bg-red-700 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <PlusCircle className="w-3.5 h-3.5" />
-            <span>{t('tickets.buy_btn', 'Comprar Boleto')}</span>
-          </button>
+        {/* Botón de acción con estilo primario de marca */}
+        <div>
+          {activeTab === 'mis-boletos' ? (
+            <button
+              id="btn-action-comprar-boletos"
+              type="button"
+              onClick={() => setActiveTab('comprar')}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-red-700 hover:bg-red-800 text-white font-black text-xs sm:text-sm rounded-xl shadow-sm hover:shadow-md transition-all cursor-pointer shrink-0"
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>Comprar Boletos</span>
+            </button>
+          ) : (
+            <button
+              id="btn-action-volver-mis-boletos"
+              type="button"
+              onClick={() => setActiveTab('mis-boletos')}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs sm:text-sm rounded-xl border border-slate-200 transition-all cursor-pointer shrink-0"
+            >
+              <TicketIcon className="w-4 h-4 text-red-700" />
+              <span>Ver Mis Boletos</span>
+            </button>
+          )}
         </div>
       </div>
 
       {/* PESTAÑA 1: MIS BOLETOS DIGITALES */}
       {activeTab === 'mis-boletos' && (
         <div className="space-y-4">
-          {/* Barra de Filtros */}
+          {/* Barra de Filtros: Estado + Filtro desplegable de Sedes */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs">
             <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200 text-xs">
               <button
@@ -440,31 +471,30 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
               </button>
             </div>
 
-            {/* Filtro por sede */}
-            <div className="inline-flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs">
-              <span className="text-[11px] font-semibold text-slate-500 pl-2 pr-1">Filtrar Sede:</span>
-              <button
-                id="filter-venue-all"
-                onClick={() => setVenueFilter('todas')}
-                className={`px-2.5 py-1 font-medium rounded-lg transition-colors cursor-pointer ${
-                  venueFilter === 'todas'
-                    ? 'bg-white text-red-700 shadow-xs font-semibold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Todas las sedes
-              </button>
-              <button
-                id="filter-venue-current"
-                onClick={() => setVenueFilter('sede_actual')}
-                className={`px-2.5 py-1 font-medium rounded-lg transition-colors cursor-pointer ${
-                  venueFilter === 'sede_actual'
-                    ? 'bg-white text-red-700 shadow-xs font-semibold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {venues.find((v) => v.id === selectedVenueId)?.name || 'Sede actual'}
-              </button>
+            {/* Filtro por sede como <select> simple con etiqueta "Ver boletos de:" */}
+            <div className="flex items-center gap-2 text-xs">
+              <label htmlFor="ticket-venue-filter-select" className="font-bold text-slate-600 shrink-0">
+                Ver boletos de:
+              </label>
+              <div className="relative min-w-[170px] sm:min-w-[220px]">
+                <select
+                  id="ticket-venue-filter-select"
+                  value={ticketVenueFilter}
+                  onChange={(e) => setTicketVenueFilter(e.target.value)}
+                  className="w-full pl-3 pr-8 py-1.5 bg-slate-100 hover:bg-slate-200/70 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-600 appearance-none cursor-pointer transition-colors"
+                >
+                  <option value="todas">Todas las sedes ({tickets.length})</option>
+                  {userTicketVenues.map((v) => {
+                    const count = tickets.filter((t) => (t.venueId || DEFAULT_VENUE_ID) === v.id).length;
+                    return (
+                      <option key={v.id} value={v.id}>
+                        {v.name} ({count})
+                      </option>
+                    );
+                  })}
+                </select>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
             </div>
           </div>
 
@@ -499,26 +529,117 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
               {groupedTickets.groups.map((grp) => (
                 <div
                   key={grp.key}
-                  className="bg-slate-50/80 p-4 rounded-3xl border border-slate-200 space-y-3 shadow-xs"
+                  id={`joint-purchase-group-${grp.purchaseId}`}
+                  className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200 shadow-xs overflow-hidden"
                 >
-                  <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-red-600"></span>
-                      <span className="font-black text-slate-900">
-                        Compra Conjunta ({grp.tickets.length} entradas)
+                  {/* Encabezado Único del Evento para todo el grupo */}
+                  <div className="bg-gradient-to-r from-slate-50 to-white p-4 sm:p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-black uppercase tracking-wider bg-red-700 text-white">
+                          🎟️ Compra Conjunta ({grp.tickets.length} asientos)
+                        </span>
+                        <span className="font-mono text-xs font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                          Ref: #{grp.purchaseId.slice(-7)}
+                        </span>
+                      </div>
+                      <h3 className="text-base sm:text-lg font-black text-slate-900 leading-tight">
+                        {grp.matchTitle}
+                      </h3>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+                        <span className="inline-flex items-center gap-1.5 font-semibold text-slate-700">
+                          <Calendar className="w-3.5 h-3.5 text-red-700" />
+                          {grp.matchDate} {grp.matchTime && `• ${grp.matchTime}`}
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 text-slate-600">
+                          <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                          {grp.stadium}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center md:flex-col md:items-end justify-between border-t md:border-t-0 pt-2 md:pt-0 border-slate-100">
+                      <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                        Total compra
                       </span>
-                      <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 font-mono text-[11px] text-slate-600 font-bold">
-                        Ref: #{grp.purchaseId.slice(-7)}
+                      <span className="text-base sm:text-lg font-black text-slate-900">
+                        ${grp.tickets.reduce((sum, t) => sum + (t.price || 0), 0)} MXN
                       </span>
                     </div>
-                    <span className="text-slate-500 font-semibold">
-                      {grp.matchTitle} • Total: ${grp.tickets.reduce((sum, t) => sum + (t.price || 0), 0)} MXN
-                    </span>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-3">
-                    {grp.tickets.map((ticket) => (
-                      <TicketCard key={ticket.id} ticket={ticket} />
+                  {/* Listado Compacto de Asientos del Grupo (sin repetir datos del partido) */}
+                  <div className="divide-y divide-slate-100 p-2 sm:p-4">
+                    {grp.tickets.map((ticket, idx) => (
+                      <div
+                        key={ticket.id}
+                        id={`joint-seat-row-${ticket.id}`}
+                        className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/70 rounded-xl transition-colors"
+                      >
+                        {/* Ubicación del asiento: Zona, Fila, Butaca y Precio */}
+                        <div className="flex items-center gap-3">
+                          <div className="w-7 h-7 rounded-lg bg-red-50 text-red-700 font-black text-xs flex items-center justify-center shrink-0">
+                            #{idx + 1}
+                          </div>
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs sm:text-sm font-bold text-slate-900">
+                                {ticket.section}
+                              </span>
+                              <span className="text-slate-300">•</span>
+                              <span className="text-xs text-slate-600">
+                                {ticket.row}
+                              </span>
+                              <span className="text-slate-300">•</span>
+                              <span className="text-xs font-black text-red-700">
+                                {ticket.seat}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                              <span>Precio: <strong className="text-slate-800">${ticket.price} MXN</strong></span>
+                              {ticket.gate && (
+                                <>
+                                  <span className="text-slate-300">•</span>
+                                  <span>Puerta: <strong className="text-slate-700">{ticket.gate}</strong></span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Estado y QR individual para torniquete */}
+                        <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                          {ticket.status === 'activo' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              Válido
+                            </span>
+                          ) : ticket.status === 'usado' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600">
+                              <Clock className="w-3 h-3 text-slate-500" />
+                              Usado
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-100 text-red-700">
+                              <XCircle className="w-3 h-3 text-red-600" />
+                              Cancelado
+                            </span>
+                          )}
+
+                          {/* Código QR individual del asiento para torniquete */}
+                          <div className="flex items-center gap-2 bg-slate-50 p-1.5 pr-2.5 rounded-xl border border-slate-200">
+                            <div className="p-1 bg-white rounded border border-slate-200 shadow-2xs">
+                              <QrCode className="w-7 h-7 text-slate-900" />
+                            </div>
+                            <div className="text-left">
+                              <span className="text-[10px] font-mono block font-bold text-slate-700 leading-tight">
+                                {ticket.qrId || ticket.id.slice(0, 8)}
+                              </span>
+                              <span className="text-[9px] text-slate-400 block">Torniquete</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>

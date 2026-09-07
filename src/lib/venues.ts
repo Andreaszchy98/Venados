@@ -106,6 +106,7 @@ export async function createVenue(venueData: Omit<Venue, 'id' | 'createdAt'> & {
       state: venueData.state,
       address: venueData.address,
       active: venueData.active !== undefined ? venueData.active : true,
+      layoutShape: venueData.layoutShape || 'baseball_horseshoe',
       createdAt: now,
     };
     await setDoc(docRef, sanitizeFirestoreData(newVenue));

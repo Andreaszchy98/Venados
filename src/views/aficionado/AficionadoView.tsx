@@ -127,9 +127,9 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
   }, [pendingEventId, initialTab]);
 
   return (
-    <div className="space-y-6">
-      {/* Saludo con selector de sede integrado al lado del nombre y pestañas de navegación */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-3 border-b border-slate-200">
+    <div className="space-y-6 pb-24">
+      {/* Saludo con selector de sede integrado al lado del nombre */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-200">
         <div>
           <div className="flex flex-wrap items-center gap-2.5">
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-1.5">
@@ -167,79 +167,9 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
             {t('aficionado.tagline', 'Portal de Experiencia del Aficionado • Boletos, eventos, consumos y tienda en tu sede')}
           </p>
         </div>
-
-        {/* Pestañas de Navegación del Aficionado */}
-        <div className="flex items-center gap-1.5 overflow-x-auto p-1 bg-slate-200/90 rounded-2xl border border-slate-300 text-xs font-semibold scrollbar-none">
-          <button
-            id="tab-aficionado-boletos"
-            onClick={() => setActiveTab('boletos')}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition-all shrink-0 cursor-pointer ${
-              activeTab === 'boletos'
-                ? 'bg-white text-red-800 shadow-xs font-bold'
-                : 'text-slate-700 hover:text-slate-900'
-            }`}
-          >
-            <Ticket className="w-4 h-4 text-red-700" />
-            {t('aficionado.tab.tickets', 'Mis Boletos')}
-          </button>
-
-          <button
-            id="tab-aficionado-tienda"
-            onClick={() => setActiveTab('tienda')}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition-all shrink-0 cursor-pointer ${
-              activeTab === 'tienda'
-                ? 'bg-white text-red-800 shadow-xs font-bold'
-                : 'text-slate-700 hover:text-slate-900'
-            }`}
-          >
-            <ShoppingBag className="w-4 h-4 text-red-700" />
-            {t('aficionado.tab.store', 'Tienda Oficial')}
-          </button>
-
-          <button
-            id="tab-aficionado-comida"
-            onClick={() => setActiveTab('comida')}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition-all shrink-0 cursor-pointer ${
-              activeTab === 'comida'
-                ? 'bg-white text-red-800 shadow-xs font-bold'
-                : 'text-slate-700 hover:text-slate-900'
-            }`}
-          >
-            <Utensils className="w-4 h-4 text-amber-700" />
-            {t('aficionado.tab.food', 'Comida & Bebidas')}
-          </button>
-
-          <button
-            id="tab-aficionado-pedidos"
-            onClick={() => setActiveTab('pedidos')}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition-all shrink-0 cursor-pointer ${
-              activeTab === 'pedidos'
-                ? 'bg-white text-red-800 shadow-xs font-bold'
-                : 'text-slate-700 hover:text-slate-900'
-            }`}
-          >
-            <Package className="w-4 h-4 text-slate-800" />
-            {t('aficionado.tab.orders', 'Mis Pedidos')}
-          </button>
-
-          <button
-            id="tab-aficionado-membresia"
-            onClick={() => setActiveTab('membresia')}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all shrink-0 cursor-pointer ${
-              activeTab === 'membresia'
-                ? 'bg-white text-slate-800 shadow-xs font-bold'
-                : 'text-slate-400 hover:text-slate-600'
-            }`}
-            title="Módulo de membresías y abonos deshabilitado temporalmente (enlace de sede activo)"
-          >
-            <Award className="w-3.5 h-3.5 text-slate-400" />
-            <span>{t('aficionado.tab.membership', 'Membresías')}</span>
-            <span className="text-[9px] bg-slate-300 text-slate-600 font-bold px-1.5 py-0.2 rounded">Pausado</span>
-          </button>
-        </div>
       </div>
 
-      {/* Contenido de la vista según pestaña */}
+      {/* Contenido de la vista según pestaña activa */}
       {activeTab === 'boletos' && (
         <MisBoletos
           user={effectiveUser}
@@ -261,6 +191,99 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
         />
       )}
       {activeTab === 'pedidos' && <MisPedidos user={effectiveUser} />}
+
+      {/* Menú de Navegación Inferior Fijo (Estilo Cine/Retail - 4 opciones sin scroll) */}
+      <nav
+        id="aficionado-bottom-nav"
+        aria-label="Navegación principal del aficionado"
+        className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-[0_-4px_20px_rgba(0,0,0,0.07)]"
+      >
+        <div className="max-w-md mx-auto grid grid-cols-4 px-2 py-1.5 sm:py-2 text-center">
+          {/* 1. Boletos */}
+          <button
+            id="bottom-nav-boletos"
+            type="button"
+            onClick={() => setActiveTab('boletos')}
+            className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer ${
+              activeTab === 'boletos'
+                ? 'text-red-700 font-black'
+                : 'text-slate-400 hover:text-slate-600 font-medium'
+            }`}
+          >
+            <div
+              className={`p-1.5 rounded-xl transition-colors ${
+                activeTab === 'boletos' ? 'bg-red-50 text-red-700 shadow-2xs' : 'text-slate-400'
+              }`}
+            >
+              <Ticket className="w-5 h-5" />
+            </div>
+            <span className="text-[11px] leading-tight tracking-tight mt-0.5">Boletos</span>
+          </button>
+
+          {/* 2. Tienda */}
+          <button
+            id="bottom-nav-tienda"
+            type="button"
+            onClick={() => setActiveTab('tienda')}
+            className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer ${
+              activeTab === 'tienda'
+                ? 'text-red-700 font-black'
+                : 'text-slate-400 hover:text-slate-600 font-medium'
+            }`}
+          >
+            <div
+              className={`p-1.5 rounded-xl transition-colors ${
+                activeTab === 'tienda' ? 'bg-red-50 text-red-700 shadow-2xs' : 'text-slate-400'
+              }`}
+            >
+              <ShoppingBag className="w-5 h-5" />
+            </div>
+            <span className="text-[11px] leading-tight tracking-tight mt-0.5">Tienda</span>
+          </button>
+
+          {/* 3. Comida */}
+          <button
+            id="bottom-nav-comida"
+            type="button"
+            onClick={() => setActiveTab('comida')}
+            className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer ${
+              activeTab === 'comida'
+                ? 'text-red-700 font-black'
+                : 'text-slate-400 hover:text-slate-600 font-medium'
+            }`}
+          >
+            <div
+              className={`p-1.5 rounded-xl transition-colors ${
+                activeTab === 'comida' ? 'bg-red-50 text-red-700 shadow-2xs' : 'text-slate-400'
+              }`}
+            >
+              <Utensils className="w-5 h-5" />
+            </div>
+            <span className="text-[11px] leading-tight tracking-tight mt-0.5">Comida</span>
+          </button>
+
+          {/* 4. Pedidos */}
+          <button
+            id="bottom-nav-pedidos"
+            type="button"
+            onClick={() => setActiveTab('pedidos')}
+            className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer ${
+              activeTab === 'pedidos'
+                ? 'text-red-700 font-black'
+                : 'text-slate-400 hover:text-slate-600 font-medium'
+            }`}
+          >
+            <div
+              className={`p-1.5 rounded-xl transition-colors ${
+                activeTab === 'pedidos' ? 'bg-red-50 text-red-700 shadow-2xs' : 'text-slate-400'
+              }`}
+            >
+              <Package className="w-5 h-5" />
+            </div>
+            <span className="text-[11px] leading-tight tracking-tight mt-0.5">Pedidos</span>
+          </button>
+        </div>
+      </nav>
     </div>
   );
 };

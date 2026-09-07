@@ -7,6 +7,7 @@ import { LogisticaAdmin } from './LogisticaAdmin';
 import { PersonalAdmin } from './PersonalAdmin';
 import { NegociosAdmin } from './NegociosAdmin';
 import { EventsManager } from './EventsManager';
+import { VenueMapBuilder } from './VenueMapBuilder';
 import { useLanguage } from '../../context/LanguageContext';
 import {
   ShieldAlert,
@@ -18,6 +19,7 @@ import {
   Users,
   Store,
   Calendar,
+  MapPin,
 } from 'lucide-react';
 
 interface AdminViewProps {
@@ -25,7 +27,7 @@ interface AdminViewProps {
 }
 
 export const AdminView: React.FC<AdminViewProps> = ({ user }) => {
-  const [activeTab, setActiveTab] = useState<'resumen' | 'eventos' | 'ventas' | 'inventario' | 'logistica' | 'personal' | 'negocios'>('resumen');
+  const [activeTab, setActiveTab] = useState<'resumen' | 'eventos' | 'mapa' | 'ventas' | 'inventario' | 'logistica' | 'personal' | 'negocios'>('resumen');
   const { t } = useLanguage();
 
   // El superadmin NO debe tener acceso a esta vista ni a la gestión de eventos
@@ -84,6 +86,19 @@ export const AdminView: React.FC<AdminViewProps> = ({ user }) => {
           >
             <Calendar className="w-4 h-4 text-red-700" />
             {t('admin.tabs.events', 'Eventos & Partidos')}
+          </button>
+
+          <button
+            id="admin-tab-mapa"
+            onClick={() => setActiveTab('mapa')}
+            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all shrink-0 ${
+              activeTab === 'mapa'
+                ? 'bg-white text-red-800 shadow-xs font-bold'
+                : 'text-slate-700 hover:text-slate-900'
+            }`}
+          >
+            <MapPin className="w-4 h-4 text-amber-700" />
+            Mapa de Asientos
           </button>
 
           <button
@@ -155,6 +170,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ user }) => {
         <AdminOverview user={user} onNavigateTab={(tab) => setActiveTab(tab as any)} />
       )}
       {activeTab === 'eventos' && <EventsManager user={user} />}
+      {activeTab === 'mapa' && <VenueMapBuilder initialVenueId={user.venueId} />}
       {activeTab === 'negocios' && <NegociosAdmin user={user} />}
       {activeTab === 'personal' && <PersonalAdmin user={user} />}
       {activeTab === 'ventas' && <VentasAdmin user={user} />}

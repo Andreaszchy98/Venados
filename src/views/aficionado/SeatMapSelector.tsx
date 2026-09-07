@@ -1,5 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { UserProfile, VenueEvent, SeatSection, EventSeat } from '../../types';
+import { UserProfile, VenueEvent, SeatSection, EventSeat, EventType, VenueZone, VenueLayoutShape } from '../../types';
+import {
+  BaseballFieldGraphic,
+  SoccerFieldGraphic,
+  BasketballCourtGraphic,
+  ConcertStageGraphic,
+  GenericEventGraphic,
+} from '../../components/fieldGraphics';
 import {
   subscribeSeatSections,
   subscribeEventSeats,
@@ -9,6 +16,9 @@ import {
   MARISCAL_ZONES,
   SeatPurchaseItem,
 } from '../../lib/seatMap';
+import { generateSeatMapLayout, SeatMapPosition } from '../../lib/venueLayoutEngine';
+import { subscribeVenueZones } from '../../lib/venueZones';
+import { getVenueById } from '../../lib/venues';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import {
   MapPin,
@@ -36,6 +46,21 @@ interface SeatMapSelectorProps {
   onCancel: () => void;
 }
 
+function getFieldGraphic(type: EventType) {
+  switch (type) {
+    case 'baseball':
+      return BaseballFieldGraphic;
+    case 'football':
+      return SoccerFieldGraphic;
+    case 'basketball':
+      return BasketballCourtGraphic;
+    case 'concert':
+      return ConcertStageGraphic;
+    default:
+      return GenericEventGraphic;
+  }
+}
+
 export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
   event,
   user,
@@ -43,6 +68,9 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
   onPurchaseSuccess,
   onCancel,
 }) => {
+  // Gráfico central del recinto/cancha según el tipo de evento
+  const FieldGraphic = getFieldGraphic(event.type);
+
   const [sections, setSections] = useState<SeatSection[]>([]);
   const [eventSeats, setEventSeats] = useState<EventSeat[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,6 +80,10 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
   const [activeSectionNumber, setActiveSectionNumber] = useState<string>('104');
   const [activeZoneFilter, setActiveZoneFilter] = useState<string>('Todas');
 
+  // Forma del recinto y zonas de precios
+  const [venueLayoutShape, setVenueLayoutShape] = useState<VenueLayoutShape>('baseball_horseshoe');
+  const [venueZones, setVenueZones] = useState<VenueZone[]>([]);
+
   // Asientos seleccionados para la compra conjunta
   const [selectedSeats, setSelectedSeats] = useState<SeatPurchaseItem[]>([]);
 
@@ -60,6 +92,25 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
   const [purchasing, setPurchasing] = useState(false);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
 
+  // Cargar forma arquitectónica y zonas de la sede
+  useEffect(() => {
+    getVenueById(event.venueId).then((v) => {
+      if (v?.layoutShape) {
+        setVenueLayoutShape(v.layoutShape);
+      }
+    });
+
+    const unsubscribeZones = subscribeVenueZones(
+      event.venueId,
+      (fetchedZones) => {
+        setVenueZones(fetchedZones);
+      },
+      (err) => console.warn('Aviso escuchando zonas del recinto:', err)
+    );
+
+    return () => unsubscribeZones();
+  }, [event.venueId]);
+
   // Cargar y escuchar secciones del estadio
   useEffect(() => {
     setLoading(true);
@@ -67,6 +118,9 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
       event.venueId,
       (fetchedSections) => {
         setSections(fetchedSections);
+        if (fetchedSections.length > 0 && !fetchedSections.some((s) => s.sectionNumber === activeSectionNumber)) {
+          setActiveSectionNumber(fetchedSections[0].sectionNumber);
+        }
       },
       (err) => {
         console.warn('Error en secciones:', err);
@@ -187,16 +241,45 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
     }
   };
 
+  // Mapa indexado de VenueZones para acceso instantáneo
+  const zonesMap = useMemo(() => {
+    const map: Record<string, VenueZone> = {};
+    for (const z of venueZones) {
+      map[z.id] = z;
+    }
+    return map;
+  }, [venueZones]);
+
+  // Generador dinámico de posiciones espaciales de cada sección
+  const layoutPositions = useMemo(() => {
+    return generateSeatMapLayout(venueLayoutShape, sections, zonesMap);
+  }, [venueLayoutShape, sections, zonesMap]);
+
+  // Resolver color de zona oficial
+  const getSectionColor = (sec: SeatSection | SeatMapPosition) => {
+    if ('color' in sec && sec.color) return sec.color;
+    if (sec.zoneId && zonesMap[sec.zoneId]) return zonesMap[sec.zoneId].color;
+    const name = sec.zoneName || (sec.zoneId && zonesMap[sec.zoneId]?.name);
+    if (name && MARISCAL_ZONES[name]) return MARISCAL_ZONES[name].colorHex;
+    return '#3B82F6';
+  };
+
   // Lista única de zonas para filtrar
   const availableZones = useMemo(() => {
+    if (venueZones.length > 0) {
+      return venueZones.map((z) => z.name);
+    }
     return Object.keys(MARISCAL_ZONES);
-  }, []);
+  }, [venueZones]);
 
   // Secciones filtradas
   const filteredSections = useMemo(() => {
     if (activeZoneFilter === 'Todas') return sections;
-    return sections.filter((s) => s.zoneName === activeZoneFilter);
-  }, [sections, activeZoneFilter]);
+    return sections.filter((s) => {
+      const zName = s.zoneName || (s.zoneId && zonesMap[s.zoneId]?.name);
+      return zName === activeZoneFilter;
+    });
+  }, [sections, activeZoneFilter, zonesMap]);
 
   if (loading || generating) {
     return (
@@ -300,6 +383,10 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
 
           {availableZones.map((zName) => {
             const zMeta = MARISCAL_ZONES[zName];
+            const zoneColor =
+              venueZones.find((z) => z.name === zName)?.color ||
+              zMeta?.colorHex ||
+              '#3B82F6';
             const price = getZonePrice(zName, event);
             const isFilterActive = activeZoneFilter === zName;
 
@@ -315,7 +402,7 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
               >
                 <span
                   className="w-2.5 h-2.5 rounded-full shrink-0"
-                  style={{ backgroundColor: zMeta.colorHex }}
+                  style={{ backgroundColor: zoneColor }}
                 ></span>
                 <span>{zName}</span>
                 <span className="text-[10px] font-mono text-slate-400 font-normal">
@@ -349,339 +436,57 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
             )}
           </div>
 
-          {/* Canvas SVG del Estadio de Béisbol */}
+          {/* Canvas SVG del Recinto / Estadio */}
           <div className="relative w-full aspect-[4/3] bg-radial from-slate-900 via-slate-950 to-slate-950 rounded-2xl overflow-hidden border border-slate-800 shadow-inner flex items-center justify-center p-2">
             <svg
               viewBox="0 0 800 620"
               className="w-full h-full select-none"
               style={{ maxHeight: '420px' }}
             >
-              <defs>
-                {/* Pasto de los jardines */}
-                <radialGradient id="outfieldGrass" cx="50%" cy="80%" r="70%">
-                  <stop offset="0%" stopColor="#15803d" />
-                  <stop offset="70%" stopColor="#166534" />
-                  <stop offset="100%" stopColor="#14532d" />
-                </radialGradient>
-                {/* Arcilla del infield */}
-                <radialGradient id="infieldClay" cx="50%" cy="75%" r="60%">
-                  <stop offset="0%" stopColor="#d97706" />
-                  <stop offset="100%" stopColor="#92400e" />
-                </radialGradient>
-              </defs>
+              {/* Gráfico central dinámico según event.type */}
+              <FieldGraphic />
 
-              {/* Terreno Exterior / Outfield Grass (Abanico de béisbol) */}
-              <path
-                d="M 120 180 A 380 380 0 0 1 680 180 L 400 460 Z"
-                fill="url(#outfieldGrass)"
-                stroke="#22c55e"
-                strokeWidth="2"
-                opacity="0.9"
-              />
+              {/* SECCIONES DINÁMICAS GENERADAS POR EL MOTOR ARQUITECTÓNICO */}
+              <g id="dynamic-venue-sections">
+                {layoutPositions.map((pos) => {
+                  const isSelected = activeSectionNumber === pos.sectionNumber;
+                  const zoneColor = getSectionColor(pos);
+                  const transform = pos.rotation
+                    ? `rotate(${pos.rotation} ${pos.x + pos.width / 2} ${pos.y + pos.height / 2})`
+                    : undefined;
 
-              {/* Barda de jonrón / Home Run Wall */}
-              <path
-                d="M 120 180 A 380 380 0 0 1 680 180"
-                fill="none"
-                stroke="#fbbf24"
-                strokeWidth="4"
-                strokeDasharray="6 4"
-              />
-
-              {/* Cuadrante de Arcilla del Infield */}
-              <path
-                d="M 280 340 L 400 220 L 520 340 L 400 460 Z"
-                fill="url(#infieldClay)"
-                stroke="#f59e0b"
-                strokeWidth="2"
-              />
-
-              {/* Pasto interior del diamante */}
-              <path
-                d="M 320 340 L 400 260 L 480 340 L 400 420 Z"
-                fill="#15803d"
-                stroke="#86efac"
-                strokeWidth="1.5"
-              />
-
-              {/* Líneas de Cal (Foul lines) */}
-              <line x1="400" y1="460" x2="115" y2="175" stroke="#ffffff" strokeWidth="2.5" strokeOpacity="0.8" />
-              <line x1="400" y1="460" x2="685" y2="175" stroke="#ffffff" strokeWidth="2.5" strokeOpacity="0.8" />
-
-              {/* Montículo del Pitcher */}
-              <circle cx="400" cy="340" r="14" fill="#b45309" stroke="#ffffff" strokeWidth="1.5" />
-              <rect x="395" y="338" width="10" height="3" fill="#ffffff" />
-
-              {/* Bases */}
-              {/* Home Plate */}
-              <polygon points="400,466 394,460 394,453 406,453 406,460" fill="#ffffff" />
-              {/* Primera Base */}
-              <rect x="475" y="335" width="10" height="10" fill="#ffffff" transform="rotate(45 480 340)" />
-              {/* Segunda Base */}
-              <rect x="395" y="255" width="10" height="10" fill="#ffffff" transform="rotate(45 400 260)" />
-              {/* Tercera Base */}
-              <rect x="315" y="335" width="10" height="10" fill="#ffffff" transform="rotate(45 320 340)" />
-
-              {/* Texto en terreno de juego */}
-              <text x="400" y="200" fill="#ffffff" opacity="0.6" fontSize="13" fontWeight="bold" textAnchor="middle" letterSpacing="2">
-                JARDÍN CENTRAL
-              </text>
-              <text x="250" y="240" fill="#ffffff" opacity="0.4" fontSize="11" fontWeight="bold" textAnchor="middle">
-                JARDÍN IZQ.
-              </text>
-              <text x="550" y="240" fill="#ffffff" opacity="0.4" fontSize="11" fontWeight="bold" textAnchor="middle">
-                JARDÍN DER.
-              </text>
-
-              {/* SECCIONES EN HERRADURA ALREDEDOR DEL CAMPO */}
-
-              {/* ANILLO 3: Nivel 300 - Sky (Arco Superior) */}
-              <g id="tier-sky-300">
-                {[
-                  { num: '301', x: 80, y: 150 },
-                  { num: '302', x: 110, y: 120 },
-                  { num: '303', x: 150, y: 90 },
-                  { num: '304', x: 195, y: 68 },
-                  { num: '305', x: 245, y: 52 },
-                  { num: '306', x: 300, y: 44 },
-                  { num: '307', x: 355, y: 40 },
-                  { num: '308', x: 410, y: 40 },
-                  { num: '309', x: 465, y: 44 },
-                  { num: '310', x: 520, y: 52 },
-                  { num: '311', x: 570, y: 68 },
-                  { num: '312', x: 615, y: 90 },
-                  { num: '313', x: 655, y: 120 },
-                  { num: '314', x: 685, y: 150 },
-                  { num: '315', x: 705, y: 190 },
-                  { num: '316', x: 715, y: 235 },
-                ].map((pos) => {
-                  const isSelected = activeSectionNumber === pos.num;
-                  const secData = sections.find((s) => s.sectionNumber === pos.num);
-                  const zoneColor = MARISCAL_ZONES['Sky']?.colorHex || '#6366F1';
                   return (
                     <g
-                      key={pos.num}
-                      onClick={() => setActiveSectionNumber(pos.num)}
+                      key={pos.sectionId || pos.sectionNumber}
+                      onClick={() => setActiveSectionNumber(pos.sectionNumber)}
                       className="cursor-pointer transition-transform hover:opacity-100"
+                      transform={transform}
                     >
                       <rect
                         x={pos.x}
                         y={pos.y}
-                        width="38"
-                        height="22"
+                        width={pos.width}
+                        height={pos.height}
                         rx="4"
-                        fill={isSelected ? '#ffffff' : zoneColor}
-                        stroke={isSelected ? '#fbbf24' : '#1e1b4b'}
-                        strokeWidth={isSelected ? 3 : 1}
-                        opacity={isSelected ? 1 : 0.85}
-                      />
-                      <text
-                        x={pos.x + 19}
-                        y={pos.y + 15}
-                        fill={isSelected ? '#0f172a' : '#ffffff'}
-                        fontSize="9"
-                        fontWeight="900"
-                        textAnchor="middle"
-                      >
-                        {pos.num}
-                      </text>
-                    </g>
-                  );
-                })}
-              </g>
-
-              {/* ANILLO 2: Nivel 200 (Gradas Intermedias) */}
-              <g id="tier-level-200">
-                {[
-                  // Fan Plus & Fan (Jardines laterales 200s)
-                  { num: '233', x: 95, y: 220, zone: 'Fan Plus' },
-                  { num: '232', x: 105, y: 250, zone: 'Fan Plus' },
-                  { num: '231', x: 115, y: 280, zone: 'Fan Plus' },
-                  { num: '227', x: 130, y: 310, zone: 'Fan' },
-                  { num: '226', x: 145, y: 340, zone: 'Fan' },
-                  { num: '225', x: 165, y: 370, zone: 'Fan' },
-
-                  // Plus & Sky Plus (Tercera Base 200s)
-                  { num: '221', x: 190, y: 400, zone: 'Plus' },
-                  { num: '220', x: 215, y: 430, zone: 'Plus' },
-                  { num: '217', x: 245, y: 460, zone: 'Sky Plus' },
-                  { num: '216', x: 275, y: 485, zone: 'Sky Plus' },
-
-                  // Diamante, Oro & Platino 200s (Detrás de Home)
-                  { num: '208', x: 310, y: 510, zone: 'Diamante' },
-                  { num: '203', x: 345, y: 525, zone: 'Oro' },
-                  { num: '207', x: 380, y: 535, zone: 'Platino' },
-                  { num: '204', x: 418, y: 535, zone: 'Platino' },
-                  { num: '202', x: 453, y: 525, zone: 'Oro' },
-                  { num: '201', x: 488, y: 510, zone: 'Diamante' },
-
-                  // Sky Plus & Plus (Primera Base 200s)
-                  { num: '210', x: 523, y: 485, zone: 'Sky Plus' },
-                  { num: '209', x: 553, y: 460, zone: 'Sky Plus' },
-                  { num: '218', x: 583, y: 430, zone: 'Plus' },
-                  { num: '219', x: 608, y: 400, zone: 'Plus' },
-
-                  // Fan & Fan Plus (Jardín Derecho 200s)
-                  { num: '222', x: 633, y: 370, zone: 'Fan' },
-                  { num: '223', x: 653, y: 340, zone: 'Fan' },
-                  { num: '224', x: 668, y: 310, zone: 'Fan' },
-                  { num: '228', x: 683, y: 280, zone: 'Fan Plus' },
-                  { num: '229', x: 693, y: 250, zone: 'Fan Plus' },
-                  { num: '230', x: 703, y: 220, zone: 'Fan Plus' },
-                ].map((pos) => {
-                  const isSelected = activeSectionNumber === pos.num;
-                  const zoneColor = MARISCAL_ZONES[pos.zone]?.colorHex || '#3B82F6';
-                  return (
-                    <g
-                      key={pos.num}
-                      onClick={() => setActiveSectionNumber(pos.num)}
-                      className="cursor-pointer"
-                    >
-                      <rect
-                        x={pos.x}
-                        y={pos.y}
-                        width="34"
-                        height="20"
-                        rx="3"
                         fill={isSelected ? '#ffffff' : zoneColor}
                         stroke={isSelected ? '#fbbf24' : '#0f172a'}
                         strokeWidth={isSelected ? 2.5 : 1}
-                        opacity={isSelected ? 1 : 0.9}
+                        opacity={isSelected ? 1 : 0.88}
                       />
                       <text
-                        x={pos.x + 17}
-                        y={pos.y + 14}
+                        x={pos.labelX}
+                        y={pos.labelY}
                         fill={isSelected ? '#0f172a' : '#ffffff'}
-                        fontSize="8.5"
+                        fontSize={pos.width < 28 ? '7' : '8.5'}
                         fontWeight="900"
                         textAnchor="middle"
                       >
-                        {pos.num}
+                        {pos.sectionNumber}
                       </text>
                     </g>
                   );
                 })}
               </g>
-
-              {/* ANILLO 1: Nivel 100 (Infield Boxes) */}
-              <g id="tier-level-100">
-                {[
-                  // Fan & Fan Plus (Jardín Izquierdo 100s)
-                  { num: '133', x: 135, y: 240, zone: 'Fan Plus' },
-                  { num: '130', x: 145, y: 270, zone: 'Fan Plus' },
-                  { num: '127', x: 160, y: 300, zone: 'Fan' },
-                  { num: '124', x: 180, y: 335, zone: 'Fan' },
-                  { num: '121', x: 205, y: 370, zone: 'Plus' },
-                  { num: '118', x: 230, y: 405, zone: 'Plus' },
-                  { num: '115', x: 260, y: 440, zone: 'Sky Plus' },
-                  { num: '112', x: 290, y: 470, zone: 'Sky Plus' },
-
-                  // Diamante, Oro & Platino 100s
-                  { num: '108', x: 325, y: 495, zone: 'Diamante' },
-                  { num: '103', x: 355, y: 508, zone: 'Oro' },
-                  { num: '107', x: 385, y: 515, zone: 'Platino' },
-                  { num: '104', x: 415, y: 515, zone: 'Platino' },
-                  { num: '102', x: 445, y: 508, zone: 'Oro' },
-                  { num: '101', x: 475, y: 495, zone: 'Diamante' },
-
-                  // Sky Plus, Plus & Fan (Jardín Derecho 100s)
-                  { num: '109', x: 505, y: 470, zone: 'Sky Plus' },
-                  { num: '113', x: 535, y: 440, zone: 'Sky Plus' },
-                  { num: '119', x: 565, y: 405, zone: 'Plus' },
-                  { num: '120', x: 590, y: 370, zone: 'Plus' },
-                  { num: '122', x: 615, y: 335, zone: 'Fan' },
-                  { num: '125', x: 635, y: 300, zone: 'Fan' },
-                  { num: '128', x: 650, y: 270, zone: 'Fan Plus' },
-                  { num: '131', x: 660, y: 240, zone: 'Fan Plus' },
-                ].map((pos) => {
-                  const isSelected = activeSectionNumber === pos.num;
-                  const zoneColor = MARISCAL_ZONES[pos.zone]?.colorHex || '#0284C7';
-                  return (
-                    <g
-                      key={pos.num}
-                      onClick={() => setActiveSectionNumber(pos.num)}
-                      className="cursor-pointer"
-                    >
-                      <rect
-                        x={pos.x}
-                        y={pos.y}
-                        width="28"
-                        height="18"
-                        rx="3"
-                        fill={isSelected ? '#ffffff' : zoneColor}
-                        stroke={isSelected ? '#fbbf24' : '#ffffff'}
-                        strokeWidth={isSelected ? 2.5 : 0.8}
-                        opacity={isSelected ? 1 : 0.95}
-                      />
-                      <text
-                        x={pos.x + 14}
-                        y={pos.y + 12.5}
-                        fill={isSelected ? '#0f172a' : '#ffffff'}
-                        fontSize="8"
-                        fontWeight="900"
-                        textAnchor="middle"
-                      >
-                        {pos.num}
-                      </text>
-                    </g>
-                  );
-                })}
-              </g>
-
-              {/* ANILLO 0: Deluxe Supreme 1 a 12 (Central Baja, pegado a Home Plate) */}
-              <g id="tier-deluxe-supreme">
-                {[
-                  { num: '12', x: 260, y: 420 },
-                  { num: '11', x: 280, y: 435 },
-                  { num: '10', x: 305, y: 450 },
-                  { num: '9', x: 330, y: 462 },
-                  { num: '8', x: 355, y: 472 },
-                  { num: '7', x: 380, y: 478 },
-                  { num: '6', x: 405, y: 478 },
-                  { num: '5', x: 430, y: 472 },
-                  { num: '4', x: 455, y: 462 },
-                  { num: '3', x: 480, y: 450 },
-                  { num: '2', x: 505, y: 435 },
-                  { num: '1', x: 525, y: 420 },
-                ].map((pos) => {
-                  const isSelected = activeSectionNumber === pos.num;
-                  const zoneColor = MARISCAL_ZONES['Deluxe Supreme']?.colorHex || '#D97706';
-                  return (
-                    <g
-                      key={pos.num}
-                      onClick={() => setActiveSectionNumber(pos.num)}
-                      className="cursor-pointer"
-                    >
-                      <rect
-                        x={pos.x}
-                        y={pos.y}
-                        width="22"
-                        height="15"
-                        rx="2.5"
-                        fill={isSelected ? '#ffffff' : zoneColor}
-                        stroke={isSelected ? '#fbbf24' : '#fef08a'}
-                        strokeWidth={isSelected ? 2.5 : 1}
-                        opacity="1"
-                      />
-                      <text
-                        x={pos.x + 11}
-                        y={pos.y + 10.5}
-                        fill={isSelected ? '#0f172a' : '#ffffff'}
-                        fontSize="7"
-                        fontWeight="900"
-                        textAnchor="middle"
-                      >
-                        {pos.num}
-                      </text>
-                    </g>
-                  );
-                })}
-              </g>
-
-              {/* Indicador de Home Plate en SVG */}
-              <text x="400" y="445" fill="#ffffff" fontSize="9" fontWeight="900" textAnchor="middle">
-                HOME
-              </text>
             </svg>
 
             {/* Etiqueta flotante inferior del mapa */}
@@ -705,7 +510,7 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                 const secSeats = seatsBySection.get(sec.sectionNumber) || [];
                 const soldCount = secSeats.filter((s) => s.status === 'vendido').length;
                 const availableCount = Math.max(0, (sec.totalSeats || 30) - soldCount);
-                const zoneMeta = MARISCAL_ZONES[sec.zoneName] || MARISCAL_ZONES['Plus'];
+                const color = getSectionColor(sec);
 
                 return (
                   <button
@@ -719,7 +524,7 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                   >
                     <span
                       className="w-1.5 h-1.5 rounded-full"
-                      style={{ backgroundColor: zoneMeta.colorHex }}
+                      style={{ backgroundColor: color }}
                     ></span>
                     <span>Sec. {sec.sectionNumber}</span>
                     <span
@@ -747,27 +552,25 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                     <span
                       className="w-3 h-3 rounded-full shrink-0"
                       style={{
-                        backgroundColor:
-                          MARISCAL_ZONES[currentSection.zoneName]?.colorHex || '#D97706',
+                        backgroundColor: getSectionColor(currentSection),
                       }}
                     ></span>
                     <h3 className="text-base font-black text-slate-900">
                       Sección {currentSection.sectionNumber}
                     </h3>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-100 text-slate-700 border border-slate-200">
-                      {currentSection.zoneName}
+                      {currentSection.zoneName || (currentSection.zoneId && zonesMap[currentSection.zoneId]?.name) || 'General'}
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    {MARISCAL_ZONES[currentSection.zoneName]?.description ||
-                      'Excelente visibilidad del diamante'}
+                    {currentSection.ring ? `Nivel / Anillo: ${currentSection.ring}` : 'Excelente visibilidad del evento'}
                   </p>
                 </div>
 
                 <div className="text-right">
                   <span className="text-[10px] text-slate-400 font-bold uppercase block">Precio</span>
                   <span className="text-base sm:text-lg font-black text-red-900">
-                    ${getZonePrice(currentSection.zoneName, event)}{' '}
+                    ${getZonePrice(currentSection.zoneName || (currentSection.zoneId && zonesMap[currentSection.zoneId]?.name) || '', event)}{' '}
                     <span className="text-[10px] font-normal text-slate-500">MXN</span>
                   </span>
                 </div>
