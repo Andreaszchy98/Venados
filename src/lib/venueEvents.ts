@@ -8,11 +8,12 @@ import {
   deleteDoc,
   query,
   where,
+  limit,
   onSnapshot,
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { VenueEvent, EventPriceTier, EventType, HeroSlide, Venue } from '../types';
-import { DEFAULT_VENUE_ID } from './defaultVenue';
+import { DEFAULT_VENUE_ID, DEFAULT_VENUES } from './defaultVenue';
 import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
 import { generateEventSeats } from './seatMap';
 import { normalizeGoogleDriveImageUrl, DEFAULT_STORE_PROMO_BANNER, getEventPosterPlaceholder } from './imageUtils';
@@ -339,6 +340,8 @@ export async function createVenueEvent(
       gate: eventData.gate || 'Puertas Generales',
       active: eventData.active !== undefined ? eventData.active : true,
       ticketsAvailable: eventData.ticketsAvailable !== undefined ? eventData.ticketsAvailable : true,
+      availableSeats: eventData.availableSeats !== undefined ? Number(eventData.availableSeats) : undefined,
+      totalCapacity: eventData.totalCapacity !== undefined ? Number(eventData.totalCapacity) : undefined,
       posterUrl: rawPoster || getEventPosterPlaceholder(eventData.type || 'baseball'),
       orderingOpensAt: eventData.orderingOpensAt || defaultWindow.orderingOpensAt,
       orderingClosesAt: eventData.orderingClosesAt || defaultWindow.orderingClosesAt,
@@ -399,6 +402,12 @@ export async function updateVenueEvent(
     if (safeUpdates.posterUrl !== undefined) {
       safeUpdates.posterUrl = normalizeGoogleDriveImageUrl(safeUpdates.posterUrl);
     }
+    if (safeUpdates.availableSeats !== undefined && safeUpdates.availableSeats !== null) {
+      safeUpdates.availableSeats = Number(safeUpdates.availableSeats);
+    }
+    if (safeUpdates.totalCapacity !== undefined && safeUpdates.totalCapacity !== null) {
+      safeUpdates.totalCapacity = Number(safeUpdates.totalCapacity);
+    }
 
     await updateDoc(docRef, sanitizeFirestoreData(safeUpdates));
   } catch (err) {
@@ -440,7 +449,8 @@ export async function getActiveEventsForVenue(venueId: string): Promise<VenueEve
   try {
     const q = query(
       collection(db, COLLECTION_NAME),
-      where('venueId', '==', venueId)
+      where('venueId', '==', venueId),
+      limit(50)
     );
     const snap = await getDocs(q);
     const all = snap.docs.map((d) => parseVenueEventDoc(d.id, d.data()));
@@ -571,7 +581,8 @@ export async function getActiveOrderingEvent(venueId: string): Promise<VenueEven
   try {
     const q = query(
       collection(db, COLLECTION_NAME),
-      where('venueId', '==', targetVenueId)
+      where('venueId', '==', targetVenueId),
+      limit(50)
     );
     const snap = await getDocs(q);
     let events = snap.docs.map((d) => parseVenueEventDoc(d.id, d.data()));
@@ -598,7 +609,8 @@ export async function getNextUpcomingEvent(venueId: string): Promise<VenueEvent 
   try {
     const q = query(
       collection(db, COLLECTION_NAME),
-      where('venueId', '==', targetVenueId)
+      where('venueId', '==', targetVenueId),
+      limit(50)
     );
     const snap = await getDocs(q);
     let events = snap.docs.map((d) => parseVenueEventDoc(d.id, d.data()));
@@ -709,15 +721,22 @@ export async function getVenueEventById(eventId: string): Promise<VenueEvent | n
  */
 export async function getUpcomingHeroEvents(
   venueId?: string,
-  limitCount: number = 8
+  limitCount: number = 8,
+  city?: string
 ): Promise<VenueEvent[]> {
   const todayStr = new Date().toISOString().split('T')[0];
+  const normalizeStr = (str?: string) =>
+    (str || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const targetCity = city ? normalizeStr(city) : null;
 
   try {
-    // 1. Obtener información de todas las sedes registradas para asociar nombres de estadio
+    // 1. Obtener información de todas las sedes registradas para asociar nombres de estadio y ciudades
     const venuesMap = new Map<string, { name: string; city: string }>();
+    DEFAULT_VENUES.forEach((v) => {
+      venuesMap.set(v.id, { name: v.name, city: v.city || 'Mazatlán' });
+    });
     try {
-      const venuesSnap = await getDocs(collection(db, 'venues'));
+      const venuesSnap = await getDocs(query(collection(db, 'venues'), limit(50)));
       venuesSnap.docs.forEach((d) => {
         const data = d.data();
         venuesMap.set(d.id, {
@@ -732,8 +751,8 @@ export async function getUpcomingHeroEvents(
     // 2. Si se especifica un venueId puntual, se busca primero en ese venue;
     // si no se especifica venueId (pantalla de inicio/login), se consultan todos los eventos disponibles.
     const eventsQuery = venueId
-      ? query(collection(db, COLLECTION_NAME), where('venueId', '==', venueId))
-      : query(collection(db, COLLECTION_NAME));
+      ? query(collection(db, COLLECTION_NAME), where('venueId', '==', venueId), limit(50))
+      : query(collection(db, COLLECTION_NAME), limit(50));
 
     const snap = await getDocs(eventsQuery);
     let events = snap.docs.map((d) => {
@@ -752,11 +771,27 @@ export async function getUpcomingHeroEvents(
       } as VenueEvent;
     });
 
+    // Filtrar por ciudad si se especificó
+    if (targetCity) {
+      events = events.filter((e) => {
+        const vInfo = venuesMap.get(e.venueId);
+        const venueCity = vInfo?.city || (e.venueId === DEFAULT_VENUE_ID ? 'Mazatlán' : '');
+        return normalizeStr(venueCity).includes(targetCity);
+      });
+    }
+
     // Si la base de datos no tiene eventos para la consulta, usar eventos por defecto de respaldo
     if (events.length === 0) {
-      const fallbacks = venueId
+      let fallbacks = venueId
         ? DEFAULT_FALLBACK_EVENTS.filter((e) => e.venueId === venueId)
         : DEFAULT_FALLBACK_EVENTS;
+      if (targetCity) {
+        fallbacks = fallbacks.filter((e) => {
+          const vInfo = venuesMap.get(e.venueId);
+          const venueCity = vInfo?.city || (e.venueId === DEFAULT_VENUE_ID ? 'Mazatlán' : '');
+          return normalizeStr(venueCity).includes(targetCity);
+        });
+      }
       events = (fallbacks.length > 0 ? fallbacks : DEFAULT_FALLBACK_EVENTS).map((e) => ({
         ...e,
         venueName: e.venueName || venuesMap.get(e.venueId)?.name || 'Estadio Teodoro Mariscal',
@@ -782,10 +817,10 @@ export async function getUpcomingHeroEvents(
     filtered.sort((a, b) => a.date.localeCompare(b.date));
 
     // Si no se solicitó un venueId específico y quedaron menos de 2 eventos,
-    // complementar con eventos de otras sedes disponibles
+    // complementar con eventos de otras sedes disponibles (respetando filtro de ciudad)
     if (!venueId && filtered.length < 2) {
       try {
-        const allSnap = await getDocs(collection(db, COLLECTION_NAME));
+        const allSnap = await getDocs(query(collection(db, COLLECTION_NAME), limit(50)));
         const otherEvents = allSnap.docs
           .map((d) => {
             const data = d.data();
@@ -800,6 +835,11 @@ export async function getUpcomingHeroEvents(
             } as VenueEvent;
           })
           .filter((e) => {
+            if (targetCity) {
+              const vInfo = venuesMap.get(e.venueId);
+              const venueCity = vInfo?.city || (e.venueId === DEFAULT_VENUE_ID ? 'Mazatlán' : '');
+              if (!normalizeStr(venueCity).includes(targetCity)) return false;
+            }
             const isFuture = e.date >= todayStr;
             const hasPoster = typeof e.posterUrl === 'string' && e.posterUrl.trim().length > 0;
             return e.active !== false && isFuture && hasPoster && !filtered.some((f) => f.id === e.id);
@@ -822,25 +862,42 @@ export async function getUpcomingHeroEvents(
 /**
  * Consulta unificada para el Hero de Bienvenida / Login.
  * Integra los eventos estelares de la cartelera con los banners promocionales
- * de la Tienda Oficial configurados por los administradores de sede (soporta Google Drive).
+ * de la Tienda Oficial configurados por los administradores de sede (soporta Google Drive y filtro de ciudad).
  */
 export async function getHeroSlides(
   venueId?: string,
-  limitCount: number = 8
+  limitCount: number = 8,
+  city?: string
 ): Promise<HeroSlide[]> {
+  const normalizeStr = (str?: string) =>
+    (str || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const targetCity = city ? normalizeStr(city) : null;
+
   try {
-    // 1. Obtener eventos de cartelera
-    const events = await getUpcomingHeroEvents(venueId, limitCount);
+    // 1. Obtener eventos de cartelera (filtrados por sede y/o ciudad)
+    const events = await getUpcomingHeroEvents(venueId, limitCount, city);
 
     // 2. Obtener sedes con promoción activa de tienda oficial
     const storeSlides: HeroSlide[] = [];
     try {
-      const venuesSnap = await getDocs(collection(db, 'venues'));
+      const venuesSnap = await getDocs(query(collection(db, 'venues'), limit(50)));
       const venuesList = venuesSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Venue));
+      DEFAULT_VENUES.forEach((defV) => {
+        if (!venuesList.some((v) => v.id === defV.id)) {
+          venuesList.push(defV);
+        }
+      });
 
-      const candidateVenues = venueId
+      let candidateVenues = venueId
         ? venuesList.filter((v) => v.id === venueId && v.active !== false)
         : venuesList.filter((v) => v.active !== false);
+
+      if (targetCity) {
+        candidateVenues = candidateVenues.filter((v) => {
+          const vCity = v.city || (v.id === DEFAULT_VENUE_ID ? 'Mazatlán' : '');
+          return normalizeStr(vCity).includes(targetCity);
+        });
+      }
 
       for (const v of candidateVenues) {
         if (v.storePromoActive === false) continue;

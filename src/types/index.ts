@@ -90,6 +90,8 @@ export interface VenueEvent {
   venueName?: string; // Nombre del recinto/estadio
   orderingOpensAt?: string; // ISO datetime — desde cuándo los negocios de la sede aceptan pedidos para este evento
   orderingClosesAt?: string; // ISO datetime — hasta cuándo aceptan pedidos
+  availableSeats?: number; // Asientos disponibles declarados por el admin de la sede
+  totalCapacity?: number; // Capacidad / aforo total del recinto para el evento
 }
 
 // ==========================================
@@ -279,6 +281,7 @@ export type MenuItemCategory = 'comida' | 'bebida' | 'cerveza' | 'snack' | 'comb
 export interface MenuItem {
   id: string;
   standId: string;
+  venueId?: string;
   name: string;
   description: string;
   price: number;

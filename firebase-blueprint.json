@@ -201,6 +201,8 @@
         "name": { "type": "string" },
         "date": { "type": "string" },
         "active": { "type": "boolean" },
+        "availableSeats": { "type": "number" },
+        "totalCapacity": { "type": "number" },
         "createdAt": { "type": "string" }
       },
       "required": ["venueId", "type", "name", "date", "active"]

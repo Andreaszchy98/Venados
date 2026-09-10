@@ -11,7 +11,7 @@ import {
   deleteMenuItem,
   toggleMenuItemAvailability,
 } from '../../lib/stands';
-import { getAllUsers } from '../../lib/auth';
+import { getVenueStaff } from '../../lib/auth';
 import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { ConfirmationModal } from '../../components/shared/ConfirmationModal';
@@ -143,8 +143,8 @@ export const NegociosAdmin: React.FC<NegociosAdminProps> = ({ user }) => {
     try {
       const [standsData, menuData, usersData] = await Promise.all([
         getStadiumStands(venueId),
-        getAllMenuItems().catch(() => []),
-        getAllUsers().catch(() => []),
+        getAllMenuItems(venueId).catch(() => []),
+        getVenueStaff(venueId).catch(() => []),
       ]);
       setStands(standsData);
       setMenuItems(menuData || []);

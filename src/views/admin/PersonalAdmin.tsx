@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile, UserRole, StadiumStand } from '../../types';
-import { getAllUsers, updateUserRoleAndDetails } from '../../lib/auth';
+import { getVenueStaff, updateUserRoleAndDetails } from '../../lib/auth';
 import { getStadiumStands } from '../../lib/stands';
 import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
@@ -50,7 +50,7 @@ export const PersonalAdmin: React.FC<PersonalAdminProps> = ({ user }) => {
     setLoading(true);
     try {
       const [allUsers, allStands] = await Promise.all([
-        getAllUsers(),
+        getVenueStaff(venueId),
         getStadiumStands(venueId).catch(() => []),
       ]);
       setUsers(allUsers);
@@ -92,6 +92,7 @@ export const PersonalAdmin: React.FC<PersonalAdminProps> = ({ user }) => {
     try {
       await updateUserRoleAndDetails(selectedUser.uid, {
         role: modalRole,
+        venueId: venueId,
         standId: modalRole === 'concesionario' ? modalStandId : undefined,
         standName: modalRole === 'concesionario' ? modalStandName : undefined,
         assignedZone: modalRole === 'runner' ? modalAssignedZone : undefined,
@@ -514,13 +515,6 @@ export const PersonalAdmin: React.FC<PersonalAdminProps> = ({ user }) => {
                       desc: 'Escaneo y validación de QR',
                       icon: Ticket,
                       color: 'border-purple-300 hover:border-purple-400 text-purple-700',
-                    },
-                    {
-                      role: 'admin' as UserRole,
-                      label: 'Administrador',
-                      desc: 'Control total de inventario y ventas',
-                      icon: Shield,
-                      color: 'border-red-300 hover:border-red-400 text-red-700',
                     },
                   ].map((item) => {
                     const Icon = item.icon;

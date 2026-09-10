@@ -13,6 +13,7 @@ import { getStadiumStands, getMenuItemsByStand } from '../../lib/stands';
 import { createFoodOrder } from '../../lib/foodOrders';
 import { subscribeUserTickets } from '../../lib/tickets';
 import { getZoneBySection, getZones } from '../../lib/zones';
+import { cleanRowValue, cleanSeatValue, cleanSectionValue, formatDeliverySeat } from '../../lib/seatUtils';
 import {
   getActiveOrderingEvent,
   getNextUpcomingEvent,
@@ -224,9 +225,9 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
     setSelectedTicketId(ticketId);
     const found = userTickets.find((t) => t.id === ticketId);
     if (found) {
-      setSeatSection(found.section);
-      setSeatRow(found.row);
-      setSeatNumber(found.seat);
+      setSeatSection(cleanSectionValue(found.section));
+      setSeatRow(cleanRowValue(found.row));
+      setSeatNumber(cleanSeatValue(found.seat));
     }
   };
 
@@ -273,9 +274,9 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
         items: foodItems,
         total,
         paymentMethod: foodPaymentMethod,
-        section: selectedOrderType === 'in-seat' ? seatSection.trim() : undefined,
-        row: selectedOrderType === 'in-seat' ? seatRow.trim() : undefined,
-        seat: selectedOrderType === 'in-seat' ? seatNumber.trim() : undefined,
+        section: selectedOrderType === 'in-seat' ? cleanSectionValue(seatSection) : undefined,
+        row: selectedOrderType === 'in-seat' ? cleanRowValue(seatRow) : undefined,
+        seat: selectedOrderType === 'in-seat' ? cleanSeatValue(seatNumber) : undefined,
         zoneId: zoneId,
       });
 
@@ -499,7 +500,7 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
               {lastPlacedOrder.type === 'in-seat' ? (
                 <div className="space-y-0.5">
                   <p className="font-bold text-slate-900">
-                    Destino: Sección {lastPlacedOrder.section}, Fila {lastPlacedOrder.row}, Asiento {lastPlacedOrder.seat}
+                    Destino: {formatDeliverySeat(lastPlacedOrder.section, lastPlacedOrder.row, lastPlacedOrder.seat)}
                   </p>
                   <p className="text-[11px] text-slate-500">
                     Un Runner de estadio te lo llevará en cuanto la cocina lo tenga listo.
@@ -818,7 +819,7 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
                             <div>
                               <p className="truncate font-semibold">{t.matchTitle}</p>
                               <p className="text-[10px] text-slate-400">
-                                Sección {t.section} • Fila {t.row} • Butaca {t.seat}
+                                {formatDeliverySeat(t.section, t.row, t.seat)}
                               </p>
                             </div>
                             {selectedTicketId === t.id && (

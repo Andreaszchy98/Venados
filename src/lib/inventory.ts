@@ -9,6 +9,7 @@ import {
   query,
   where,
   orderBy,
+  limit,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { InventoryProduct, ProductCost } from '../types';
@@ -359,7 +360,10 @@ export function getCuratedProductsForVenue(venueId: string): InventoryProduct[] 
 
 export async function getInventoryProducts(venueId?: string): Promise<InventoryProduct[]> {
   try {
-    const snap = await getDocs(collection(db, COLLECTION_NAME));
+    const q = venueId
+      ? query(collection(db, COLLECTION_NAME), where('venueId', '==', venueId), limit(150))
+      : query(collection(db, COLLECTION_NAME), limit(150));
+    const snap = await getDocs(q);
 
     if (snap.empty) {
       try {
@@ -383,14 +387,6 @@ export async function getInventoryProducts(venueId?: string): Promise<InventoryP
         image: normalizeGoogleDriveImageUrl(data.image) || getDefaultProductPlaceholder(data.category),
       };
     }) as InventoryProduct[];
-
-    if (venueId) {
-      const filtered = products.filter((p) => (p.venueId || DEFAULT_VENUE_ID) === venueId);
-      if (filtered.length > 0) {
-        return filtered;
-      }
-      return getCuratedProductsForVenue(venueId);
-    }
 
     return products;
   } catch (err) {

@@ -32,101 +32,101 @@ export const MARISCAL_ZONES: Record<string, ZoneMeta> = {
   'Deluxe Supreme': {
     name: 'Deluxe Supreme',
     defaultPrice: 950,
-    colorHex: '#D97706',
-    badgeBg: 'bg-amber-500/15 text-amber-600 border-amber-500/30',
-    badgeText: 'text-amber-500',
-    fillColor: '#D97706',
-    strokeColor: '#B45309',
+    colorHex: '#25223A',
+    badgeBg: 'bg-indigo-950/20 text-indigo-900 border-indigo-950/30',
+    badgeText: 'text-indigo-950',
+    fillColor: '#25223A',
+    strokeColor: '#FFFFFF',
     gate: 'Puerta Principal / VIP',
-    description: 'Nivel central bajo exclusivo junto al Home Plate',
+    description: 'Nivel central bajo exclusivo junto al Home Plate (Sec. 1-12)',
   },
   'Platino': {
     name: 'Platino',
     defaultPrice: 750,
-    colorHex: '#7C3AED',
-    badgeBg: 'bg-violet-500/15 text-violet-600 border-violet-500/30',
-    badgeText: 'text-violet-500',
-    fillColor: '#7C3AED',
-    strokeColor: '#6D28D9',
+    colorHex: '#DC2626',
+    badgeBg: 'bg-red-500/15 text-red-600 border-red-500/30',
+    badgeText: 'text-red-500',
+    fillColor: '#DC2626',
+    strokeColor: '#B91C1C',
     gate: 'Puertas 1 y 2',
-    description: 'Vista preferencial directa detrás del plato de bateo',
+    description: 'Laterales bajas del infield en color rojo (Sec. 105-108, 115-117)',
   },
   'Diamante': {
     name: 'Diamante',
     defaultPrice: 600,
+    colorHex: '#EA580C',
+    badgeBg: 'bg-orange-500/15 text-orange-600 border-orange-500/30',
+    badgeText: 'text-orange-500',
+    fillColor: '#EA580C',
+    strokeColor: '#C2410C',
+    gate: 'Puertas 1 y 2',
+    description: 'Herraje central nivel 200 en color naranja terracota (Sec. 205-217)',
+  },
+  'Oro': {
+    name: 'Oro',
+    defaultPrice: 480,
     colorHex: '#0284C7',
     badgeBg: 'bg-sky-500/15 text-sky-600 border-sky-500/30',
     badgeText: 'text-sky-500',
     fillColor: '#0284C7',
     strokeColor: '#0369A1',
-    gate: 'Puertas 1 y 2',
-    description: 'Infield lateral con máxima cercanía a las bases',
-  },
-  'Oro': {
-    name: 'Oro',
-    defaultPrice: 480,
-    colorHex: '#EAB308',
-    badgeBg: 'bg-yellow-500/15 text-yellow-600 border-yellow-500/30',
-    badgeText: 'text-yellow-600',
-    fillColor: '#EAB308',
-    strokeColor: '#CA8A04',
     gate: 'Puertas 2 y 4',
-    description: 'Infield intermedio de gran ángulo y visión panorámica',
+    description: 'Líneas de 1ra y 3ra base en color azul turquesa (Sec. 101-104, 118-121)',
   },
   'Sky Plus': {
     name: 'Sky Plus',
     defaultPrice: 400,
-    colorHex: '#06B6D4',
-    badgeBg: 'bg-cyan-500/15 text-cyan-600 border-cyan-500/30',
-    badgeText: 'text-cyan-500',
-    fillColor: '#06B6D4',
-    strokeColor: '#0891B2',
-    gate: 'Puertas 4 y 8',
-    description: 'Laterales sobre las líneas de 1ra y 3ra base',
+    colorHex: '#FB923C',
+    badgeBg: 'bg-amber-500/15 text-amber-600 border-amber-500/30',
+    badgeText: 'text-amber-500',
+    fillColor: '#FB923C',
+    strokeColor: '#EA580C',
+    gate: 'Rampa Nivel 300',
+    description: 'Nivel 300 central en color melocotón (Sec. 305-307, 310-312)',
   },
   'Plus': {
     name: 'Plus',
     defaultPrice: 350,
-    colorHex: '#3B82F6',
-    badgeBg: 'bg-blue-500/15 text-blue-600 border-blue-500/30',
-    badgeText: 'text-blue-500',
-    fillColor: '#3B82F6',
-    strokeColor: '#2563EB',
+    colorHex: '#84CC16',
+    badgeBg: 'bg-lime-500/15 text-lime-700 border-lime-500/30',
+    badgeText: 'text-lime-700',
+    fillColor: '#84CC16',
+    strokeColor: '#65A30D',
     gate: 'Puertas 4 y 8',
-    description: 'Laterales cómodas con gran ambiente de juego',
+    description: 'Nivel 200 lateral en color verde lima (Sec. 201-204, 218-221)',
   },
   'Fan': {
     name: 'Fan',
     defaultPrice: 220,
-    colorHex: '#10B981',
-    badgeBg: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30',
-    badgeText: 'text-emerald-500',
-    fillColor: '#10B981',
-    strokeColor: '#059669',
-    gate: 'Puertas 6 y 8',
-    description: 'Grada animada y familiar hacia los jardines',
+    colorHex: '#38BDF8',
+    badgeBg: 'bg-cyan-500/15 text-cyan-600 border-cyan-500/30',
+    badgeText: 'text-cyan-600',
+    fillColor: '#38BDF8',
+    strokeColor: '#0284C7',
+    gate: 'Puertas 6 y 8 (Bleachers)',
+    description: 'Jardines bajos en color celeste sobre la barda (Sec. 122-127, 128-133)',
   },
   'Fan Plus': {
     name: 'Fan Plus',
     defaultPrice: 280,
-    colorHex: '#059669',
-    badgeBg: 'bg-teal-500/15 text-teal-600 border-teal-500/30',
-    badgeText: 'text-teal-600',
-    fillColor: '#059669',
-    strokeColor: '#047857',
-    gate: 'Puertas 6 y 8',
-    description: 'Jardines exteriores con vista libre al diamante',
+    colorHex: '#94A3B8',
+    badgeBg: 'bg-slate-500/15 text-slate-700 border-slate-500/30',
+    badgeText: 'text-slate-700',
+    fillColor: '#94A3B8',
+    strokeColor: '#64748B',
+    gate: 'Puertas 6 y 8 (Bleachers)',
+    description: 'Jardines altos nivel 200 en color gris lavanda (Sec. 222-227, 228-233)',
   },
   'Sky': {
     name: 'Sky',
     defaultPrice: 160,
-    colorHex: '#6366F1',
-    badgeBg: 'bg-indigo-500/15 text-indigo-600 border-indigo-500/30',
-    badgeText: 'text-indigo-500',
-    fillColor: '#6366F1',
-    strokeColor: '#4F46E5',
+    colorHex: '#7C3AED',
+    badgeBg: 'bg-purple-500/15 text-purple-600 border-purple-500/30',
+    badgeText: 'text-purple-600',
+    fillColor: '#7C3AED',
+    strokeColor: '#6D28D9',
     gate: 'Rampa Nivel 300',
-    description: 'Nivel 300 superior, vista aérea de todo el estadio',
+    description: 'Nivel 300 lateral en color morado (Sec. 301-304, 313-316)',
   },
 };
 
@@ -374,7 +374,7 @@ export function buildMariscalSectionsData(venueId: string): Omit<SeatSection, 'i
     seatsPerRow: 10,
   };
 
-  // 1. Deluxe Supreme: 1 a 12 (central baja, junto al home)
+  // 1. Deluxe Supreme: 1 a 12 (central baja junto a Home Plate)
   for (let i = 1; i <= 12; i++) {
     sections.push({
       ...defaultProps,
@@ -383,59 +383,44 @@ export function buildMariscalSectionsData(venueId: string): Omit<SeatSection, 'i
     });
   }
 
-  // 2. Platino: 104-107, 204-207 (las más cercanas al home en niveles 1 y 2)
-  for (let i = 104; i <= 107; i++) {
-    sections.push({ ...defaultProps, sectionNumber: String(i), zoneName: 'Platino' });
-  }
-  for (let i = 204; i <= 207; i++) {
-    sections.push({ ...defaultProps, sectionNumber: String(i), zoneName: 'Platino' });
+  // 2. Platino (Rojo): 105-108 (1ra base) y 115-117 (3ra base)
+  for (const s of [105, 106, 107, 108, 115, 116, 117]) {
+    sections.push({ ...defaultProps, sectionNumber: String(s), zoneName: 'Platino' });
   }
 
-  // 3. Oro: 102-103, 202-203
-  for (const s of [102, 103, 202, 203]) {
+  // 3. Oro (Azul Turquesa): 101-104 (1ra base) y 118-121 (3ra base)
+  for (const s of [101, 102, 103, 104, 118, 119, 120, 121]) {
     sections.push({ ...defaultProps, sectionNumber: String(s), zoneName: 'Oro' });
   }
 
-  // 4. Diamante: 101, 108, 201, 208
-  for (const s of [101, 108, 201, 208]) {
-    sections.push({ ...defaultProps, sectionNumber: String(s), zoneName: 'Diamante' });
+  // 4. Diamante (Naranja Terracota): Herraje central nivel 200 (205-217)
+  for (let i = 205; i <= 217; i++) {
+    sections.push({ ...defaultProps, sectionNumber: String(i), zoneName: 'Diamante' });
   }
 
-  // 5. Sky Plus: 109-117, 209-217
-  for (let i = 109; i <= 117; i++) {
-    sections.push({ ...defaultProps, sectionNumber: String(i), zoneName: 'Sky Plus' });
-  }
-  for (let i = 209; i <= 217; i++) {
-    sections.push({ ...defaultProps, sectionNumber: String(i), zoneName: 'Sky Plus' });
+  // 5. Plus (Verde Lima): Nivel 200 lateral (201-204 y 218-221)
+  for (const s of [201, 202, 203, 204, 218, 219, 220, 221]) {
+    sections.push({ ...defaultProps, sectionNumber: String(s), zoneName: 'Plus' });
   }
 
-  // 6. Plus: 118-121, 218-221
-  for (let i = 118; i <= 121; i++) {
-    sections.push({ ...defaultProps, sectionNumber: String(i), zoneName: 'Plus' });
-  }
-  for (let i = 218; i <= 221; i++) {
-    sections.push({ ...defaultProps, sectionNumber: String(i), zoneName: 'Plus' });
-  }
-
-  // 7. Fan: 122-127, 222-227
-  for (let i = 122; i <= 127; i++) {
-    sections.push({ ...defaultProps, sectionNumber: String(i), zoneName: 'Fan' });
-  }
-  for (let i = 222; i <= 227; i++) {
+  // 6. Fan (Celeste): Jardines Bajos sobre barda (122-127 y 128-133)
+  for (let i = 122; i <= 133; i++) {
     sections.push({ ...defaultProps, sectionNumber: String(i), zoneName: 'Fan' });
   }
 
-  // 8. Fan Plus: 128-133, 228-233
-  for (let i = 128; i <= 133; i++) {
-    sections.push({ ...defaultProps, sectionNumber: String(i), zoneName: 'Fan Plus' });
-  }
-  for (let i = 228; i <= 233; i++) {
+  // 7. Fan Plus (Gris Lavanda): Jardines Altos nivel 200 (222-227 y 228-233)
+  for (let i = 222; i <= 233; i++) {
     sections.push({ ...defaultProps, sectionNumber: String(i), zoneName: 'Fan Plus' });
   }
 
-  // 9. Sky: 301-316 (anillo superior)
-  for (let i = 301; i <= 316; i++) {
-    sections.push({ ...defaultProps, sectionNumber: String(i), zoneName: 'Sky' });
+  // 8. Sky (Morado): Nivel 300 lateral (301-304 y 313-316)
+  for (const s of [301, 302, 303, 304, 313, 314, 315, 316]) {
+    sections.push({ ...defaultProps, sectionNumber: String(s), zoneName: 'Sky' });
+  }
+
+  // 9. Sky Plus (Melocotón): Nivel 300 central (305-307 y 310-312)
+  for (const s of [305, 306, 307, 310, 311, 312]) {
+    sections.push({ ...defaultProps, sectionNumber: String(s), zoneName: 'Sky Plus' });
   }
 
   return sections;

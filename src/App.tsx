@@ -35,9 +35,8 @@ import {
   MapPin,
 } from 'lucide-react';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { DEFAULT_VENUE_ID, DEFAULT_VENUES, ensureDefaultVenueExists } from './lib/defaultVenue';
+import { DEFAULT_VENUE_ID, ensureDefaultVenueExists } from './lib/defaultVenue';
 import { DEFAULT_FALLBACK_EVENTS, getHeroSlides } from './lib/venueEvents';
-import { subscribeVenues } from './lib/venues';
 import { DEFAULT_STORE_PROMO_BANNER } from './lib/imageUtils';
 
 function MainLayout() {
@@ -111,42 +110,31 @@ function MainLayout() {
   });
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
 
-  // Sedes disponibles para la cartelera pública
-  const [publicVenues, setPublicVenues] = useState<Venue[]>(DEFAULT_VENUES);
-  const [selectedPublicVenueId, setSelectedPublicVenueId] = useState<string>(() => {
+  // Ciudad seleccionada para la cartelera pública (por el momento solo Mazatlán)
+  const [selectedCity, setSelectedCity] = useState<string>(() => {
     try {
-      return localStorage.getItem('vxp_selected_venue_id') || '';
+      return localStorage.getItem('vxp_selected_city') || 'Mazatlán';
     } catch {
-      return '';
+      return 'Mazatlán';
     }
   });
 
-  // Escuchar sedes en tiempo real
-  useEffect(() => {
-    const unsub = subscribeVenues((venuesList) => {
-      if (venuesList && venuesList.length > 0) {
-        setPublicVenues(venuesList);
-      }
-    });
-    return () => unsub();
-  }, []);
-
-  const handleSelectPublicVenue = (venueId: string) => {
-    setSelectedPublicVenueId(venueId);
+  const handleSelectCity = (city: string) => {
+    setSelectedCity(city);
     try {
-      if (venueId) {
-        localStorage.setItem('vxp_selected_venue_id', venueId);
+      if (city) {
+        localStorage.setItem('vxp_selected_city', city);
       } else {
-        localStorage.removeItem('vxp_selected_venue_id');
+        localStorage.removeItem('vxp_selected_city');
       }
     } catch {}
   };
 
-  // Cargar slides (eventos y banners promocionales de tienda oficial) para el hero
+  // Cargar slides (eventos y banners promocionales de tienda oficial) filtrados por ciudad para el hero
   useEffect(() => {
     let isMounted = true;
     setLoadingHeroEvents(true);
-    getHeroSlides(selectedPublicVenueId || undefined, 8)
+    getHeroSlides(undefined, 8, selectedCity)
       .then((slides) => {
         if (isMounted) {
           if (slides && slides.length > 0) {
@@ -169,7 +157,7 @@ function MainLayout() {
     return () => {
       isMounted = false;
     };
-  }, [selectedPublicVenueId]);
+  }, [selectedCity]);
 
   // Ciclo automático de fondo y póster: exactamente cada 5 segundos avanza a la siguiente imagen con fade suave
   useEffect(() => {
@@ -402,23 +390,21 @@ function MainLayout() {
         ) : !userProfile ? (
           /* Pantalla de Bienvenida con Cartelera Oficial e Imágenes (única pantalla de inicio) */
           <div className="max-w-5xl mx-auto space-y-4 sm:space-y-6 py-2 sm:py-6">
-            {/* Barra de Selección de Sede / Recinto Deportivo */}
+            {/* Barra de Selección de Ciudad */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 sm:p-4 rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-xs">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-red-50 text-red-700 flex items-center justify-center shrink-0 border border-red-100">
-                  <Building2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <MapPin className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
                 <div>
                   <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 flex items-center gap-1.5">
-                    Sede Deportiva
-                    {selectedPublicVenueId && (
-                      <span className="text-[10px] font-bold text-red-700 bg-red-100/70 px-2 py-0.5 rounded-full">
-                        Filtrado
-                      </span>
-                    )}
+                    Seleccionar Ciudad
+                    <span className="text-[10px] font-bold text-red-700 bg-red-100/70 px-2 py-0.5 rounded-full">
+                      {selectedCity}
+                    </span>
                   </h3>
                   <p className="text-[11px] sm:text-xs text-slate-500">
-                    Elige el estadio del que deseas ver partidos, boletos y accesos
+                    Mostrando únicamente la cartelera oficial y eventos de {selectedCity}
                   </p>
                 </div>
               </div>
@@ -426,26 +412,21 @@ function MainLayout() {
               <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                 <div className="relative w-full sm:w-auto min-w-[240px]">
                   <select
-                    id="public-landing-venue-select"
-                    value={selectedPublicVenueId}
-                    onChange={(e) => handleSelectPublicVenue(e.target.value)}
-                    className="w-full pl-9 pr-8 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-600 appearance-none cursor-pointer"
+                    id="public-landing-city-select"
+                    value={selectedCity}
+                    onChange={(e) => handleSelectCity(e.target.value)}
+                    className="w-full pl-9 pr-8 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-red-600 appearance-none cursor-pointer"
                   >
-                    <option value="">Todas las Sedes (Cartelera General)</option>
-                    {publicVenues.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.name} ({v.city})
-                      </option>
-                    ))}
+                    <option value="Mazatlán">Mazatlán, Sinaloa</option>
                   </select>
-                  <Building2 className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <MapPin className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <ChevronRight className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none rotate-90" />
                 </div>
               </div>
             </div>
 
-            {/* Banner Principal con Cartelera Dinámica y Tienda Oficial */}
-            <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-red-950 via-red-900 to-slate-950 text-white p-5 sm:p-8 lg:p-10 shadow-xl border border-red-800/40 text-center sm:text-left min-h-0 sm:min-h-[380px] flex flex-col justify-between">
+            {/* Banner Principal con Cartelera Dinámica ajustada a todo lo ancho del recuadro color tinto */}
+            <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-red-950 via-red-900 to-slate-950 text-white p-4 sm:p-6 lg:p-7 shadow-xl border border-red-800/40 flex flex-col justify-between space-y-4 sm:space-y-5">
               {/* Fondo ambiental suave basado en el póster/banner activo */}
               {heroSlides.length > 0 && (
                 <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
@@ -463,10 +444,9 @@ function MainLayout() {
                           alt=""
                           aria-hidden="true"
                           referrerPolicy="no-referrer"
-                          className="w-full h-full object-cover blur-3xl opacity-25 scale-110"
+                          className="w-full h-full object-cover blur-3xl opacity-20 scale-110"
                         />
-                        <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/85 to-red-950/60" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-black/40" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-red-950/90 via-slate-950/80 to-red-950/60" />
                       </div>
                     );
                   })}
@@ -476,239 +456,180 @@ function MainLayout() {
               {/* Resplandor luminoso decorativo de fondo */}
               <div className="absolute top-0 right-0 w-96 h-96 bg-red-600/15 rounded-full blur-3xl pointer-events-none z-10" />
 
-              {/* Contenido en primer plano con grilla adaptable */}
-              <div className="relative z-20 grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 lg:gap-8 items-center py-1">
-                {/* Columna izquierda: Información, textos y CTA */}
-                <div className="lg:col-span-7 space-y-3 sm:space-y-4 text-center sm:text-left">
-                  {heroSlides[currentSlideIndex] && (
-                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5 sm:gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleSelectHeroSlide(heroSlides[currentSlideIndex])}
-                        className="inline-flex items-center gap-1.5 sm:gap-2 px-3 py-1 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-bold tracking-wider bg-black/60 hover:bg-black/80 backdrop-blur-md border border-white/20 text-red-100 transition-all cursor-pointer shadow-xs text-left max-w-full"
-                      >
-                        {heroSlides[currentSlideIndex].slideType === 'store_promo' ? (
-                          <ShoppingBag className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                        ) : (
-                          <Sparkles className="w-3.5 h-3.5 text-amber-300 shrink-0" />
-                        )}
-                        <span className="truncate max-w-[130px] xs:max-w-[180px] sm:max-w-xs">
-                          {heroSlides[currentSlideIndex].title}
-                        </span>
-                        <span className="text-amber-300 font-black text-[9px] sm:text-[10px] uppercase bg-amber-400/20 px-1.5 py-0.5 rounded-sm shrink-0">
-                          {heroSlides[currentSlideIndex].slideType === 'store_promo' ? 'Ir a Tienda' : 'Ver Boletos'}
-                        </span>
-                      </button>
-                      {heroSlides[currentSlideIndex].venueName && (
-                        <span className="text-[11px] sm:text-xs font-bold text-amber-200 bg-red-950/70 border border-amber-400/30 px-2.5 py-1 rounded-full whitespace-nowrap flex items-center gap-1 backdrop-blur-xs">
-                          🏟️ {heroSlides[currentSlideIndex].venueName}
-                        </span>
-                      )}
-                      <span className={`text-[11px] sm:text-xs font-semibold px-2.5 py-1 rounded-full border whitespace-nowrap ${
-                        heroSlides[currentSlideIndex].slideType === 'store_promo'
-                          ? 'bg-amber-400/20 text-amber-300 border-amber-400/40'
-                          : 'bg-black/40 text-amber-300/90 border-white/10'
-                      }`}>
-                        {heroSlides[currentSlideIndex].slideType === 'store_promo' ? '🛍️ OFICIAL & ENVÍOS' : `📅 ${heroSlides[currentSlideIndex].dateBadge}`}
-                      </span>
-                    </div>
-                  )}
-
-                  {heroSlides[currentSlideIndex]?.slideType === 'store_promo' ? (
-                    <>
-                      <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black tracking-tight leading-tight drop-shadow-sm text-amber-300">
-                        {heroSlides[currentSlideIndex].title}
-                      </h1>
-                      <p className="text-xs sm:text-sm md:text-base text-red-100/90 leading-relaxed font-normal max-w-xl mx-auto sm:mx-0">
-                        {heroSlides[currentSlideIndex].subtitle ||
-                          'Jerseys originales, gorras de juego y recuerdos exclusivos con entrega en tu asiento o envío express.'}
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black tracking-tight leading-tight drop-shadow-sm">
-                        {t('hero.title', 'Bienvenido a VXP')}
-                      </h1>
-                      <p className="text-xs sm:text-sm md:text-base text-red-100/90 leading-relaxed font-normal max-w-xl mx-auto sm:mx-0">
-                        {t(
-                          'hero.subtitle',
-                          'Boletos digitales, pedidos a tu asiento, tienda oficial y toda la experiencia de tu estadio, desde tu celular.'
-                        )}
-                      </p>
-                    </>
-                  )}
-
-                  <div className="pt-1 sm:pt-2 flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
-                    {heroSlides[currentSlideIndex]?.slideType === 'store_promo' ? (
-                      <button
-                        id="hero-store-login-btn"
-                        onClick={() => handleSelectHeroSlide(heroSlides[currentSlideIndex])}
-                        className="w-full sm:w-auto text-center px-6 py-3 bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-sm rounded-xl shadow-lg transition-all transform hover:-translate-y-0.5 cursor-pointer whitespace-nowrap flex items-center justify-center gap-2"
-                      >
-                        <ShoppingBag className="w-4 h-4 text-slate-950" />
-                        <span>Explorar Tienda Oficial</span>
-                      </button>
-                    ) : (
-                      <button
-                        id="hero-login-btn"
-                        onClick={handleGenericLogin}
-                        className="w-full sm:w-auto text-center px-6 py-3 bg-white hover:bg-slate-100 text-red-900 font-extrabold text-sm rounded-xl shadow-lg transition-all transform hover:-translate-y-0.5 cursor-pointer whitespace-nowrap"
-                      >
-                        {t('hero.login_btn', 'Ingresar con Google o Correo')}
-                      </button>
-                    )}
+              {/* Encabezado superior dentro del recuadro tinto */}
+              <div className="relative z-20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3 sm:pb-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[10px] sm:text-xs font-black tracking-wider uppercase bg-amber-400 text-slate-950 px-2.5 py-0.5 rounded-full shadow-xs">
+                      Cartelera Oficial
+                    </span>
+                    <span className="text-xs text-red-200 font-semibold">
+                      Mazatlán • Estadio Teodoro Mariscal
+                    </span>
                   </div>
+                  <h1 className="text-xl sm:text-2xl lg:text-3xl font-black tracking-tight drop-shadow-sm text-white">
+                    {t('hero.title', 'Bienvenido a VXP')}
+                  </h1>
                 </div>
 
-                {/* Columna derecha: Tarjeta del Póster Oficial Completo con Proporción Adaptativa */}
-                {heroSlides.length > 0 && (
-                  <div className="lg:col-span-5 flex justify-center w-full mt-2 lg:mt-0">
-                    <div
-                      id="hero-featured-poster-card"
-                      className="relative group w-full max-w-xs sm:max-w-sm lg:max-w-md rounded-2xl overflow-hidden border border-white/20 bg-slate-950/80 shadow-2xl transition-all duration-300 hover:scale-[1.01] hover:border-amber-400/60 p-1.5 sm:p-2 backdrop-blur-md"
-                    >
-                      {/* Contenedor adaptativo: Aspect ratio 4/3 en móvil y 16/10 en tablet/escritorio con crossfade suave */}
-                      <div className="relative w-full aspect-4/3 sm:aspect-16/10 lg:aspect-4/3 max-h-[260px] sm:max-h-[300px] lg:max-h-[340px] rounded-xl overflow-hidden bg-slate-950 flex items-center justify-center">
-                        {heroSlides.map((slide, idx) => {
-                          const isActive = idx === currentSlideIndex;
-                          const isStore = slide.slideType === 'store_promo';
-                          return (
-                            <div
-                              key={slide.id}
-                              onClick={() => handleSelectHeroSlide(slide)}
-                              className={`absolute inset-0 transition-opacity duration-1000 ease-in-out flex items-center justify-center cursor-pointer ${
-                                isActive
-                                  ? 'opacity-100 z-10 pointer-events-auto'
-                                  : 'opacity-0 z-0 pointer-events-none'
-                              }`}
-                              title={isStore ? `Clic para ver Tienda Oficial: ${slide.title}` : `Clic para ver y comprar boletos: ${slide.title}`}
-                            >
-                              {/* Fondo difuminado a juego para rellenar bordes si el formato varía */}
-                              <img
-                                src={slide.imageUrl}
-                                alt=""
-                                aria-hidden="true"
-                                className="absolute inset-0 w-full h-full object-cover blur-md opacity-35 scale-110 pointer-events-none"
-                                referrerPolicy="no-referrer"
-                              />
-                              {/* Imagen principal: object-contain para mostrarla 100% completa sin recortar */}
-                              <img
-                                src={slide.imageUrl}
-                                alt={slide.title}
-                                className="relative z-10 max-h-full max-w-full object-contain rounded-lg drop-shadow-xl"
-                                referrerPolicy="no-referrer"
-                              />
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    id="hero-login-btn"
+                    onClick={handleGenericLogin}
+                    className="w-full sm:w-auto text-center px-5 py-2.5 bg-white hover:bg-slate-100 text-red-950 font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all transform hover:-translate-y-0.5 cursor-pointer whitespace-nowrap"
+                  >
+                    {t('hero.login_btn', 'Ingresar con Google o Correo')}
+                  </button>
+                </div>
+              </div>
 
-                              {/* Badge distintivo de categoría */}
-                              <div className="absolute top-2 left-2 z-20">
-                                <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md shadow-md backdrop-blur-xs flex items-center gap-1 ${
-                                  isStore
-                                    ? 'bg-amber-400 text-slate-950'
-                                    : 'bg-red-700/90 text-white'
-                                }`}>
-                                  {isStore ? (
-                                    <ShoppingBag className="w-3 h-3 text-slate-950" />
-                                  ) : (
-                                    <Ticket className="w-3 h-3 text-white" />
-                                  )}
-                                  {isStore ? 'Tienda Oficial' : 'Evento Cartelera'}
-                                </span>
-                              </div>
+              {/* CARTELERA DE EVENTOS A TODO LO ANCHO DEL RECUADRO COLOR TINTO */}
+              {heroSlides.length > 0 && (
+                <div className="relative z-20 w-full">
+                  <div
+                    id="hero-featured-poster-card"
+                    className="relative group w-full rounded-2xl overflow-hidden border border-white/20 bg-slate-950/90 shadow-2xl transition-all duration-300 hover:border-amber-400/60 backdrop-blur-md"
+                  >
+                    {/* Contenedor adaptativo panorámico que llena el 100% del ancho del recuadro */}
+                    <div className="relative w-full aspect-16/9 sm:aspect-21/9 md:aspect-[2.4/1] min-h-[220px] sm:min-h-[280px] md:min-h-[340px] max-h-[460px] overflow-hidden bg-slate-950 flex items-center justify-center">
+                      {heroSlides.map((slide, idx) => {
+                        const isActive = idx === currentSlideIndex;
+                        const isStore = slide.slideType === 'store_promo';
+                        return (
+                          <div
+                            key={slide.id}
+                            onClick={() => handleSelectHeroSlide(slide)}
+                            className={`absolute inset-0 transition-opacity duration-1000 ease-in-out flex items-center justify-center cursor-pointer ${
+                              isActive
+                                ? 'opacity-100 z-10 pointer-events-auto'
+                                : 'opacity-0 z-0 pointer-events-none'
+                            }`}
+                            title={isStore ? `Clic para ver Tienda Oficial: ${slide.title}` : `Clic para ver y comprar boletos: ${slide.title}`}
+                          >
+                            {/* Fondo difuminado para rellenar marcos si el formato varía */}
+                            <img
+                              src={slide.imageUrl}
+                              alt=""
+                              aria-hidden="true"
+                              className="absolute inset-0 w-full h-full object-cover blur-lg opacity-40 scale-105 pointer-events-none"
+                              referrerPolicy="no-referrer"
+                            />
+                            {/* Imagen principal: se ajusta a lo ancho al 100% */}
+                            <img
+                              src={slide.imageUrl}
+                              alt={slide.title}
+                              className="relative z-10 w-full h-full object-cover md:object-contain drop-shadow-2xl"
+                              referrerPolicy="no-referrer"
+                            />
 
-                              {/* Overlay al pasar el mouse */}
-                              <div className="absolute inset-0 z-20 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
-                                <span className={`inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider px-3 py-1.5 rounded-lg w-fit shadow-md ${
-                                  isStore
-                                    ? 'text-slate-950 bg-amber-400'
-                                    : 'text-amber-300 bg-red-700/95'
-                                }`}>
-                                  {isStore ? (
-                                    <>
-                                      <ShoppingBag className="w-3.5 h-3.5" />
-                                      Explorar Tienda Oficial
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Ticket className="w-3.5 h-3.5 text-amber-300" />
-                                      Comprar boletos para este evento
-                                    </>
-                                  )}
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })}
-
-                        {/* Flechas de cambio rápido entre imágenes (visibles con toque en móvil) */}
-                        {heroSlides.length > 1 && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setCurrentSlideIndex((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
-                              }}
-                              className="absolute left-2 top-1/2 -translate-y-1/2 z-30 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-black/70 hover:bg-black/90 active:bg-black text-white flex items-center justify-center border border-white/20 backdrop-blur-xs opacity-80 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity cursor-pointer shadow-md"
-                              aria-label="Imagen anterior"
-                            >
-                              <ChevronLeft className="w-4 h-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setCurrentSlideIndex((prev) => (prev + 1) % heroSlides.length);
-                              }}
-                              className="absolute right-2 top-1/2 -translate-y-1/2 z-30 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-black/70 hover:bg-black/90 active:bg-black text-white flex items-center justify-center border border-white/20 backdrop-blur-xs opacity-80 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity cursor-pointer shadow-md"
-                              aria-label="Siguiente imagen"
-                            >
-                              <ChevronRight className="w-4 h-4" />
-                            </button>
-                          </>
-                        )}
-                      </div>
-
-                      {/* Pie de foto de la tarjeta con nombre, sede y fecha con cambio suave */}
-                      <div className="mt-2 px-2 py-0.5 relative h-6 overflow-hidden">
-                        {heroSlides.map((slide, idx) => {
-                          const isActive = idx === currentSlideIndex;
-                          return (
-                            <div
-                              key={slide.id}
-                              className={`absolute inset-0 flex items-center justify-between gap-2 text-xs transition-opacity duration-700 ease-in-out ${
-                                isActive ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none z-0'
-                              }`}
-                            >
-                              <div className="flex items-center gap-1.5 truncate">
-                                <span className="font-bold text-white truncate text-[11px] sm:text-xs max-w-[140px] xs:max-w-[170px] sm:max-w-[200px]">
-                                  {slide.title}
-                                </span>
-                                {slide.venueName && (
-                                  <span className="text-[9px] sm:text-[10px] text-amber-200/90 font-medium px-1.5 py-0.5 rounded bg-white/10 truncate max-w-[100px] hidden xs:inline">
-                                    {slide.venueName}
-                                  </span>
+                            {/* Badge superior distintivo */}
+                            <div className="absolute top-3 left-3 z-20 flex flex-wrap items-center gap-1.5 sm:gap-2">
+                              <span className={`text-[10px] sm:text-xs font-black uppercase tracking-wider px-2.5 py-1 rounded-lg shadow-lg backdrop-blur-md flex items-center gap-1.5 ${
+                                isStore
+                                  ? 'bg-amber-400 text-slate-950 font-black'
+                                  : 'bg-red-700 text-white'
+                              }`}>
+                                {isStore ? (
+                                  <ShoppingBag className="w-3.5 h-3.5 text-slate-950" />
+                                ) : (
+                                  <Ticket className="w-3.5 h-3.5 text-white" />
                                 )}
-                              </div>
-                              <span className="text-amber-300 font-extrabold text-[10px] sm:text-[11px] shrink-0 bg-amber-400/20 px-1.5 sm:px-2 py-0.5 rounded-sm">
-                                {slide.dateBadge || 'OFICIAL'}
+                                {isStore ? 'Tienda Oficial' : 'Cartelera Mazatlán'}
+                              </span>
+
+                              {slide.venueName && (
+                                <span className="text-[10px] sm:text-xs font-bold text-white bg-black/60 border border-white/20 px-2.5 py-1 rounded-lg shadow-md backdrop-blur-md hidden xs:inline-flex items-center gap-1">
+                                  🏟️ {slide.venueName}
+                                </span>
+                              )}
+
+                              <span className="text-[10px] sm:text-xs font-bold text-amber-300 bg-black/70 border border-amber-400/30 px-2.5 py-1 rounded-lg shadow-md backdrop-blur-md">
+                                {isStore ? '🛍️ OFICIAL & ENVÍOS' : `📅 ${slide.dateBadge}`}
                               </span>
                             </div>
-                          );
-                        })}
-                      </div>
+
+                            {/* Franja de información inferior a lo ancho del cartel con llamada a la acción */}
+                            <div className="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/95 via-black/75 to-transparent pt-12 pb-3.5 sm:pb-4 px-3.5 sm:px-6 flex flex-col sm:flex-row sm:items-end justify-between gap-2.5">
+                              <div className="space-y-0.5 max-w-2xl">
+                                <h2 className="text-base sm:text-xl md:text-2xl font-black text-white tracking-tight leading-tight drop-shadow-md">
+                                  {slide.title}
+                                </h2>
+                                {slide.subtitle && (
+                                  <p className="text-xs sm:text-sm text-slate-200 line-clamp-1 sm:line-clamp-2 drop-shadow-xs">
+                                    {slide.subtitle}
+                                  </p>
+                                )}
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSelectHeroSlide(slide);
+                                }}
+                                className={`shrink-0 inline-flex items-center justify-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl font-black text-xs sm:text-sm shadow-xl transition-all transform hover:scale-105 active:scale-95 cursor-pointer whitespace-nowrap ${
+                                  isStore
+                                    ? 'bg-amber-400 hover:bg-amber-300 text-slate-950'
+                                    : 'bg-red-600 hover:bg-red-500 text-white'
+                                }`}
+                              >
+                                {isStore ? (
+                                  <>
+                                    <ShoppingBag className="w-4 h-4 text-slate-950" />
+                                    <span>Explorar Tienda Oficial</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Ticket className="w-4 h-4 text-white" />
+                                    <span>Comprar Boletos</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {/* Flechas de navegación para recorrer la cartelera */}
+                      {heroSlides.length > 1 && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCurrentSlideIndex((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
+                            }}
+                            className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-30 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-black/75 hover:bg-black text-white flex items-center justify-center border border-white/25 backdrop-blur-md transition-all transform hover:scale-110 cursor-pointer shadow-lg"
+                            aria-label="Evento anterior"
+                          >
+                            <ChevronLeft className="w-5 h-5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCurrentSlideIndex((prev) => (prev + 1) % heroSlides.length);
+                            }}
+                            className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-30 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-black/75 hover:bg-black text-white flex items-center justify-center border border-white/25 backdrop-blur-md transition-all transform hover:scale-110 cursor-pointer shadow-lg"
+                            aria-label="Siguiente evento"
+                          >
+                            <ChevronRight className="w-5 h-5" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* Indicadores de paginación del ciclo de cartelera y tienda */}
               {heroSlides.length > 1 && (
-                <div className="relative z-20 mt-4 sm:mt-6 pt-3 sm:pt-4 border-t border-white/10 flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <span className="text-[10px] sm:text-[11px] font-bold text-white/70 uppercase tracking-wider">
-                      En cartelera y tienda ({currentSlideIndex + 1}/{heroSlides.length})
+                <div className="relative z-20 pt-2 sm:pt-3 border-t border-white/10 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] sm:text-xs font-bold text-white/80 uppercase tracking-wider">
+                      Cartelera Mazatlán ({currentSlideIndex + 1}/{heroSlides.length})
                     </span>
-                    <span className="text-[10px] text-amber-300/80 font-medium hidden sm:inline">
+                    <span className="text-[10px] text-amber-300 font-medium hidden sm:inline">
                       • Cambia cada 5s
                     </span>
                   </div>

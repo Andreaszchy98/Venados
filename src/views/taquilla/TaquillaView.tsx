@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Ticket, UserProfile } from '../../types';
-import { getAllTickets, updateTicketStatus } from '../../lib/tickets';
+import { getVenueTickets, updateTicketStatus } from '../../lib/tickets';
+import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
 import { TicketCard } from '../../components/shared/TicketCard';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { ErrorMessage } from '../../components/shared/ErrorMessage';
@@ -19,7 +20,7 @@ export const TaquillaView: React.FC<TaquillaViewProps> = ({ user }) => {
   const fetchTickets = async () => {
     setLoading(true);
     try {
-      const data = await getAllTickets();
+      const data = await getVenueTickets(user?.venueId || DEFAULT_VENUE_ID);
       setTickets(data);
     } catch (err: any) {
       console.error('Error fetching tickets for taquilla:', err);

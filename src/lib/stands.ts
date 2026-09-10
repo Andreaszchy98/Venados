@@ -8,6 +8,7 @@ import {
   deleteDoc,
   query,
   where,
+  limit,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { StadiumStand, MenuItem } from '../types';
@@ -177,7 +178,10 @@ const INITIAL_MENU_ITEMS: Record<string, Omit<MenuItem, 'id' | 'standId' | 'crea
 
 export async function getStadiumStands(venueId?: string): Promise<StadiumStand[]> {
   try {
-    const snap = await getDocs(collection(db, STANDS_COLLECTION));
+    const q = venueId
+      ? query(collection(db, STANDS_COLLECTION), where('venueId', '==', venueId), limit(50))
+      : query(collection(db, STANDS_COLLECTION), limit(50));
+    const snap = await getDocs(q);
     if (snap.empty) {
       try {
         const seeded = await seedInitialStandsAndMenu();
@@ -200,11 +204,7 @@ export async function getStadiumStands(venueId?: string): Promise<StadiumStand[]
       }
     }
     let stands = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StadiumStand[];
-    if (venueId) {
-      const filteredStands = stands.filter((s) => (s.venueId || DEFAULT_VENUE_ID) === venueId);
-      if (filteredStands.length > 0) {
-        return filteredStands;
-      }
+    if (venueId && stands.length === 0) {
       return INITIAL_STANDS.map((s, idx) => ({
         ...s,
         venueId: venueId,
@@ -215,6 +215,7 @@ export async function getStadiumStands(venueId?: string): Promise<StadiumStand[]
     return stands;
   } catch (err) {
     handleFirestoreError(err, OperationType.LIST, STANDS_COLLECTION);
+    return [];
   }
 }
 
@@ -264,12 +265,28 @@ export async function getMenuItemsByStand(standId: string): Promise<MenuItem[]> 
   }
 }
 
-export async function getAllMenuItems(): Promise<MenuItem[]> {
+export async function getAllMenuItems(venueId?: string): Promise<MenuItem[]> {
   try {
-    const snap = await getDocs(collection(db, MENU_COLLECTION));
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() })) as MenuItem[];
+    const q = venueId
+      ? query(collection(db, MENU_COLLECTION), where('venueId', '==', venueId), limit(150))
+      : query(collection(db, MENU_COLLECTION), limit(150));
+    const snap = await getDocs(q);
+    let items = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as MenuItem[];
+
+    // Si no hay items con venueId explícito guardados en Firestore,
+    // filtrar según los stands asignados a esta sede para compatibilidad
+    if (items.length === 0 && venueId) {
+      const stands = await getStadiumStands(venueId);
+      const standIds = new Set(stands.map((s) => s.id));
+      if (standIds.size > 0) {
+        const allSnap = await getDocs(query(collection(db, MENU_COLLECTION), limit(150)));
+        items = (allSnap.docs.map((d) => ({ id: d.id, ...d.data() })) as MenuItem[]).filter((i) => standIds.has(i.standId));
+      }
+    }
+    return items;
   } catch (err) {
     handleFirestoreError(err, OperationType.LIST, MENU_COLLECTION);
+    return [];
   }
 }
 
@@ -282,7 +299,9 @@ export async function toggleMenuItemAvailability(itemId: string, available: bool
   }
 }
 
-export async function saveMenuItem(itemData: Partial<MenuItem> & { name: string; price: number; standId: string }): Promise<MenuItem> {
+export async function saveMenuItem(
+  itemData: Partial<MenuItem> & { name: string; price: number; standId: string; venueId?: string }
+): Promise<MenuItem> {
   const now = new Date().toISOString();
   try {
     if (itemData.id) {
@@ -294,6 +313,7 @@ export async function saveMenuItem(itemData: Partial<MenuItem> & { name: string;
       const newItem: MenuItem = {
         id: docRef.id,
         standId: itemData.standId,
+        venueId: itemData.venueId || DEFAULT_VENUE_ID,
         name: itemData.name,
         description: itemData.description || '',
         price: Number(itemData.price) || 0,

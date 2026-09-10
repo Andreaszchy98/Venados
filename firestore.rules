@@ -83,14 +83,28 @@ service cloud.firestore {
         isAuthenticated() &&
         request.auth.uid == userId &&
         request.resource.data.role == 'aficionado'
-      ) || isSuperAdmin() || isAdmin();
+      ) || isSuperAdmin() || (
+        isAdmin() &&
+        request.resource.data.role in ['concesionario', 'runner', 'taquilla', 'aficionado'] &&
+        request.resource.data.get('venueId', null) == getUserDoc().data.get('venueId', null)
+      );
       allow update: if (
         isOwner(userId) &&
         request.resource.data.role == resource.data.role &&
         request.resource.data.get('venueId', null) == resource.data.get('venueId', null) &&
         request.resource.data.get('standId', null) == resource.data.get('standId', null) &&
         request.resource.data.get('zoneId', null) == resource.data.get('zoneId', null)
-      ) || isSuperAdmin() || isAdmin();
+      ) || isSuperAdmin() || (
+        isAdmin() &&
+        // el admin nunca puede tocar cuentas que YA son admin o superadmin
+        resource.data.get('role', 'aficionado') != 'admin' &&
+        resource.data.get('role', 'aficionado') != 'superadmin' &&
+        // el admin nunca puede asignar el rol admin/superadmin
+        request.resource.data.role in ['concesionario', 'runner', 'taquilla', 'aficionado'] &&
+        // el usuario editado debe pertenecer a la misma sede del admin (o no tener sede asignada aún)
+        (resource.data.get('venueId', null) == null || resource.data.get('venueId', null) == getUserDoc().data.get('venueId', null)) &&
+        request.resource.data.get('venueId', null) == getUserDoc().data.get('venueId', null)
+      );
       allow delete: if isSuperAdmin();
     }
 

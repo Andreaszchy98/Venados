@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { UserProfile, FoodOrder, Zone } from '../../types';
 import { listenToStandFoodOrders, claimInSeatOrder, deliverInSeatOrder } from '../../lib/foodOrders';
 import { getZones } from '../../lib/zones';
+import { cleanRowValue, cleanSeatValue, cleanSectionValue, formatDeliverySeat, isGeneralAdmissionRow } from '../../lib/seatUtils';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import {
   Bike,
@@ -248,12 +249,12 @@ export const RunnerOrdersQueue: React.FC<RunnerOrdersQueueProps> = ({ user }) =>
                             {zoneMatch?.name || 'Zona del Estadio'}
                           </span>
                         </div>
-                        <div className="flex items-center gap-3 text-xs text-slate-900 font-black pt-1">
-                          <span>Sección: <strong className="text-red-800">{order.section || '-'}</strong></span>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-900 font-black pt-1">
+                          <span>Sección: <strong className="text-red-800">{cleanSectionValue(order.section) || '-'}</strong></span>
                           <span>•</span>
-                          <span>Fila: <strong className="text-red-800">{order.row || '-'}</strong></span>
+                          <span>{isGeneralAdmissionRow(order.row) ? 'Zona:' : 'Fila:'} <strong className="text-red-800">{cleanRowValue(order.row) || '-'}</strong></span>
                           <span>•</span>
-                          <span>Butaca: <strong className="text-red-800">{order.seat || '-'}</strong></span>
+                          <span>Asiento: <strong className="text-red-800">{cleanSeatValue(order.seat) || '-'}</strong></span>
                         </div>
                         <p className="text-[11px] text-slate-600 font-medium">
                           Cliente: <strong>{order.customerName}</strong>
@@ -347,15 +348,17 @@ export const RunnerOrdersQueue: React.FC<RunnerOrdersQueueProps> = ({ user }) =>
                         <div className="grid grid-cols-3 gap-2 text-center pt-1">
                           <div className="bg-red-50 p-2 rounded-xl">
                             <span className="text-[10px] font-bold text-red-800 uppercase block">Sección</span>
-                            <span className="text-lg font-black text-red-950">{order.section || '-'}</span>
+                            <span className="text-lg font-black text-red-950">{cleanSectionValue(order.section) || '-'}</span>
                           </div>
                           <div className="bg-red-50 p-2 rounded-xl">
-                            <span className="text-[10px] font-bold text-red-800 uppercase block">Fila</span>
-                            <span className="text-lg font-black text-red-950">{order.row || '-'}</span>
+                            <span className="text-[10px] font-bold text-red-800 uppercase block">
+                              {isGeneralAdmissionRow(order.row) ? 'Zona' : 'Fila'}
+                            </span>
+                            <span className="text-lg font-black text-red-950">{cleanRowValue(order.row) || '-'}</span>
                           </div>
                           <div className="bg-red-50 p-2 rounded-xl">
                             <span className="text-[10px] font-bold text-red-800 uppercase block">Asiento</span>
-                            <span className="text-lg font-black text-red-950">{order.seat || '-'}</span>
+                            <span className="text-lg font-black text-red-950">{cleanSeatValue(order.seat) || '-'}</span>
                           </div>
                         </div>
 
@@ -422,7 +425,7 @@ export const RunnerOrdersQueue: React.FC<RunnerOrdersQueueProps> = ({ user }) =>
                         {order.standName} • Código {order.pickupCode}
                       </p>
                       <p className="text-[11px] text-slate-500">
-                        Entregado en Sección {order.section || '-'}, Fila {order.row || '-'}, Butaca {order.seat || '-'} ({order.customerName})
+                        Entregado en {formatDeliverySeat(order.section, order.row, order.seat)} ({order.customerName})
                       </p>
                     </div>
                   </div>

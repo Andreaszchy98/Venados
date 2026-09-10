@@ -8,6 +8,7 @@ import {
   updateDoc,
   orderBy,
   onSnapshot,
+  limit,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Ticket } from '../types';
@@ -43,14 +44,82 @@ export function subscribeUserTickets(
 }
 
 /**
- * Obtener todos los boletos (para admin y taquilla)
+ * Obtener boletos del aficionado actual (Filtrado estricto por userId y acotado por limit)
  */
-export async function getAllTickets(): Promise<Ticket[]> {
-  const snapshot = await getDocs(collection(db, 'tickets'));
-  return snapshot.docs.map((docSnap) => ({
-    id: docSnap.id,
-    ...(docSnap.data() as Omit<Ticket, 'id'>),
-  }));
+export async function getUserTickets(userId: string): Promise<Ticket[]> {
+  try {
+    const q = query(
+      collection(db, 'tickets'),
+      where('userId', '==', userId),
+      limit(100)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((docSnap) => ({
+      id: docSnap.id,
+      ...(docSnap.data() as Omit<Ticket, 'id'>),
+    }));
+  } catch (err) {
+    console.error('Error al obtener boletos del usuario:', err);
+    return [];
+  }
+}
+
+/**
+ * Obtener boletos de un evento específico (para validación de aforo y acceso)
+ */
+export async function getEventTickets(eventId: string): Promise<Ticket[]> {
+  try {
+    const q = query(
+      collection(db, 'tickets'),
+      where('eventId', '==', eventId),
+      limit(150)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((docSnap) => ({
+      id: docSnap.id,
+      ...(docSnap.data() as Omit<Ticket, 'id'>),
+    }));
+  } catch (err) {
+    console.error('Error al obtener boletos del evento:', err);
+    return [];
+  }
+}
+
+/**
+ * Obtener boletos de una sede específica (para taquilla y control de accesos de la sede)
+ */
+export async function getVenueTickets(venueId: string, eventId?: string): Promise<Ticket[]> {
+  try {
+    const q = eventId
+      ? query(
+          collection(db, 'tickets'),
+          where('venueId', '==', venueId),
+          where('eventId', '==', eventId),
+          limit(150)
+        )
+      : query(
+          collection(db, 'tickets'),
+          where('venueId', '==', venueId),
+          limit(150)
+        );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((docSnap) => ({
+      id: docSnap.id,
+      ...(docSnap.data() as Omit<Ticket, 'id'>),
+    }));
+  } catch (err) {
+    console.error('Error al obtener boletos de la sede:', err);
+    return [];
+  }
+}
+
+/**
+ * Consulta de boletos para administración y taquilla con filtrado por sede y salvaguarda limit.
+ * NUNCA lee la base de datos completa de tickets sin acotar.
+ */
+export async function getAllTickets(venueId?: string): Promise<Ticket[]> {
+  const targetVenueId = venueId || DEFAULT_VENUE_ID;
+  return getVenueTickets(targetVenueId);
 }
 
 /**

@@ -1,6 +1,7 @@
 import React from 'react';
 import { UserRole } from '../../types';
 import { Shield, Ticket, User, Utensils, Bike, Crown } from 'lucide-react';
+import { useLanguage } from '../../context/LanguageContext';
 
 interface RoleBadgeProps {
   role: UserRole;
@@ -8,40 +9,42 @@ interface RoleBadgeProps {
 }
 
 export const RoleBadge: React.FC<RoleBadgeProps> = ({ role, showIcon = true }) => {
+  const { t } = useLanguage();
+
   switch (role) {
     case 'superadmin':
       return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-900 border border-amber-300">
           {showIcon && <Crown className="w-3.5 h-3.5 text-amber-600" />}
-          Superadmin
+          {t('role.superadmin', 'Superadmin')}
         </span>
       );
     case 'admin':
       return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-800 border border-red-200">
           {showIcon && <Shield className="w-3.5 h-3.5 text-red-600" />}
-          Administrador
+          {t('role.admin', 'Administrador')}
         </span>
       );
     case 'runner':
       return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-100 text-blue-800 border border-blue-200">
           {showIcon && <Bike className="w-3.5 h-3.5 text-blue-600" />}
-          Runner Estadio
+          {t('role.runner', 'Runner Estadio')}
         </span>
       );
     case 'taquilla':
       return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-purple-100 text-purple-800 border border-purple-200">
           {showIcon && <Ticket className="w-3.5 h-3.5 text-purple-600" />}
-          Taquilla / Operador
+          {t('role.taquilla', 'Taquilla / Operador')}
         </span>
       );
     case 'concesionario':
       return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
           {showIcon && <Utensils className="w-3.5 h-3.5 text-amber-600" />}
-          Concesionario
+          {t('role.concesionario', 'Concesionario')}
         </span>
       );
     case 'aficionado':
@@ -49,7 +52,7 @@ export const RoleBadge: React.FC<RoleBadgeProps> = ({ role, showIcon = true }) =
       return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
           {showIcon && <User className="w-3.5 h-3.5 text-slate-500" />}
-          Aficionado
+          {t('role.aficionado', 'Aficionado')}
         </span>
       );
   }

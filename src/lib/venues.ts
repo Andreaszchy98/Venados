@@ -10,6 +10,7 @@ import {
   where,
   orderBy,
   onSnapshot,
+  limit,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Venue, VenueEvent, EventType } from '../types';
@@ -27,7 +28,7 @@ export function subscribeVenues(
   onUpdate: (venues: Venue[]) => void,
   onError?: (err: Error) => void
 ): () => void {
-  const q = query(collection(db, VENUES_COLLECTION));
+  const q = query(collection(db, VENUES_COLLECTION), limit(50));
   return onSnapshot(
     q,
     (snapshot) => {
@@ -58,7 +59,7 @@ export function subscribeVenues(
  */
 export async function getAllVenues(): Promise<Venue[]> {
   try {
-    const snap = await getDocs(collection(db, VENUES_COLLECTION));
+    const snap = await getDocs(query(collection(db, VENUES_COLLECTION), limit(50)));
     if (snap.empty) {
       return DEFAULT_VENUES;
     }
@@ -180,10 +181,9 @@ export async function deleteVenue(venueId: string): Promise<void> {
  */
 export async function getVenueEvents(venueId?: string): Promise<VenueEvent[]> {
   try {
-    let q = query(collection(db, EVENTS_COLLECTION));
-    if (venueId) {
-      q = query(collection(db, EVENTS_COLLECTION), where('venueId', '==', venueId));
-    }
+    const q = venueId
+      ? query(collection(db, EVENTS_COLLECTION), where('venueId', '==', venueId), limit(50))
+      : query(collection(db, EVENTS_COLLECTION), limit(50));
     const snap = await getDocs(q);
     if (snap.empty && (!venueId || venueId === DEFAULT_VENUE_ID)) {
       return [DEFAULT_FALLBACK_EVENT];

@@ -35,6 +35,7 @@ import {
   Image as ImageIcon,
   UtensilsCrossed,
   RotateCcw,
+  Armchair,
 } from 'lucide-react';
 
 interface EventsManagerProps {
@@ -115,6 +116,8 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user }) => {
   const [formGate, setFormGate] = useState('Puertas 1, 2 y 4');
   const [formActive, setFormActive] = useState(true);
   const [formTicketsAvailable, setFormTicketsAvailable] = useState(true);
+  const [formAvailableSeats, setFormAvailableSeats] = useState<number | ''>(2820);
+  const [formTotalCapacity, setFormTotalCapacity] = useState<number | ''>(16000);
   const [formPriceTiers, setFormPriceTiers] = useState<EventPriceTier[]>(DEFAULT_TIERS);
   const [formPosterUrl, setFormPosterUrl] = useState('');
   const [formOrderingOpensAt, setFormOrderingOpensAt] = useState('');
@@ -161,6 +164,8 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user }) => {
     setFormGate('Puertas 1, 2, 4 y 8');
     setFormActive(true);
     setFormTicketsAvailable(true);
+    setFormAvailableSeats(2820);
+    setFormTotalCapacity(16000);
     setFormPriceTiers([...DEFAULT_TIERS]);
     setFormPosterUrl('');
     setFormOrderingOpensAt(toDateTimeLocal(defWindow.orderingOpensAt));
@@ -178,6 +183,8 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user }) => {
     setFormGate(event.gate || 'Puertas Generales');
     setFormActive(event.active);
     setFormTicketsAvailable(event.ticketsAvailable);
+    setFormAvailableSeats(event.availableSeats !== undefined ? event.availableSeats : 2820);
+    setFormTotalCapacity(event.totalCapacity !== undefined ? event.totalCapacity : 16000);
     setFormPriceTiers(
       event.priceTiers && event.priceTiers.length > 0
         ? event.priceTiers.map((t) => ({ ...t }))
@@ -312,6 +319,8 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user }) => {
             gate: formGate.trim() || undefined,
             active: formActive,
             ticketsAvailable: formTicketsAvailable,
+            availableSeats: formAvailableSeats !== '' ? Number(formAvailableSeats) : undefined,
+            totalCapacity: formTotalCapacity !== '' ? Number(formTotalCapacity) : undefined,
             priceTiers: formPriceTiers,
             posterUrl: finalPosterUrl,
             orderingOpensAt: finalOpensAt,
@@ -333,6 +342,8 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user }) => {
             gate: formGate.trim() || undefined,
             active: formActive,
             ticketsAvailable: formTicketsAvailable,
+            availableSeats: formAvailableSeats !== '' ? Number(formAvailableSeats) : undefined,
+            totalCapacity: formTotalCapacity !== '' ? Number(formTotalCapacity) : undefined,
             priceTiers: formPriceTiers,
             posterUrl: finalPosterUrl,
             orderingOpensAt: finalOpensAt,
@@ -716,6 +727,24 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user }) => {
                   );
                 })()}
 
+                {/* Asientos Disponibles Declarados */}
+                <div className="mt-2.5 flex items-center justify-between text-[11px] bg-indigo-50/70 p-2 rounded-xl border border-indigo-200/80">
+                  <div className="flex items-center gap-1.5 text-indigo-950">
+                    <Armchair className="w-3.5 h-3.5 text-indigo-700 shrink-0" />
+                    <span className="font-bold">Asientos Sede:</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="font-black text-xs text-indigo-950 bg-indigo-100/80 px-2 py-0.5 rounded-md">
+                      {(ev.availableSeats !== undefined ? ev.availableSeats : 2820).toLocaleString()} disp.
+                    </span>
+                    {ev.totalCapacity && (
+                      <span className="text-[10px] text-indigo-700 font-semibold">
+                        / {ev.totalCapacity.toLocaleString()} aforo
+                      </span>
+                    )}
+                  </div>
+                </div>
+
                 {/* Niveles de Precios (Price Tiers) */}
                 <div className="mt-3.5 space-y-1.5">
                   <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
@@ -1083,6 +1112,95 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user }) => {
                     </span>
                   </div>
                 </label>
+              </div>
+
+              {/* Declaración de Aforo y Asientos Disponibles por el Admin de la Sede */}
+              <div className="p-4 bg-indigo-50/70 rounded-2xl border border-indigo-200/90 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Armchair className="w-4 h-4 text-indigo-700 shrink-0" />
+                    <div>
+                      <h4 className="font-extrabold text-xs text-indigo-950">
+                        Aforo y Asientos Disponibles de la Sede
+                      </h4>
+                      <p className="text-[11px] text-indigo-800/80">
+                        Declara cuántos asientos están disponibles para la compra de aficionados en este evento
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-slate-800">
+                      Asientos Disponibles a la Venta *
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="100000"
+                      value={formAvailableSeats}
+                      onChange={(e) =>
+                        setFormAvailableSeats(
+                          e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value, 10))
+                        )
+                      }
+                      placeholder="Ej. 2820"
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-600"
+                    />
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setFormAvailableSeats(2820)}
+                        className="text-[10px] px-2 py-0.5 bg-white hover:bg-indigo-100 text-indigo-800 font-bold rounded border border-indigo-200 cursor-pointer"
+                      >
+                        2,820 (Teodoro Mariscal)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormAvailableSeats(3120)}
+                        className="text-[10px] px-2 py-0.5 bg-white hover:bg-indigo-100 text-indigo-800 font-bold rounded border border-indigo-200 cursor-pointer"
+                      >
+                        3,120 (El Encanto)
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-slate-800">
+                      Capacidad Total / Aforo Oficial
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="100000"
+                      value={formTotalCapacity}
+                      onChange={(e) =>
+                        setFormTotalCapacity(
+                          e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value, 10))
+                        )
+                      }
+                      placeholder="Ej. 16000"
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-600"
+                    />
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setFormTotalCapacity(16000)}
+                        className="text-[10px] px-2 py-0.5 bg-white hover:bg-indigo-100 text-indigo-800 font-bold rounded border border-indigo-200 cursor-pointer"
+                      >
+                        16,000 (Aforo Máx)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormTotalCapacity(25000)}
+                        className="text-[10px] px-2 py-0.5 bg-white hover:bg-indigo-100 text-indigo-800 font-bold rounded border border-indigo-200 cursor-pointer"
+                      >
+                        25,000 (Concierto)
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Secciones & Price Tiers */}

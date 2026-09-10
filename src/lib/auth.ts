@@ -13,6 +13,9 @@ import {
   updateDoc,
   collection,
   getDocs,
+  query,
+  where,
+  limit,
 } from 'firebase/firestore';
 import { auth, googleProvider, db } from './firebase';
 import { UserProfile, UserRole } from '../types';
@@ -106,11 +109,67 @@ export async function syncUserProfile(
 }
 
 /**
- * Obtener lista de todos los usuarios registrados (Para Administración de Personal)
+ * Obtener miembros de personal y aficionados elegibles para una sede deportiva específica.
+ * NUNCA devuelve usuarios con rol 'admin' o 'superadmin' — ni de la propia sede ni de otras.
+ * Sólo trae usuarios asignados a la sede del admin actual, más aficionados sin sede asignada aún.
+ */
+export async function getVenueStaff(venueId: string): Promise<UserProfile[]> {
+  try {
+    // 1. Usuarios asignados a esta sede específica
+    const venueStaffQuery = query(
+      collection(db, 'users'),
+      where('venueId', '==', venueId),
+      limit(100)
+    );
+
+    // 2. Aficionados registrados sin asignación de sede aún (para poder ser promovidos a staff)
+    const unassignedAficionadosQuery = query(
+      collection(db, 'users'),
+      where('role', '==', 'aficionado'),
+      limit(100)
+    );
+
+    const [venueStaffSnap, unassignedSnap] = await Promise.all([
+      getDocs(venueStaffQuery),
+      getDocs(unassignedAficionadosQuery),
+    ]);
+
+    const usersMap = new Map<string, UserProfile>();
+
+    // Procesar personal asignado a la sede
+    venueStaffSnap.docs.forEach((d) => {
+      const u = { uid: d.id, ...d.data() } as UserProfile;
+      // NUNCA devolver admins ni superadmins
+      if (u.role !== 'admin' && u.role !== 'superadmin') {
+        usersMap.set(u.uid, u);
+      }
+    });
+
+    // Procesar aficionados no asignados a ninguna otra sede
+    unassignedSnap.docs.forEach((d) => {
+      const u = { uid: d.id, ...d.data() } as UserProfile;
+      if ((!u.venueId || u.venueId === venueId) && u.role !== 'admin' && u.role !== 'superadmin') {
+        if (!usersMap.has(u.uid)) {
+          usersMap.set(u.uid, u);
+        }
+      }
+    });
+
+    return Array.from(usersMap.values());
+  } catch (err) {
+    handleFirestoreError(err, OperationType.LIST, 'users');
+    return [];
+  }
+}
+
+/**
+ * Obtener lista de usuarios registrados (Uso exclusivo de Superadmin para asignar Admins de Sede)
+ * Incluye salvaguarda de limit para evitar lecturas masivas descontroladas.
  */
 export async function getAllUsers(): Promise<UserProfile[]> {
   try {
-    const snap = await getDocs(collection(db, 'users'));
+    const q = query(collection(db, 'users'), limit(150));
+    const snap = await getDocs(q);
     return snap.docs.map((d) => ({
       uid: d.id,
       ...d.data(),
@@ -191,6 +250,8 @@ export async function updateUserRoleAndDetails(
   uid: string,
   updates: {
     role: UserRole;
+    venueId?: string;
+    venueName?: string;
     standId?: string;
     standName?: string;
     assignedZone?: string;
@@ -203,6 +264,13 @@ export async function updateUserRoleAndDetails(
       role: updates.role,
       updatedAt: new Date().toISOString(),
     };
+
+    if (updates.venueId !== undefined) {
+      payload.venueId = updates.venueId;
+    }
+    if (updates.venueName !== undefined) {
+      payload.venueName = updates.venueName;
+    }
 
     if (updates.role === 'concesionario') {
       payload.standId = updates.standId || null;

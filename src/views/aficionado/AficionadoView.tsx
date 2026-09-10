@@ -217,7 +217,9 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
             >
               <Ticket className="w-5 h-5" />
             </div>
-            <span className="text-[11px] leading-tight tracking-tight mt-0.5">Boletos</span>
+            <span className="text-[11px] leading-tight tracking-tight mt-0.5">
+              {t('nav.tickets', 'Boletos')}
+            </span>
           </button>
 
           {/* 2. Tienda */}
@@ -238,7 +240,9 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
             >
               <ShoppingBag className="w-5 h-5" />
             </div>
-            <span className="text-[11px] leading-tight tracking-tight mt-0.5">Tienda</span>
+            <span className="text-[11px] leading-tight tracking-tight mt-0.5">
+              {t('nav.store', 'Tienda')}
+            </span>
           </button>
 
           {/* 3. Comida */}
@@ -259,7 +263,9 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
             >
               <Utensils className="w-5 h-5" />
             </div>
-            <span className="text-[11px] leading-tight tracking-tight mt-0.5">Comida</span>
+            <span className="text-[11px] leading-tight tracking-tight mt-0.5">
+              {t('nav.food', 'Comida')}
+            </span>
           </button>
 
           {/* 4. Pedidos */}
@@ -280,7 +286,9 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
             >
               <Package className="w-5 h-5" />
             </div>
-            <span className="text-[11px] leading-tight tracking-tight mt-0.5">Pedidos</span>
+            <span className="text-[11px] leading-tight tracking-tight mt-0.5">
+              {t('nav.orders', 'Pedidos')}
+            </span>
           </button>
         </div>
       </nav>

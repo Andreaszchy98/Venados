@@ -19,6 +19,7 @@ import {
   SeatPurchaseItem,
 } from '../../lib/seatMap';
 import { EncantoStadiumMap } from '../../components/stadiumMaps/EncantoStadiumMap';
+import { TeodoroMariscalStadiumMap } from '../../components/stadiumMaps/TeodoroMariscalStadiumMap';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import {
   MapPin,
@@ -163,18 +164,24 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
     return seatsBySection.get(currentSection.sectionNumber) || [];
   }, [currentSection, seatsBySection]);
 
-  // Estadísticas globales de disponibilidad (Capacidad Estadio Teodoro Mariscal: 94 secciones x 30 = 2,820 asientos)
+  // Estadísticas globales de disponibilidad (Toma en cuenta si el admin de la sede declaró asientos disponibles)
   const globalStats = useMemo(() => {
+    const sold = eventSeats.filter((s) => s.status === 'vendido').length;
+    if (event?.availableSeats !== undefined && event.availableSeats > 0) {
+      const declaredTotal = event.totalCapacity || event.availableSeats;
+      const declaredAvailable = Math.max(0, event.availableSeats - sold);
+      return { total: declaredTotal, sold, available: declaredAvailable };
+    }
+
     const total = isEncanto
       ? sections.reduce(
           (acc, s) => acc + (s.totalSeats || (s.rows || 3) * (s.seatsPerRow || 10)),
           0
         ) || 3120
       : 94 * 30;
-    const sold = eventSeats.filter((s) => s.status === 'vendido').length;
     const available = Math.max(0, total - sold);
     return { total, sold, available };
-  }, [sections, eventSeats, isEncanto]);
+  }, [sections, eventSeats, isEncanto, event?.availableSeats, event?.totalCapacity]);
 
   // Alternar selección de un asiento
   const handleToggleSeat = (seat: EventSeat, section: SeatSection) => {
@@ -486,8 +493,8 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                     { num: '312', x: 615, y: 90 },
                     { num: '313', x: 655, y: 120 },
                     { num: '314', x: 685, y: 150 },
-                    { num: '315', x: 705, y: 190 },
-                    { num: '316', x: 715, y: 235 },
+                    { num: '315', x: 716, y: 184 },
+                    { num: '316', x: 747, y: 218 },
                   ].map((pos) => {
                     const isSelected = activeSectionNumber === pos.num;
                     const zoneColor = MARISCAL_ZONES['Sky']?.colorHex || '#6366F1';

@@ -26,6 +26,7 @@ import {
   getEventPosterPlaceholder,
 } from '../../lib/venueEvents';
 import { normalizeGoogleDriveImageUrl } from '../../lib/imageUtils';
+import { formatDeliverySeat } from '../../lib/seatUtils';
 import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { ConfirmationModal } from '../../components/shared/ConfirmationModal';
@@ -610,7 +611,7 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
                         <p className="font-black text-xs text-slate-900">{order.customerName}</p>
                         {order.orderType === 'in-seat' ? (
                           <p className="text-[11px] font-bold text-red-900 bg-red-50/80 px-2 py-0.5 rounded border border-red-200/60">
-                            📍 Sec: {order.section || '-'} • Fila: {order.row || '-'} • Butaca: {order.seat || '-'}
+                            📍 {formatDeliverySeat(order.section, order.row, order.seat)}
                           </p>
                         ) : (
                           <span className="text-[10px] text-slate-500">Retiro Express en mostrador</span>

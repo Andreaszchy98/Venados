@@ -4,6 +4,9 @@ import {
   getDocs,
   getDoc,
   setDoc,
+  query,
+  where,
+  limit,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Zone } from '../types';
@@ -65,7 +68,10 @@ export async function seedInitialZones(): Promise<void> {
  */
 export async function getZones(venueId?: string): Promise<Zone[]> {
   try {
-    const snap = await getDocs(collection(db, ZONES_COLLECTION));
+    const q = venueId
+      ? query(collection(db, ZONES_COLLECTION), where('venueId', '==', venueId), limit(50))
+      : query(collection(db, ZONES_COLLECTION), limit(50));
+    const snap = await getDocs(q);
     if (snap.empty) {
       await seedInitialZones();
       const initial = INITIAL_ZONES;
@@ -74,14 +80,11 @@ export async function getZones(venueId?: string): Promise<Zone[]> {
       }
       return initial;
     }
-    let zones = snap.docs.map((d) => ({
+    const zones = snap.docs.map((d) => ({
       id: d.id,
       ...d.data(),
     })) as Zone[];
 
-    if (venueId) {
-      zones = zones.filter((z) => (z.venueId || DEFAULT_VENUE_ID) === venueId);
-    }
     return zones;
   } catch (err) {
     handleFirestoreError(err, OperationType.LIST, ZONES_COLLECTION);
