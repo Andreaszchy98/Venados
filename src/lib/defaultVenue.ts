@@ -1,10 +1,10 @@
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, query } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { Venue, VenueEvent } from '../types';
 import { getEventPosterPlaceholder } from './imageUtils';
 
-export const DEFAULT_VENUE_ID = 'venue-teodoro-mariscal';
-export const DEFAULT_EVENT_ID = 'event-temporada-2026';
+import { DEFAULT_VENUE_ID, DEFAULT_EVENT_ID } from './constants';
+export { DEFAULT_VENUE_ID, DEFAULT_EVENT_ID } from './constants';
 
 export const DEFAULT_VENUES: Venue[] = [
   {
@@ -114,42 +114,34 @@ export async function ensureDefaultVenueExists(): Promise<void> {
       }
     }
 
-    // Asegurar evento por defecto de Estadio El Encanto
-    const encantoEventRef = doc(db, 'venueEvents', 'event-futbol-mazatlan-2026');
-    const encantoSnap = await getDoc(encantoEventRef);
-    if (!encantoSnap.exists()) {
-      const encantoDefaultEvent: VenueEvent = {
-        id: 'event-futbol-mazatlan-2026',
-        venueId: 'venue-encanto',
-        type: 'football',
-        name: 'Mazatlán FC vs Club América',
-        opponent: 'Club América',
-        date: '2026-11-05',
-        time: '21:00 hrs',
-        gate: 'Puertas 1, 2, 3, 4, 5 y 6',
-        active: true,
-        ticketsAvailable: true,
-        posterUrl: getEventPosterPlaceholder('football'),
-        orderingOpensAt: '2026-11-05T19:00:00.000Z',
-        orderingClosesAt: '2026-11-06T01:00:00.000Z',
-        priceTiers: [
-          { section: 'Poniente Central', price: 650 },
-          { section: 'Oriente Central', price: 600 },
-          { section: 'Poniente Lateral', price: 480 },
-          { section: 'Oriente Lateral', price: 450 },
-          { section: 'Poniente Superior', price: 360 },
-          { section: 'Oriente Superior', price: 320 },
-          { section: 'General Sur', price: 220 },
-          { section: 'General Norte', price: 200 },
-          { section: 'Cabecera Superior', price: 250 },
-          { section: 'Tiro de Esquina', price: 290 },
-          { section: 'Palcos', price: 1200 },
-          { section: 'Sky Boxes', price: 1400 },
-          { section: 'Zona Lounge', price: 1100 },
-        ],
-        createdAt: new Date().toISOString(),
-      };
-      await setDoc(encantoEventRef, encantoDefaultEvent);
+    // Limpiar activamente el evento eliminado de Mazatlán FC si aún persiste en Firestore
+    try {
+      const encantoEventRef = doc(db, 'venueEvents', 'event-futbol-mazatlan-2026');
+      const encantoSnap = await getDoc(encantoEventRef);
+      if (encantoSnap.exists()) {
+        await deleteDoc(encantoEventRef);
+      }
+      // Asegurar que ningún otro evento remanente de Mazatlán FC persista
+      const allEventsSnap = await getDocs(collection(db, 'venueEvents'));
+      for (const d of allEventsSnap.docs) {
+        const evData = d.data() as Partial<VenueEvent>;
+        if (
+          d.id === 'event-futbol-mazatlan-2026' ||
+          (evData.name && (evData.name.includes('Mazatlán FC') || evData.name.includes('Mazatlan FC')))
+        ) {
+          await deleteDoc(d.ref).catch(() => {});
+        }
+      }
+    } catch (cleanEvErr) {
+      console.warn('ensureDefaultVenueExists: Nota al verificar eliminación de evento Mazatlán FC:', cleanEvErr);
+    }
+
+    // Consolidar concesionarios para mantener únicamente los 3 puestos canónicos
+    try {
+      const { cleanupDuplicateStands } = await import('./stands');
+      await cleanupDuplicateStands();
+    } catch (cleanStandsErr) {
+      console.warn('ensureDefaultVenueExists: Nota al consolidar puestos:', cleanStandsErr);
     }
   } catch (err) {
     // Se captura la advertencia en caso de que el usuario no autenticado o no-admin

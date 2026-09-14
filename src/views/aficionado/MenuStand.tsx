@@ -48,16 +48,37 @@ interface MenuStandProps {
   user: UserProfile;
   onOrderSuccess?: () => void;
   onGoToTickets?: () => void;
+  onRequireAuth?: () => void;
 }
 
-export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGoToTickets }) => {
+export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGoToTickets, onRequireAuth }) => {
   const [stands, setStands] = useState<StadiumStand[]>([]);
   const [selectedStand, setSelectedStand] = useState<StadiumStand | null>(null);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [loadingStands, setLoadingStands] = useState(true);
   const [loadingMenu, setLoadingMenu] = useState(false);
-  const [cart, setCart] = useState<{ item: MenuItem; quantity: number }[]>([]);
+  const [cart, setCart] = useState<{ item: MenuItem; quantity: number }[]>(() => {
+    try {
+      const saved = sessionStorage.getItem('vxp_food_cart');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [placingOrder, setPlacingOrder] = useState(false);
+
+  // Sincronizar carrito con sessionStorage para no perder progreso ante inicio de sesión
+  useEffect(() => {
+    try {
+      if (cart.length > 0) {
+        sessionStorage.setItem('vxp_food_cart', JSON.stringify(cart));
+      } else {
+        sessionStorage.removeItem('vxp_food_cart');
+      }
+    } catch (e) {
+      console.warn('Error guardando carrito de comida:', e);
+    }
+  }, [cart]);
 
   // Verificación de ventana de pedidos activa
   const [checkingOrderingWindow, setCheckingOrderingWindow] = useState(true);
@@ -240,6 +261,14 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
   const handleConfirmOrder = async () => {
     if (cart.length === 0 || !selectedStand) return;
 
+    // Si el usuario no tiene sesión iniciada, solicitamos login manteniendo su carrito intacto
+    if (!user || !user.uid) {
+      if (onRequireAuth) {
+        onRequireAuth();
+      }
+      return;
+    }
+
     if (selectedOrderType === 'in-seat') {
       if (!seatSection.trim() || !seatRow.trim() || !seatNumber.trim()) {
         setFormError('Por favor indica tu Sección, Fila y Butaca para que el Runner pueda llevar tu pedido.');
@@ -290,6 +319,9 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
       });
 
       setCart([]);
+      try {
+        sessionStorage.removeItem('vxp_food_cart');
+      } catch {}
       setIsCheckoutModalOpen(false);
       if (onOrderSuccess) onOrderSuccess();
     } catch (err: any) {
@@ -308,148 +340,28 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
     );
   }
 
-  if (!activeOrderingEvent) {
-    return (
-      <div className="space-y-6">
-        {/* Banner Fuera de Horario */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white p-6 sm:p-8 border border-slate-700/60 shadow-lg">
-          <div className="relative z-10 space-y-2">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 border border-amber-400/30 text-amber-300">
-              <Clock className="w-3.5 h-3.5" /> Fuera de Horario de Evento
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
-              Servicio de Alimentos No Disponible
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-              No hay ningún evento en curso en este momento. Los pedidos de comida y bebida solo están disponibles durante el horario de eventos en el estadio.
-            </p>
-          </div>
-        </div>
-
-        {/* Tarjeta Explicativa con Próximo Evento */}
-        <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-xs text-center space-y-6 max-w-2xl mx-auto">
-          <div className="w-16 h-16 rounded-3xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto border border-amber-200">
-            <Utensils className="w-8 h-8" />
-          </div>
-
-          <div className="space-y-2">
-            <h3 className="text-lg sm:text-xl font-black text-slate-900">
-              Cocinas y Concesiones en Pausa
-            </h3>
-            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-lg mx-auto">
-              No hay ningún evento en curso en este momento. Los pedidos de comida y bebida solo están disponibles durante el horario de eventos.
-            </p>
-          </div>
-
-          {upcomingEvent ? (
-            <div className="p-4 sm:p-5 bg-gradient-to-br from-amber-50/90 to-orange-50/70 rounded-2xl border border-amber-200 text-left space-y-3 shadow-xs">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-red-600 shrink-0" />
-                <span className="text-xs font-black uppercase tracking-wider text-amber-900">
-                  Próximo Evento Programado
-                </span>
-              </div>
-              <div className="flex gap-4 items-center">
-                {(() => {
-                  const posterSrc =
-                    normalizeGoogleDriveImageUrl(upcomingEvent.posterUrl) ||
-                    getEventPosterPlaceholder(upcomingEvent.type || 'baseball');
-                  return (
-                    <div className="w-24 sm:w-28 h-16 sm:h-20 rounded-xl overflow-hidden bg-slate-950 border border-amber-300 shadow-xs shrink-0 relative flex items-center justify-center">
-                      <img
-                        src={posterSrc}
-                        alt=""
-                        aria-hidden="true"
-                        className="absolute inset-0 w-full h-full object-cover blur-xs opacity-40 scale-110 pointer-events-none"
-                        referrerPolicy="no-referrer"
-                      />
-                      <img
-                        src={posterSrc}
-                        alt={upcomingEvent.name}
-                        className="relative z-10 max-h-full max-w-full object-contain"
-                        referrerPolicy="no-referrer"
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).src = getEventPosterPlaceholder(
-                            upcomingEvent.type || 'baseball'
-                          );
-                        }}
-                      />
-                    </div>
-                  );
-                })()}
-                <div className="flex-1 min-w-0">
-                  <h4 className="font-extrabold text-sm sm:text-base text-slate-900 leading-snug">
-                    {upcomingEvent.name}
-                  </h4>
-                  <p className="text-xs text-slate-600 mt-1 font-medium">
-                    Fecha: <strong className="text-slate-800">{upcomingEvent.date}</strong> ({upcomingEvent.time || '20:00 hrs'})
-                  </p>
-                  <p className="text-xs text-amber-900 mt-1.5 font-bold flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                    <span>
-                      Los pedidos abren:{' '}
-                      {(() => {
-                        const opens = upcomingEvent.orderingOpensAt;
-                        if (!opens) return '2 horas antes del evento';
-                        try {
-                          const d = new Date(opens);
-                          return (
-                            d.toLocaleDateString('es-MX', {
-                              weekday: 'short',
-                              day: 'numeric',
-                              month: 'short',
-                            }) +
-                            ' a las ' +
-                            d.toLocaleTimeString('es-MX', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            }) +
-                            ' hrs'
-                          );
-                        } catch {
-                          return '2 horas antes del evento';
-                        }
-                      })()}
-                    </span>
-                  </p>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-500">
-              No hay eventos futuros programados inmediatamente en el calendario de la sede.
-            </div>
-          )}
-
-          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
-            {onGoToTickets && (
-              <button
-                onClick={onGoToTickets}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 bg-red-700 hover:bg-red-800 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
-              >
-                <TicketIcon className="w-4 h-4" />
-                <span>Ver Cartelera y Comprar Boletos</span>
-              </button>
-            )}
-            <button
-              onClick={checkOrderingWindow}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
-            >
-              <RefreshCw className="w-4 h-4 text-slate-500" />
-              <span>Comprobar de Nuevo</span>
-            </button>
-          </div>
-
-          <p className="text-[11px] text-slate-400">
-            * La compra de boletos para cualquier partido o concierto sigue disponible en todo momento.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
+      {/* Banner de Modo Catálogo si no hay evento en vivo */}
+      {!activeOrderingEvent && (
+        <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <Utensils className="w-5 h-5 text-amber-400 shrink-0" />
+            <div>
+              <span className="font-bold text-white block">Catálogo y Menús de Concesiones</span>
+              <span className="text-amber-200/80 text-[11px]">
+                Explora los puestos y precios de alimentos del estadio. Los envíos de runners a butaca operan durante los horarios de partidos.
+              </span>
+            </div>
+          </div>
+          {upcomingEvent && (
+            <span className="text-[11px] font-bold text-amber-300 bg-amber-400/15 px-3 py-1.5 rounded-xl border border-amber-400/20 shrink-0">
+              Próximo evento: {upcomingEvent.name}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Banner Principal */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-red-900 via-red-800 to-amber-900 text-white p-6 sm:p-8 border border-red-700/50 shadow-lg">
         <div className="relative z-10 space-y-2">
@@ -467,48 +379,48 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
 
       {/* Banner de Confirmación de Pedido Reciente */}
       {lastPlacedOrder && (
-        <div className="p-5 bg-emerald-50 border border-emerald-200 text-emerald-950 rounded-2xl shadow-xs space-y-3">
+        <div className="p-5 bg-[#0F1626] border border-emerald-500/50 text-white rounded-2xl shadow-xl space-y-3 font-sports">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0" />
-              <h3 className="font-extrabold text-sm text-emerald-900">
+              <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0" />
+              <h3 className="font-extrabold text-sm text-white uppercase tracking-wider">
                 ¡Orden Enviada a Cocina con Éxito!
               </h3>
             </div>
             <button
               onClick={() => setLastPlacedOrder(null)}
-              className="text-xs text-emerald-700 hover:text-emerald-900 underline font-semibold"
+              className="text-xs text-slate-400 hover:text-white underline font-semibold cursor-pointer"
             >
               Cerrar
             </button>
           </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-emerald-200">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#0A0E17] p-3.5 rounded-xl border border-slate-700/80">
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-500 font-medium">Modalidad:</span>
-                <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-100 text-emerald-800 uppercase">
+                <span className="text-xs text-slate-400 font-medium uppercase">Modalidad:</span>
+                <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-500/40 uppercase">
                   {lastPlacedOrder.type === 'in-seat' ? '🚴 Entrega a Butaca' : '⚡ Pickup Express'}
                 </span>
               </div>
-              <p className="text-2xl font-black text-emerald-700 tracking-wider font-mono mt-1">
+              <p className="text-2xl font-black text-emerald-400 tracking-wider font-scoreboard mt-1">
                 {lastPlacedOrder.code}
               </p>
             </div>
 
-            <div className="text-xs text-slate-600">
+            <div className="text-xs text-slate-300 font-sans">
               {lastPlacedOrder.type === 'in-seat' ? (
                 <div className="space-y-0.5">
-                  <p className="font-bold text-slate-900">
+                  <p className="font-bold text-white font-sports">
                     Destino: {formatDeliverySeat(lastPlacedOrder.section, lastPlacedOrder.row, lastPlacedOrder.seat)}
                   </p>
-                  <p className="text-[11px] text-slate-500">
+                  <p className="text-[11px] text-slate-400">
                     Un Runner de estadio te lo llevará en cuanto la cocina lo tenga listo.
                   </p>
                 </div>
               ) : (
                 <p>
-                  Pasa al mostrador cuando la pantalla o tu pestaña "Mis Pedidos" marque <strong>LISTO</strong>.
+                  Pasa al mostrador cuando la pantalla o tu pestaña "Mis Pedidos" marque <strong className="text-emerald-400">LISTO</strong>.
                 </p>
               )}
             </div>
@@ -520,10 +432,10 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
       {loadingStands ? (
         <LoadingSpinner message="Localizando puestos de comida en el estadio..." />
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-4 font-sports">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-              <Store className="w-4 h-4 text-red-700" /> Concesiones & Puestos en Vivo
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <Store className="w-4 h-4 text-red-500" /> Concesiones & Puestos en Vivo
             </h3>
           </div>
 
@@ -535,25 +447,25 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
                   setSelectedStand(stand);
                   setCart([]);
                 }}
-                className={`p-3.5 rounded-xl text-left border transition-all flex items-start gap-3 ${
+                className={`p-3.5 rounded-xl text-left border transition-all flex items-start gap-3 cursor-pointer ${
                   selectedStand?.id === stand.id
-                    ? 'bg-white border-red-700 shadow-md ring-2 ring-red-700/20'
-                    : 'bg-white/80 border-slate-200 hover:bg-white hover:border-slate-300 shadow-xs'
+                    ? 'bg-[#0F1626] border-red-600 shadow-xl ring-2 ring-red-600/30'
+                    : 'bg-[#0F1626]/80 border-slate-700/80 hover:bg-[#0F1626] hover:border-slate-600 shadow-md'
                 }`}
               >
                 <img
                   src={stand.image}
                   alt={stand.name}
-                  className="w-12 h-12 rounded-lg object-cover bg-slate-100 shrink-0"
+                  className="w-12 h-12 rounded-lg object-cover bg-[#0A0E17] shrink-0"
                   referrerPolicy="no-referrer"
                 />
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-slate-900 truncate">{stand.name}</p>
-                  <p className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
-                    <MapPin className="w-3 h-3 text-red-600 shrink-0" />
+                  <p className="text-xs font-bold text-white truncate tracking-wide">{stand.name}</p>
+                  <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5 font-sans">
+                    <MapPin className="w-3 h-3 text-red-500 shrink-0" />
                     <span className="truncate">{stand.location}</span>
                   </p>
-                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 mt-1">
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-400 mt-1 font-sans">
                     <Clock className="w-3 h-3" /> ~{stand.estimatedWaitMinutes} min
                   </span>
                 </div>
@@ -565,17 +477,17 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
 
       {/* Menú y Carrito */}
       {selectedStand && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2 font-sports">
           {/* Menú del puesto seleccionado */}
           <div className="lg:col-span-2 space-y-4">
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
+            <div className="bg-[#0F1626] p-4 rounded-xl border border-slate-700/80 shadow-md flex items-center justify-between">
               <div>
-                <h3 className="font-extrabold text-sm text-slate-900">{selectedStand.name}</h3>
-                <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                  <MapPin className="w-3.5 h-3.5 text-red-600" /> {selectedStand.location}
+                <h3 className="font-extrabold text-sm text-white tracking-wide">{selectedStand.name}</h3>
+                <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5 font-sans">
+                  <MapPin className="w-3.5 h-3.5 text-red-500" /> {selectedStand.location}
                 </p>
               </div>
-              <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
+              <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-950/40 text-amber-300 border border-amber-500/30 uppercase tracking-wider">
                 {selectedStand.categoryTag}
               </span>
             </div>
@@ -583,7 +495,7 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
             {loadingMenu ? (
               <LoadingSpinner message="Cargando menú del puesto..." />
             ) : menuItems.length === 0 ? (
-              <div className="bg-white p-8 rounded-xl border border-slate-200 text-center text-slate-500">
+              <div className="bg-[#0F1626] p-8 rounded-xl border border-slate-700/80 text-center text-slate-400">
                 No hay productos disponibles en este puesto en este momento.
               </div>
             ) : (
@@ -591,28 +503,28 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
                 {menuItems.map((item) => (
                   <div
                     key={item.id}
-                    className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs hover:border-slate-300 transition-colors flex gap-3 justify-between"
+                    className="bg-[#0F1626] p-3.5 rounded-xl border border-slate-700/80 shadow-md hover:border-slate-600 transition-colors flex gap-3 justify-between"
                   >
                     <div className="flex-1 space-y-1">
                       <div className="flex items-center gap-2">
-                        <h4 className="font-bold text-xs text-slate-900">{item.name}</h4>
+                        <h4 className="font-bold text-xs text-white tracking-wide">{item.name}</h4>
                         {!item.available && (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 bg-red-100 text-red-700 rounded">
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 bg-red-950 text-red-400 border border-red-800 rounded uppercase">
                             Agotado
                           </span>
                         )}
                       </div>
-                      <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
+                      <p className="text-[11px] text-slate-300 line-clamp-2 leading-relaxed font-sans">
                         {item.description}
                       </p>
                       <div className="pt-1 flex items-center justify-between">
-                        <span className="text-xs font-black text-red-900">
-                          ${item.price.toLocaleString('es-MX')} MXN
+                        <span className="text-xs font-black text-emerald-400 font-scoreboard">
+                          ${item.price.toLocaleString('es-MX')} <span className="text-[10px] text-slate-400 font-sans">MXN</span>
                         </span>
                         {item.available && (
                           <button
                             onClick={() => addToCart(item)}
-                            className="px-3 py-1 bg-red-700 hover:bg-red-800 text-white text-xs font-bold rounded-lg shadow-xs flex items-center gap-1 transition-transform active:scale-95"
+                            className="px-3 py-1 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white text-xs font-bold rounded-lg shadow-md flex items-center gap-1 transition-transform active:scale-95 uppercase tracking-wider cursor-pointer"
                           >
                             <Plus className="w-3 h-3" /> Agregar
                           </button>
@@ -623,7 +535,7 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
                     <img
                       src={item.image}
                       alt={item.name}
-                      className="w-16 h-16 rounded-lg object-cover bg-slate-100 shrink-0 self-center"
+                      className="w-16 h-16 rounded-lg object-cover bg-[#0A0E17] shrink-0 self-center"
                       referrerPolicy="no-referrer"
                     />
                   </div>
@@ -633,44 +545,44 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
           </div>
 
           {/* Carrito de Comanda */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4 h-fit sticky top-20">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <div className="flex items-center gap-2 font-extrabold text-sm text-slate-900">
-                <ShoppingBag className="w-4 h-4 text-red-700" />
+          <div className="bg-[#0F1626] p-5 rounded-2xl border border-slate-700/80 shadow-xl space-y-4 h-fit sticky top-20 text-white">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-700/80">
+              <div className="flex items-center gap-2 font-extrabold text-sm text-white uppercase tracking-wider">
+                <ShoppingBag className="w-4 h-4 text-red-500" />
                 <span>Comanda del Estadio</span>
               </div>
-              <span className="text-xs text-slate-500 font-semibold">{totalCount} platillos</span>
+              <span className="text-xs text-slate-400 font-semibold">{totalCount} platillos</span>
             </div>
 
             {cart.length === 0 ? (
               <div className="py-8 text-center text-slate-400 space-y-2">
-                <Utensils className="w-8 h-8 mx-auto text-slate-300" />
-                <p className="text-xs font-semibold">Selecciona platillos del menú</p>
+                <Utensils className="w-8 h-8 mx-auto text-slate-600" />
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Selecciona platillos del menú</p>
               </div>
             ) : (
               <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
                 {cart.map((c) => (
                   <div
                     key={c.item.id}
-                    className="flex items-center justify-between gap-2 p-2 bg-slate-50 rounded-lg text-xs"
+                    className="flex items-center justify-between gap-2 p-2 bg-[#0A0E17] rounded-lg border border-slate-700/80 text-xs"
                   >
                     <div className="flex-1 min-w-0">
-                      <p className="font-bold text-slate-900 truncate">{c.item.name}</p>
-                      <p className="text-[11px] text-red-800 font-semibold">
+                      <p className="font-bold text-white truncate tracking-wide">{c.item.name}</p>
+                      <p className="text-[11px] text-emerald-400 font-scoreboard">
                         ${(c.item.price * c.quantity).toLocaleString('es-MX')} MXN
                       </p>
                     </div>
-                    <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-md p-0.5">
+                    <div className="flex items-center gap-1 bg-[#141C2E] border border-slate-700 rounded-md p-0.5">
                       <button
                         onClick={() => updateCartQty(c.item.id, -1)}
-                        className="p-1 text-slate-600 hover:text-red-700"
+                        className="p-1 text-slate-400 hover:text-red-400 cursor-pointer"
                       >
                         <Minus className="w-3 h-3" />
                       </button>
-                      <span className="text-xs font-bold px-1">{c.quantity}</span>
+                      <span className="text-xs font-bold text-white px-1 font-mono">{c.quantity}</span>
                       <button
                         onClick={() => updateCartQty(c.item.id, 1)}
-                        className="p-1 text-slate-600 hover:text-red-700"
+                        className="p-1 text-slate-400 hover:text-emerald-400 cursor-pointer"
                       >
                         <Plus className="w-3 h-3" />
                       </button>
@@ -680,16 +592,16 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
               </div>
             )}
 
-            <div className="pt-3 border-t border-slate-200 space-y-3">
-              <div className="flex justify-between items-center text-sm font-black text-slate-900">
-                <span>Total:</span>
-                <span className="text-red-900">${total.toLocaleString('es-MX')} MXN</span>
+            <div className="pt-3 border-t border-slate-700/80 space-y-3">
+              <div className="flex justify-between items-center text-sm font-black text-white">
+                <span className="uppercase tracking-wider">Total:</span>
+                <span className="text-emerald-400 font-scoreboard text-lg">${total.toLocaleString('es-MX')} MXN</span>
               </div>
 
               <button
                 disabled={cart.length === 0}
                 onClick={handleOpenCheckout}
-                className="w-full py-3 bg-red-700 hover:bg-red-800 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full py-3 bg-red-600 hover:bg-red-500 active:bg-red-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider"
               >
                 <span>Continuar al Pedido</span>
                 <ArrowRight className="w-4 h-4" />
@@ -701,22 +613,22 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
 
       {/* MODAL: Selección de Método de Entrega (Pickup vs In-Seat) & Método de Pago */}
       {isCheckoutModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-lg w-full max-h-[92vh] sm:max-h-[88vh] flex flex-col shadow-2xl border border-slate-100 overflow-hidden my-auto animate-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto animate-in fade-in duration-150 font-sports">
+          <div className="bg-[#0F1626] rounded-2xl sm:rounded-3xl max-w-lg w-full max-h-[92vh] sm:max-h-[88vh] flex flex-col shadow-2xl border border-slate-700/80 overflow-hidden my-auto animate-in zoom-in-95 duration-150 text-white">
             {/* Header */}
-            <div className="p-4 sm:p-5 flex items-center justify-between border-b border-slate-100 bg-white shrink-0">
+            <div className="p-4 sm:p-5 flex items-center justify-between border-b border-slate-700/80 bg-[#0A0E17] shrink-0">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-red-50 text-red-700 rounded-xl">
+                <div className="p-2 bg-red-950 text-red-500 rounded-xl border border-red-800/40">
                   <ShoppingBag className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-black text-slate-900 text-sm sm:text-base">Detalles y Pago del Pedido</h3>
-                  <p className="text-[11px] sm:text-xs text-slate-500">Puesto: {selectedStand?.name}</p>
+                  <h3 className="font-black text-white text-sm sm:text-base uppercase tracking-wider">Detalles y Pago del Pedido</h3>
+                  <p className="text-[11px] sm:text-xs text-slate-400 font-sans">Puesto: {selectedStand?.name}</p>
                 </div>
               </div>
               <button
                 onClick={() => setIsCheckoutModalOpen(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+                className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-[#141C2E] transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -725,15 +637,15 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
             {/* Scrollable Body */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs sm:text-sm">
               {formError && (
-                <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-red-600 mt-0.5" />
+                <div className="p-3 bg-red-950/60 border border-red-700 text-red-300 rounded-xl text-xs flex items-start gap-2 font-sans">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-red-400 mt-0.5" />
                   <span>{formError}</span>
                 </div>
               )}
 
               {/* 1. Modalidad de Entrega */}
               <div className="space-y-1.5">
-                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                   1. Modalidad de Entrega
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -742,21 +654,21 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
                     onClick={() => setSelectedOrderType('in-seat')}
                     className={`p-3.5 rounded-2xl border-2 text-left transition-all flex flex-col justify-between cursor-pointer ${
                       selectedOrderType === 'in-seat'
-                        ? 'border-red-700 bg-red-50/50 shadow-xs'
-                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                        ? 'border-red-500 bg-red-950/40 shadow-md text-white'
+                        : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17] text-slate-300'
                     }`}
                   >
                     <div className="flex items-center justify-between w-full mb-2">
-                      <div className={`p-2 rounded-xl ${selectedOrderType === 'in-seat' ? 'bg-red-700 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                      <div className={`p-2 rounded-xl ${selectedOrderType === 'in-seat' ? 'bg-red-600 text-white' : 'bg-[#141C2E] text-slate-400'}`}>
                         <Bike className="w-4 h-4" />
                       </div>
                       {selectedOrderType === 'in-seat' && (
-                        <span className="w-2.5 h-2.5 rounded-full bg-red-700"></span>
+                        <span className="w-2.5 h-2.5 rounded-full bg-red-500"></span>
                       )}
                     </div>
                     <div>
-                      <p className="font-extrabold text-xs text-slate-900">Entrega a mi Asiento</p>
-                      <p className="text-[10px] text-slate-500 mt-0.5">Un Runner te lo lleva hasta tu butaca</p>
+                      <p className="font-extrabold text-xs text-white uppercase tracking-wide">Entrega a mi Asiento</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5 font-sans">Un Runner te lo lleva hasta tu butaca</p>
                     </div>
                   </button>
 
@@ -765,21 +677,21 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
                     onClick={() => setSelectedOrderType('pickup')}
                     className={`p-3.5 rounded-2xl border-2 text-left transition-all flex flex-col justify-between cursor-pointer ${
                       selectedOrderType === 'pickup'
-                        ? 'border-amber-700 bg-amber-50/50 shadow-xs'
-                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                        ? 'border-amber-500 bg-amber-950/40 shadow-md text-white'
+                        : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17] text-slate-300'
                     }`}
                   >
                     <div className="flex items-center justify-between w-full mb-2">
-                      <div className={`p-2 rounded-xl ${selectedOrderType === 'pickup' ? 'bg-amber-700 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                      <div className={`p-2 rounded-xl ${selectedOrderType === 'pickup' ? 'bg-amber-600 text-slate-950' : 'bg-[#141C2E] text-slate-400'}`}>
                         <Sparkles className="w-4 h-4" />
                       </div>
                       {selectedOrderType === 'pickup' && (
-                        <span className="w-2.5 h-2.5 rounded-full bg-amber-700"></span>
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
                       )}
                     </div>
                     <div>
-                      <p className="font-extrabold text-xs text-slate-900">Pickup Express</p>
-                      <p className="text-[10px] text-slate-500 mt-0.5">Recoges en la barra con tu código</p>
+                      <p className="font-extrabold text-xs text-white uppercase tracking-wide">Pickup Express</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5 font-sans">Recoges en la barra con tu código</p>
                     </div>
                   </button>
                 </div>
@@ -787,13 +699,13 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
 
               {/* Formulario de Ubicación para In-Seat */}
               {selectedOrderType === 'in-seat' && (
-                <div className="bg-slate-50 p-3.5 sm:p-4 rounded-2xl border border-slate-200 space-y-3">
+                <div className="bg-[#0A0E17] p-3.5 sm:p-4 rounded-2xl border border-slate-700/80 space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                      <Armchair className="w-4 h-4 text-red-700" /> ¿Dónde estás sentado?
+                    <span className="text-xs font-bold text-white flex items-center gap-1.5 uppercase tracking-wider">
+                      <Armchair className="w-4 h-4 text-red-500" /> ¿Dónde estás sentado?
                     </span>
                     {resolvedZone && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-950 text-sky-400 border border-sky-600/40 uppercase">
                         {resolvedZone.name}
                       </span>
                     )}
@@ -801,8 +713,8 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
 
                   {userTickets.length > 0 && (
                     <div>
-                      <label className="text-[11px] font-semibold text-slate-600 flex items-center gap-1 mb-1">
-                        <TicketIcon className="w-3 h-3 text-red-600" /> Usar ubicación de tu boleto activo:
+                      <label className="text-[11px] font-semibold text-slate-400 flex items-center gap-1 mb-1 font-sans">
+                        <TicketIcon className="w-3 h-3 text-red-500" /> Usar ubicación de tu boleto activo:
                       </label>
                       <div className="space-y-1.5 max-h-28 overflow-y-auto">
                         {userTickets.map((t) => (
@@ -812,18 +724,18 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
                             onClick={() => handleTicketSelect(t.id)}
                             className={`w-full p-2 rounded-xl text-left text-xs border flex items-center justify-between transition-all cursor-pointer ${
                               selectedTicketId === t.id
-                                ? 'bg-white border-red-700 shadow-xs font-bold text-slate-900'
-                                : 'bg-white/60 border-slate-200 text-slate-600 hover:bg-white'
+                                ? 'bg-red-950/40 border-red-500 shadow-xs font-bold text-white'
+                                : 'bg-[#141C2E] border-slate-700 text-slate-300 hover:text-white'
                             }`}
                           >
                             <div>
                               <p className="truncate font-semibold">{t.matchTitle}</p>
-                              <p className="text-[10px] text-slate-400">
+                              <p className="text-[10px] text-slate-400 font-sans">
                                 {formatDeliverySeat(t.section, t.row, t.seat)}
                               </p>
                             </div>
                             {selectedTicketId === t.id && (
-                              <CheckCircle2 className="w-4 h-4 text-red-700 shrink-0" />
+                              <CheckCircle2 className="w-4 h-4 text-red-500 shrink-0" />
                             )}
                           </button>
                         ))}
@@ -831,9 +743,9 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
                     </div>
                   )}
 
-                  <div className="grid grid-cols-3 gap-2 pt-1">
+                  <div className="grid grid-cols-3 gap-2 pt-1 font-sans">
                     <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase">Sección *</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase font-sports">Sección *</label>
                       <input
                         type="text"
                         placeholder="Ej: 102"
@@ -842,11 +754,11 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
                           setSeatSection(e.target.value);
                           setSelectedTicketId('');
                         }}
-                        className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-red-600"
+                        className="w-full px-2.5 py-2 bg-[#141C2E] border border-slate-700 rounded-xl text-xs font-bold text-white focus:outline-hidden focus:border-red-500"
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase">Fila *</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase font-sports">Fila *</label>
                       <input
                         type="text"
                         placeholder="Ej: D"
@@ -855,11 +767,11 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
                           setSeatRow(e.target.value);
                           setSelectedTicketId('');
                         }}
-                        className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-red-600"
+                        className="w-full px-2.5 py-2 bg-[#141C2E] border border-slate-700 rounded-xl text-xs font-bold text-white focus:outline-hidden focus:border-red-500"
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase">Asiento *</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase font-sports">Asiento *</label>
                       <input
                         type="text"
                         placeholder="Ej: 14"
@@ -868,7 +780,7 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
                           setSeatNumber(e.target.value);
                           setSelectedTicketId('');
                         }}
-                        className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-red-600"
+                        className="w-full px-2.5 py-2 bg-[#141C2E] border border-slate-700 rounded-xl text-xs font-bold text-white focus:outline-hidden focus:border-red-500"
                       />
                     </div>
                   </div>
@@ -877,7 +789,7 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
 
               {/* 2. Selector de Método de Pago */}
               <div className="space-y-2">
-                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                   2. Método de Pago
                 </label>
 
@@ -887,21 +799,21 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
                     onClick={() => setFoodPaymentMethod('Efectivo / Terminal física')}
                     className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between cursor-pointer ${
                       foodPaymentMethod === 'Efectivo / Terminal física'
-                        ? 'border-emerald-600 bg-emerald-50/70 shadow-xs'
-                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                        ? 'border-emerald-500 bg-emerald-950/40 shadow-xs'
+                        : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17]'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-base">💵</span>
                       {foodPaymentMethod === 'Efectivo / Terminal física' && (
-                        <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+                        <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
                       )}
                     </div>
                     <div>
-                      <p className="font-extrabold text-[11px] text-slate-900 leading-tight">
+                      <p className="font-extrabold text-[11px] text-white leading-tight uppercase">
                         Efectivo / Terminal física
                       </p>
-                      <p className="text-[10px] text-slate-500 mt-0.5">
+                      <p className="text-[10px] text-slate-400 mt-0.5 font-sans">
                         Paga al recibir en tu butaca o en la barra
                       </p>
                     </div>
@@ -912,21 +824,21 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
                     onClick={() => setFoodPaymentMethod('Tarjeta en Línea')}
                     className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between cursor-pointer ${
                       foodPaymentMethod === 'Tarjeta en Línea'
-                        ? 'border-red-700 bg-red-50/70 shadow-xs'
-                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                        ? 'border-red-500 bg-red-950/40 shadow-xs'
+                        : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17]'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-base">💳</span>
                       {foodPaymentMethod === 'Tarjeta en Línea' && (
-                        <span className="w-2 h-2 rounded-full bg-red-700"></span>
+                        <span className="w-2 h-2 rounded-full bg-red-500"></span>
                       )}
                     </div>
                     <div>
-                      <p className="font-extrabold text-[11px] text-slate-900 leading-tight">
+                      <p className="font-extrabold text-[11px] text-white leading-tight uppercase">
                         Tarjeta en Línea
                       </p>
-                      <p className="text-[10px] text-slate-500 mt-0.5">
+                      <p className="text-[10px] text-slate-400 mt-0.5 font-sans">
                         Visa, Mastercard, Amex
                       </p>
                     </div>
@@ -934,8 +846,8 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
                 </div>
 
                 {foodPaymentMethod === 'Efectivo / Terminal física' && (
-                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] text-emerald-900 font-medium flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0 animate-pulse"></span>
+                  <div className="p-2.5 bg-[#0A0E17] border border-emerald-500/50 rounded-xl text-[11px] text-emerald-300 font-medium flex items-center gap-2 font-sans">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 animate-pulse"></span>
                     <span>
                       {selectedOrderType === 'in-seat'
                         ? 'El Runner llevará terminal física inalámbrica o cambio en efectivo para tu cobro.'
@@ -947,27 +859,32 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
             </div>
 
             {/* Footer */}
-            <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50 shrink-0 space-y-3">
-              <div className="flex justify-between items-center text-xs sm:text-sm font-extrabold text-slate-900">
-                <span>Total a Pagar ({totalCount} items):</span>
-                <span className="text-red-900 text-sm sm:text-base font-black">${total.toLocaleString('es-MX')} MXN</span>
+            <div className="p-4 sm:p-5 border-t border-slate-700/80 bg-[#0A0E17] shrink-0 space-y-3">
+              <div className="flex justify-between items-center text-xs sm:text-sm font-extrabold text-white">
+                <span className="uppercase tracking-wider">Total a Pagar ({totalCount} items):</span>
+                <span className="text-emerald-400 text-sm sm:text-base font-scoreboard">${total.toLocaleString('es-MX')} MXN</span>
               </div>
 
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setIsCheckoutModalOpen(false)}
-                  className="px-4 py-2.5 bg-white border border-slate-300 text-slate-700 text-xs font-bold rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+                  className="px-4 py-2.5 bg-[#141C2E] border border-slate-700 text-slate-300 hover:text-white text-xs font-bold rounded-xl transition-colors cursor-pointer uppercase tracking-wider"
                 >
                   Cancelar
                 </button>
                 <button
                   disabled={placingOrder}
                   onClick={handleConfirmOrder}
-                  className="flex-1 py-3 bg-red-700 hover:bg-red-800 disabled:opacity-50 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  className="flex-1 py-3 bg-red-600 hover:bg-red-500 active:bg-red-700 disabled:opacity-50 text-white font-black text-xs rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider"
                 >
                   {placingOrder ? (
                     'Enviando orden a cocina...'
+                  ) : !user || !user.uid ? (
+                    <>
+                      <span>Iniciar Sesión para Confirmar Pedido</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
                   ) : (
                     <>
                       <span>Confirmar y Enviar Pedido</span>

@@ -13,13 +13,14 @@ import {
 import { db } from './firebase';
 import { StadiumStand, MenuItem } from '../types';
 import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
-import { DEFAULT_VENUE_ID } from './defaultVenue';
+import { DEFAULT_VENUE_ID } from './constants';
 
 const STANDS_COLLECTION = 'stands';
 const MENU_COLLECTION = 'menuItems';
 
-const INITIAL_STANDS: Omit<StadiumStand, 'id' | 'createdAt'>[] = [
+export const INITIAL_STANDS: StadiumStand[] = [
   {
+    id: 'stand-mariscos-muchacho-alegre',
     venueId: DEFAULT_VENUE_ID,
     name: 'Mariscos El Muchacho Alegre - Estadio',
     location: 'Explanada Principal - Puerta 3',
@@ -27,8 +28,10 @@ const INITIAL_STANDS: Omit<StadiumStand, 'id' | 'createdAt'>[] = [
     active: true,
     estimatedWaitMinutes: 12,
     image: 'https://images.unsplash.com/photo-1535400255456-984241443b29?w=600&auto=format&fit=crop&q=80',
+    createdAt: '2026-01-01T00:00:00.000Z',
   },
   {
+    id: 'stand-asador-venados-bbq',
     venueId: DEFAULT_VENUE_ID,
     name: 'Asador Venados BBQ & Tacos',
     location: 'Zona Central - Planta Baja Pasillo 5',
@@ -36,17 +39,10 @@ const INITIAL_STANDS: Omit<StadiumStand, 'id' | 'createdAt'>[] = [
     active: true,
     estimatedWaitMinutes: 8,
     image: 'https://images.unsplash.com/photo-1551504734-5ee1c4a1479b?w=600&auto=format&fit=crop&q=80',
+    createdAt: '2026-01-01T00:00:00.000Z',
   },
   {
-    venueId: DEFAULT_VENUE_ID,
-    name: 'Snacks & Hot Dogs Teodoro Mariscal',
-    location: 'Bleachers - Nivel 2 y Puerta 8',
-    categoryTag: 'Hot Dogs & Snacks',
-    active: true,
-    estimatedWaitMinutes: 5,
-    image: 'https://images.unsplash.com/photo-1619740455993-9e612b1af08a?w=600&auto=format&fit=crop&q=80',
-  },
-  {
+    id: 'stand-barra-pacifico',
     venueId: DEFAULT_VENUE_ID,
     name: 'Barra 21 Cervecería Pacífico',
     location: 'Zona Lateral Poniente y Palcos',
@@ -54,6 +50,7 @@ const INITIAL_STANDS: Omit<StadiumStand, 'id' | 'createdAt'>[] = [
     active: true,
     estimatedWaitMinutes: 3,
     image: 'https://images.unsplash.com/photo-1608270199996-51f786fa05d8?w=600&auto=format&fit=crop&q=80',
+    createdAt: '2026-01-01T00:00:00.000Z',
   },
 ];
 
@@ -182,70 +179,113 @@ export async function getStadiumStands(venueId?: string): Promise<StadiumStand[]
       ? query(collection(db, STANDS_COLLECTION), where('venueId', '==', venueId), limit(50))
       : query(collection(db, STANDS_COLLECTION), limit(50));
     const snap = await getDocs(q);
+
     if (snap.empty) {
       try {
         const seeded = await seedInitialStandsAndMenu();
         if (venueId) {
-          return seeded.filter((s) => (s.venueId || DEFAULT_VENUE_ID) === venueId);
+          const match = seeded.filter((s) => (s.venueId || DEFAULT_VENUE_ID) === venueId);
+          return (match.length > 0 ? match : seeded).slice(0, 3);
         }
-        return seeded;
+        return seeded.slice(0, 3);
       } catch (seedErr) {
-        console.warn('No se pudieron sembrar los puestos en Firestore (permiso restringido). Usando datos iniciales:', seedErr);
-        const staticList = INITIAL_STANDS.map((s, idx) => ({
-          ...s,
-          venueId: DEFAULT_VENUE_ID,
-          id: `stand-init-${idx + 1}`,
-          createdAt: new Date().toISOString(),
-        }));
-        if (venueId) {
-          return staticList.filter((s) => (s.venueId || DEFAULT_VENUE_ID) === venueId);
-        }
-        return staticList;
+        console.warn('No se pudieron sembrar los puestos en Firestore. Usando 3 datos iniciales:', seedErr);
+        return INITIAL_STANDS.slice(0, 3);
       }
     }
-    let stands = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StadiumStand[];
-    if (venueId && stands.length === 0) {
-      return INITIAL_STANDS.map((s, idx) => ({
-        ...s,
-        venueId: venueId,
-        id: `stand-${venueId}-${idx + 1}`,
-        createdAt: new Date().toISOString(),
-      }));
+
+    const allDocs = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StadiumStand[];
+
+    // Deduplicar estrictamente por nombre o ID para garantizar exactamente un puesto por concepto (máx 3)
+    const uniqueMap = new Map<string, StadiumStand>();
+    for (const s of allDocs) {
+      const key = (s.name || '').trim().toLowerCase();
+      if (!uniqueMap.has(key)) {
+        uniqueMap.set(key, s);
+      }
     }
-    return stands;
+    const deduplicated = Array.from(uniqueMap.values()).slice(0, 3);
+
+    // Si Firestore acumuló más de 3 puestos o duplicados de sesiones anteriores, ejecutar limpieza en segundo plano
+    if (allDocs.length > 3) {
+      cleanupDuplicateStands().catch(() => {});
+    }
+
+    return deduplicated;
   } catch (err) {
     handleFirestoreError(err, OperationType.LIST, STANDS_COLLECTION);
-    return [];
+    return INITIAL_STANDS.slice(0, 3);
   }
 }
 
-// ⚠️ DATOS DE PRUEBA - eliminar antes de producción
+/**
+ * Limpia y consolida puestos en Firestore dejando únicamente los 3 concesionarios canónicos.
+ * Elimina duplicados generados aleatoriamente y sus respectivos platillos de menú huérfanos.
+ */
+export async function cleanupDuplicateStands(): Promise<void> {
+  try {
+    const standsSnap = await getDocs(collection(db, STANDS_COLLECTION));
+    const canonicalIds = new Set(INITIAL_STANDS.map((s) => s.id));
+    const seenNames = new Set<string>();
+
+    for (const d of standsSnap.docs) {
+      const data = d.data() as StadiumStand;
+      const normalizedName = (data.name || '').trim().toLowerCase();
+
+      // Si no es un ID canónico o ya procesamos un puesto con este nombre, borrar duplicado
+      const isExtraOrDuplicate = !canonicalIds.has(d.id) || seenNames.has(normalizedName);
+      if (isExtraOrDuplicate) {
+        await deleteDoc(d.ref).catch(() => {});
+        // Limpiar items de menú que dependían del ID duplicado
+        try {
+          const menuSnap = await getDocs(
+            query(collection(db, MENU_COLLECTION), where('standId', '==', d.id))
+          );
+          for (const mDoc of menuSnap.docs) {
+            await deleteDoc(mDoc.ref).catch(() => {});
+          }
+        } catch {}
+      } else {
+        seenNames.add(normalizedName);
+      }
+    }
+
+    // Asegurar que los 3 concesionarios canónicos existen con sus IDs deterministas
+    await seedInitialStandsAndMenu();
+  } catch (err) {
+    console.warn('cleanupDuplicateStands: Nota durante la consolidación de puestos:', err);
+  }
+}
+
+// ⚠️ DATOS POR DEFECTO - Deterministas (máximo 3 puestos)
 export async function seedInitialStandsAndMenu(): Promise<StadiumStand[]> {
   const createdStands: StadiumStand[] = [];
   const now = new Date().toISOString();
 
   for (const standData of INITIAL_STANDS) {
-    const standDocRef = doc(collection(db, STANDS_COLLECTION));
+    const standDocRef = doc(db, STANDS_COLLECTION, standData.id);
     const fullStand: StadiumStand = {
       ...standData,
-      venueId: (standData as any).venueId || DEFAULT_VENUE_ID,
-      id: standDocRef.id,
-      createdAt: now,
+      venueId: standData.venueId || DEFAULT_VENUE_ID,
+      createdAt: standData.createdAt || now,
+      updatedAt: now,
     };
-    await setDoc(standDocRef, fullStand);
+    await setDoc(standDocRef, fullStand, { merge: true });
     createdStands.push(fullStand);
 
-    // Sembrar menú para este puesto
+    // Sembrar menú con IDs deterministas para evitar duplicados
     const menuList = INITIAL_MENU_ITEMS[standData.name] || [];
-    for (const item of menuList) {
-      const itemDocRef = doc(collection(db, MENU_COLLECTION));
+    for (let idx = 0; idx < menuList.length; idx++) {
+      const item = menuList[idx];
+      const itemDocRef = doc(db, MENU_COLLECTION, `menu-${standData.id}-${idx + 1}`);
       const fullItem: MenuItem = {
         ...item,
-        id: itemDocRef.id,
-        standId: fullStand.id,
+        id: `menu-${standData.id}-${idx + 1}`,
+        standId: standData.id,
+        venueId: standData.venueId || DEFAULT_VENUE_ID,
         createdAt: now,
       };
-      await setDoc(itemDocRef, fullItem);
+      await setDoc(itemDocRef, fullItem, { merge: true });
     }
   }
 

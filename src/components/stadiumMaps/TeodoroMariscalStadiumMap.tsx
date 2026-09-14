@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { SeatSection, VenueEvent } from '../../types';
 import { MARISCAL_ZONES, getZonePrice } from '../../lib/seatMap';
-import { ZoomIn, ZoomOut, RotateCcw, Info, Sparkles, MapPin, ShieldCheck } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw, Info, Sparkles } from 'lucide-react';
 
 interface TeodoroMariscalStadiumMapProps {
   sections: SeatSection[];
@@ -11,135 +11,231 @@ interface TeodoroMariscalStadiumMapProps {
   event?: VenueEvent | null;
 }
 
-interface SectionDefinition {
+interface SectorDef {
   num: string;
   zone: string;
-  centerType: 'outfield' | 'infield';
-  angleDeg: number;
-  radius: number;
-  width: number;
-  height: number;
+  fillColor: string;
+  textColor: string;
+  strokeColor?: string;
+  rIn: number;
+  rOut: number;
+  startDeg: number;
+  endDeg: number;
 }
 
-// Configuración matemática de coordenadas radiales para las 86 secciones oficiales del Teodoro Mariscal
-const SECTIONS_CONFIG: SectionDefinition[] = [
-  // 1. DELUXE SUPREME: 12 al 1 (Central baja pegada a Home Plate)
-  { num: '1', zone: 'Deluxe Supreme', centerType: 'infield', angleDeg: 46, radius: 76, width: 22, height: 16 },
-  { num: '2', zone: 'Deluxe Supreme', centerType: 'infield', angleDeg: 54, radius: 76, width: 22, height: 16 },
-  { num: '3', zone: 'Deluxe Supreme', centerType: 'infield', angleDeg: 62, radius: 76, width: 22, height: 16 },
-  { num: '4', zone: 'Deluxe Supreme', centerType: 'infield', angleDeg: 70, radius: 76, width: 22, height: 16 },
-  { num: '5', zone: 'Deluxe Supreme', centerType: 'infield', angleDeg: 78, radius: 76, width: 22, height: 16 },
-  { num: '6', zone: 'Deluxe Supreme', centerType: 'infield', angleDeg: 86, radius: 76, width: 22, height: 16 },
-  { num: '7', zone: 'Deluxe Supreme', centerType: 'infield', angleDeg: 94, radius: 76, width: 22, height: 16 },
-  { num: '8', zone: 'Deluxe Supreme', centerType: 'infield', angleDeg: 102, radius: 76, width: 22, height: 16 },
-  { num: '9', zone: 'Deluxe Supreme', centerType: 'infield', angleDeg: 110, radius: 76, width: 22, height: 16 },
-  { num: '10', zone: 'Deluxe Supreme', centerType: 'infield', angleDeg: 118, radius: 76, width: 22, height: 16 },
-  { num: '11', zone: 'Deluxe Supreme', centerType: 'infield', angleDeg: 126, radius: 76, width: 22, height: 16 },
-  { num: '12', zone: 'Deluxe Supreme', centerType: 'infield', angleDeg: 134, radius: 76, width: 22, height: 16 },
+// Generador de sector anular preciso en coordenadas polares
+function createAnnularSectorPath(
+  cx: number,
+  cy: number,
+  rIn: number,
+  rOut: number,
+  startDeg: number,
+  endDeg: number,
+  paddingDeg: number = 0.5
+): string {
+  const s = startDeg + paddingDeg;
+  const e = endDeg - paddingDeg;
 
-  // 2. PLATINO (Rojo): Laterales bajas del Infield
-  // Primera Base (1B)
-  { num: '108', zone: 'Platino', centerType: 'infield', angleDeg: 38, radius: 76, width: 24, height: 16 },
-  { num: '107', zone: 'Platino', centerType: 'infield', angleDeg: 30, radius: 76, width: 24, height: 16 },
-  { num: '106', zone: 'Platino', centerType: 'infield', angleDeg: 22, radius: 76, width: 24, height: 16 },
-  { num: '105', zone: 'Platino', centerType: 'infield', angleDeg: 14, radius: 76, width: 24, height: 16 },
-  // Tercera Base (3B)
-  { num: '115', zone: 'Platino', centerType: 'infield', angleDeg: 142, radius: 76, width: 24, height: 16 },
-  { num: '116', zone: 'Platino', centerType: 'infield', angleDeg: 150, radius: 76, width: 24, height: 16 },
-  { num: '117', zone: 'Platino', centerType: 'infield', angleDeg: 158, radius: 76, width: 24, height: 16 },
+  const a1 = (s * Math.PI) / 180;
+  const a2 = (e * Math.PI) / 180;
 
-  // 3. ORO (Azul Turquesa): Infield sobre las líneas de cal
-  // Primera Base
-  { num: '104', zone: 'Oro', centerType: 'infield', angleDeg: 6, radius: 76, width: 24, height: 16 },
-  { num: '103', zone: 'Oro', centerType: 'infield', angleDeg: -2, radius: 76, width: 24, height: 16 },
-  { num: '102', zone: 'Oro', centerType: 'infield', angleDeg: -10, radius: 76, width: 24, height: 16 },
-  { num: '101', zone: 'Oro', centerType: 'infield', angleDeg: -18, radius: 76, width: 24, height: 16 },
-  // Tercera Base
-  { num: '118', zone: 'Oro', centerType: 'infield', angleDeg: 166, radius: 76, width: 24, height: 16 },
-  { num: '119', zone: 'Oro', centerType: 'infield', angleDeg: 174, radius: 76, width: 24, height: 16 },
-  { num: '120', zone: 'Oro', centerType: 'infield', angleDeg: 182, radius: 76, width: 24, height: 16 },
-  { num: '121', zone: 'Oro', centerType: 'infield', angleDeg: 190, radius: 76, width: 24, height: 16 },
+  const x1In = cx + rIn * Math.cos(a1);
+  const y1In = cy + rIn * Math.sin(a1);
+  const x2In = cx + rIn * Math.cos(a2);
+  const y2In = cy + rIn * Math.sin(a2);
 
-  // 4. JARDINES BAJOS (FAN - Celeste): Barda de Outfield
-  // Jardín Izquierdo (Left Field)
-  { num: '122', zone: 'Fan', centerType: 'outfield', angleDeg: 196, radius: 198, width: 27, height: 17 },
-  { num: '123', zone: 'Fan', centerType: 'outfield', angleDeg: 210, radius: 198, width: 27, height: 17 },
-  { num: '124', zone: 'Fan', centerType: 'outfield', angleDeg: 224, radius: 198, width: 27, height: 17 },
-  { num: '125', zone: 'Fan', centerType: 'outfield', angleDeg: 238, radius: 198, width: 27, height: 17 },
-  { num: '126', zone: 'Fan', centerType: 'outfield', angleDeg: 252, radius: 198, width: 27, height: 17 },
-  { num: '127', zone: 'Fan', centerType: 'outfield', angleDeg: 266, radius: 198, width: 27, height: 17 },
-  // Jardín Derecho (Right Field)
-  { num: '128', zone: 'Fan', centerType: 'outfield', angleDeg: 274, radius: 198, width: 27, height: 17 },
-  { num: '129', zone: 'Fan', centerType: 'outfield', angleDeg: 288, radius: 198, width: 27, height: 17 },
-  { num: '130', zone: 'Fan', centerType: 'outfield', angleDeg: 302, radius: 198, width: 27, height: 17 },
-  { num: '131', zone: 'Fan', centerType: 'outfield', angleDeg: 316, radius: 198, width: 27, height: 17 },
-  { num: '132', zone: 'Fan', centerType: 'outfield', angleDeg: 330, radius: 198, width: 27, height: 17 },
-  { num: '133', zone: 'Fan', centerType: 'outfield', angleDeg: 344, radius: 198, width: 27, height: 17 },
+  const x1Out = cx + rOut * Math.cos(a1);
+  const y1Out = cy + rOut * Math.sin(a1);
+  const x2Out = cx + rOut * Math.cos(a2);
+  const y2Out = cy + rOut * Math.sin(a2);
 
-  // 5. JARDINES ALTOS NIVEL 200 (FAN PLUS - Gris Lavanda)
-  // Jardín Izquierdo Alto
-  { num: '222', zone: 'Fan Plus', centerType: 'outfield', angleDeg: 196, radius: 224, width: 29, height: 17 },
-  { num: '223', zone: 'Fan Plus', centerType: 'outfield', angleDeg: 210, radius: 224, width: 29, height: 17 },
-  { num: '224', zone: 'Fan Plus', centerType: 'outfield', angleDeg: 224, radius: 224, width: 29, height: 17 },
-  { num: '225', zone: 'Fan Plus', centerType: 'outfield', angleDeg: 238, radius: 224, width: 29, height: 17 },
-  { num: '226', zone: 'Fan Plus', centerType: 'outfield', angleDeg: 252, radius: 224, width: 29, height: 17 },
-  { num: '227', zone: 'Fan Plus', centerType: 'outfield', angleDeg: 266, radius: 224, width: 29, height: 17 },
-  // Jardín Derecho Alto
-  { num: '228', zone: 'Fan Plus', centerType: 'outfield', angleDeg: 274, radius: 224, width: 29, height: 17 },
-  { num: '229', zone: 'Fan Plus', centerType: 'outfield', angleDeg: 288, radius: 224, width: 29, height: 17 },
-  { num: '230', zone: 'Fan Plus', centerType: 'outfield', angleDeg: 302, radius: 224, width: 29, height: 17 },
-  { num: '231', zone: 'Fan Plus', centerType: 'outfield', angleDeg: 316, radius: 224, width: 29, height: 17 },
-  { num: '232', zone: 'Fan Plus', centerType: 'outfield', angleDeg: 330, radius: 224, width: 29, height: 17 },
-  { num: '233', zone: 'Fan Plus', centerType: 'outfield', angleDeg: 344, radius: 224, width: 29, height: 17 },
+  const largeArc = Math.abs(e - s) > 180 ? 1 : 0;
 
-  // 6. NIVEL 200 LATERAL (PLUS - Verde Lima)
-  // Primera Base
-  { num: '201', zone: 'Plus', centerType: 'infield', angleDeg: -18, radius: 110, width: 27, height: 18 },
-  { num: '202', zone: 'Plus', centerType: 'infield', angleDeg: -10, radius: 110, width: 27, height: 18 },
-  { num: '203', zone: 'Plus', centerType: 'infield', angleDeg: -2, radius: 110, width: 27, height: 18 },
-  { num: '204', zone: 'Plus', centerType: 'infield', angleDeg: 6, radius: 110, width: 27, height: 18 },
-  // Tercera Base
-  { num: '218', zone: 'Plus', centerType: 'infield', angleDeg: 166, radius: 110, width: 27, height: 18 },
-  { num: '219', zone: 'Plus', centerType: 'infield', angleDeg: 174, radius: 110, width: 27, height: 18 },
-  { num: '220', zone: 'Plus', centerType: 'infield', angleDeg: 182, radius: 110, width: 27, height: 18 },
-  { num: '221', zone: 'Plus', centerType: 'infield', angleDeg: 190, radius: 110, width: 27, height: 18 },
+  return `M ${x1In} ${y1In} A ${rIn} ${rIn} 0 ${largeArc} 1 ${x2In} ${y2In} L ${x2Out} ${y2Out} A ${rOut} ${rOut} 0 ${largeArc} 0 ${x1Out} ${y1Out} Z`;
+}
 
-  // 7. NIVEL 200 CENTRAL (DIAMANTE - Naranja Terracota): 205 a 217
-  { num: '205', zone: 'Diamante', centerType: 'infield', angleDeg: 14, radius: 110, width: 27, height: 18 },
-  { num: '206', zone: 'Diamante', centerType: 'infield', angleDeg: 26, radius: 110, width: 27, height: 18 },
-  { num: '207', zone: 'Diamante', centerType: 'infield', angleDeg: 38, radius: 110, width: 27, height: 18 },
-  { num: '208', zone: 'Diamante', centerType: 'infield', angleDeg: 50, radius: 110, width: 27, height: 18 },
-  { num: '209', zone: 'Diamante', centerType: 'infield', angleDeg: 62, radius: 110, width: 27, height: 18 },
-  { num: '210', zone: 'Diamante', centerType: 'infield', angleDeg: 74, radius: 110, width: 27, height: 18 },
-  { num: '211', zone: 'Diamante', centerType: 'infield', angleDeg: 85, radius: 110, width: 27, height: 18 },
-  { num: '212', zone: 'Diamante', centerType: 'infield', angleDeg: 95, radius: 110, width: 27, height: 18 },
-  { num: '213', zone: 'Diamante', centerType: 'infield', angleDeg: 106, radius: 110, width: 27, height: 18 },
-  { num: '214', zone: 'Diamante', centerType: 'infield', angleDeg: 118, radius: 110, width: 27, height: 18 },
-  { num: '215', zone: 'Diamante', centerType: 'infield', angleDeg: 130, radius: 110, width: 27, height: 18 },
-  { num: '216', zone: 'Diamante', centerType: 'infield', angleDeg: 142, radius: 110, width: 27, height: 18 },
-  { num: '217', zone: 'Diamante', centerType: 'infield', angleDeg: 154, radius: 110, width: 27, height: 18 },
+// Cálculo del punto central para ubicar el número y rotación legible
+function getSectorCenterAndRotation(
+  cx: number,
+  cy: number,
+  rIn: number,
+  rOut: number,
+  startDeg: number,
+  endDeg: number
+) {
+  const midAngle = (startDeg + endDeg) / 2;
+  const midR = (rIn + rOut) / 2;
+  const rad = (midAngle * Math.PI) / 180;
 
-  // 8. NIVEL 300 LATERAL (SKY - Morado)
-  // Primera Base
-  { num: '301', zone: 'Sky', centerType: 'infield', angleDeg: -18, radius: 146, width: 29, height: 19 },
-  { num: '302', zone: 'Sky', centerType: 'infield', angleDeg: -10, radius: 146, width: 29, height: 19 },
-  { num: '303', zone: 'Sky', centerType: 'infield', angleDeg: -2, radius: 146, width: 29, height: 19 },
-  { num: '304', zone: 'Sky', centerType: 'infield', angleDeg: 6, radius: 146, width: 29, height: 19 },
-  // Tercera Base
-  { num: '313', zone: 'Sky', centerType: 'infield', angleDeg: 166, radius: 146, width: 29, height: 19 },
-  { num: '314', zone: 'Sky', centerType: 'infield', angleDeg: 174, radius: 146, width: 29, height: 19 },
-  { num: '315', zone: 'Sky', centerType: 'infield', angleDeg: 182, radius: 146, width: 29, height: 19 },
-  { num: '316', zone: 'Sky', centerType: 'infield', angleDeg: 190, radius: 146, width: 29, height: 19 },
+  const x = cx + midR * Math.cos(rad);
+  const y = cy + midR * Math.sin(rad);
 
-  // 9. NIVEL 300 CENTRAL (SKY PLUS - Melocotón / Salmón Claro)
-  // Primera Base
-  { num: '305', zone: 'Sky Plus', centerType: 'infield', angleDeg: 20, radius: 146, width: 29, height: 19 },
-  { num: '306', zone: 'Sky Plus', centerType: 'infield', angleDeg: 34, radius: 146, width: 29, height: 19 },
-  { num: '307', zone: 'Sky Plus', centerType: 'infield', angleDeg: 48, radius: 146, width: 29, height: 19 },
-  // Tercera Base
-  { num: '310', zone: 'Sky Plus', centerType: 'infield', angleDeg: 132, radius: 146, width: 29, height: 19 },
-  { num: '311', zone: 'Sky Plus', centerType: 'infield', angleDeg: 146, radius: 146, width: 29, height: 19 },
-  { num: '312', zone: 'Sky Plus', centerType: 'infield', angleDeg: 160, radius: 146, width: 29, height: 19 },
+  // Tangente a la curvatura para que el texto fluya naturalmente a lo largo del arco
+  let rotDeg = midAngle + 90;
+  if (rotDeg > 90 && rotDeg < 270) {
+    rotDeg += 180;
+  }
+
+  return { x, y, rotDeg };
+}
+
+// Radios concéntricos unificados según el póster oficial
+const R_T1_IN = 256;
+const R_T1_OUT = 296;
+
+const R_T2_IN = 302;
+const R_T2_OUT = 346;
+
+const R_T3_IN = 352;
+const R_T3_OUT = 398;
+
+// Paleta cromática exacta de la imagen del usuario
+const COLOR_FAN = '#38B6FF'; // Cyan / Sky Blue (Bleachers Fila Baja)
+const COLOR_FAN_PLUS = '#9FB4C7'; // Lavender Grey (Bleachers Fila Alta)
+const COLOR_DELUXE = '#E4DFF0'; // White / Light Lavender (Palcos 1-12)
+const COLOR_PLATINO = '#E5243B'; // Crimson Red
+const COLOR_ORO = '#0292D8'; // Deep Cyan / Turquoise
+const COLOR_PLUS = '#94CE3A'; // Bright Lime Green
+const COLOR_DIAMANTE = '#ED6A26'; // Terracotta Orange
+const COLOR_SKY = '#772582'; // Rich Royal Purple
+const COLOR_SKY_PLUS = '#FA8E5C'; // Peach / Coral Warm Orange
+
+// Definición geométrica exacta de los 86 sectores de la imagen del usuario
+const SECTOR_DEFINITIONS: SectorDef[] = [
+  // =========================================================================
+  // 1. BLEACHERS (JARDINES SUPERIORES)
+  // =========================================================================
+  // Fila Baja Izquierda (Cyan 122 - 127)
+  { num: '122', zone: 'Fan', fillColor: COLOR_FAN, textColor: '#091A2B', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 211, endDeg: 219.5 },
+  { num: '123', zone: 'Fan', fillColor: COLOR_FAN, textColor: '#091A2B', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 219.5, endDeg: 228 },
+  { num: '124', zone: 'Fan', fillColor: COLOR_FAN, textColor: '#091A2B', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 228, endDeg: 236.5 },
+  { num: '125', zone: 'Fan', fillColor: COLOR_FAN, textColor: '#091A2B', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 236.5, endDeg: 245 },
+  { num: '126', zone: 'Fan', fillColor: COLOR_FAN, textColor: '#091A2B', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 245, endDeg: 253.5 },
+  { num: '127', zone: 'Fan', fillColor: COLOR_FAN, textColor: '#091A2B', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 253.5, endDeg: 262 },
+
+  // Fila Alta Izquierda (Gris Lavanda 222 - 227)
+  { num: '222', zone: 'Fan Plus', fillColor: COLOR_FAN_PLUS, textColor: '#0F172A', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 211, endDeg: 219.5 },
+  { num: '223', zone: 'Fan Plus', fillColor: COLOR_FAN_PLUS, textColor: '#0F172A', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 219.5, endDeg: 228 },
+  { num: '224', zone: 'Fan Plus', fillColor: COLOR_FAN_PLUS, textColor: '#0F172A', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 228, endDeg: 236.5 },
+  { num: '225', zone: 'Fan Plus', fillColor: COLOR_FAN_PLUS, textColor: '#0F172A', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 236.5, endDeg: 245 },
+  { num: '226', zone: 'Fan Plus', fillColor: COLOR_FAN_PLUS, textColor: '#0F172A', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 245, endDeg: 253.5 },
+  { num: '227', zone: 'Fan Plus', fillColor: COLOR_FAN_PLUS, textColor: '#0F172A', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 253.5, endDeg: 262 },
+
+  // Fila Baja Derecha (Cyan 128 - 133)
+  { num: '128', zone: 'Fan', fillColor: COLOR_FAN, textColor: '#091A2B', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 278, endDeg: 286.5 },
+  { num: '129', zone: 'Fan', fillColor: COLOR_FAN, textColor: '#091A2B', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 286.5, endDeg: 295 },
+  { num: '130', zone: 'Fan', fillColor: COLOR_FAN, textColor: '#091A2B', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 295, endDeg: 303.5 },
+  { num: '131', zone: 'Fan', fillColor: COLOR_FAN, textColor: '#091A2B', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 303.5, endDeg: 312 },
+  { num: '132', zone: 'Fan', fillColor: COLOR_FAN, textColor: '#091A2B', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 312, endDeg: 320.5 },
+  { num: '133', zone: 'Fan', fillColor: COLOR_FAN, textColor: '#091A2B', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 320.5, endDeg: 329 },
+
+  // Fila Alta Derecha (Gris Lavanda 228 - 233)
+  { num: '228', zone: 'Fan Plus', fillColor: COLOR_FAN_PLUS, textColor: '#0F172A', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 278, endDeg: 286.5 },
+  { num: '229', zone: 'Fan Plus', fillColor: COLOR_FAN_PLUS, textColor: '#0F172A', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 286.5, endDeg: 295 },
+  { num: '230', zone: 'Fan Plus', fillColor: COLOR_FAN_PLUS, textColor: '#0F172A', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 295, endDeg: 303.5 },
+  { num: '231', zone: 'Fan Plus', fillColor: COLOR_FAN_PLUS, textColor: '#0F172A', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 303.5, endDeg: 312 },
+  { num: '232', zone: 'Fan Plus', fillColor: COLOR_FAN_PLUS, textColor: '#0F172A', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 312, endDeg: 320.5 },
+  { num: '233', zone: 'Fan Plus', fillColor: COLOR_FAN_PLUS, textColor: '#0F172A', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 320.5, endDeg: 329 },
+
+  // =========================================================================
+  // 2. ALA IZQUIERDA (3RA BASE: ORO, PLUS Y SKY)
+  // =========================================================================
+  // Oro (Cyan Nivel 100)
+  { num: '121', zone: 'Oro', fillColor: COLOR_ORO, textColor: '#FFFFFF', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 163, endDeg: 172 },
+  { num: '120', zone: 'Oro', fillColor: COLOR_ORO, textColor: '#FFFFFF', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 154, endDeg: 163 },
+  { num: '119', zone: 'Oro', fillColor: COLOR_ORO, textColor: '#FFFFFF', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 145, endDeg: 154 },
+  { num: '118', zone: 'Oro', fillColor: COLOR_ORO, textColor: '#FFFFFF', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 136, endDeg: 145 },
+
+  // Plus (Verde Lima Nivel 200)
+  { num: '221', zone: 'Plus', fillColor: COLOR_PLUS, textColor: '#102A05', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 163, endDeg: 172 },
+  { num: '220', zone: 'Plus', fillColor: COLOR_PLUS, textColor: '#102A05', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 154, endDeg: 163 },
+  { num: '219', zone: 'Plus', fillColor: COLOR_PLUS, textColor: '#102A05', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 145, endDeg: 154 },
+  { num: '218', zone: 'Plus', fillColor: COLOR_PLUS, textColor: '#102A05', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 136, endDeg: 145 },
+
+  // Sky (Morado Nivel 300)
+  { num: '316', zone: 'Sky', fillColor: COLOR_SKY, textColor: '#FFFFFF', rIn: R_T3_IN, rOut: R_T3_OUT, startDeg: 163, endDeg: 172 },
+  { num: '315', zone: 'Sky', fillColor: COLOR_SKY, textColor: '#FFFFFF', rIn: R_T3_IN, rOut: R_T3_OUT, startDeg: 154, endDeg: 163 },
+  { num: '314', zone: 'Sky', fillColor: COLOR_SKY, textColor: '#FFFFFF', rIn: R_T3_IN, rOut: R_T3_OUT, startDeg: 145, endDeg: 154 },
+  { num: '313', zone: 'Sky', fillColor: COLOR_SKY, textColor: '#FFFFFF', rIn: R_T3_IN, rOut: R_T3_OUT, startDeg: 136, endDeg: 145 },
+
+  // =========================================================================
+  // 3. ALA DERECHA (1RA BASE: ORO, PLUS Y SKY)
+  // =========================================================================
+  // Oro (Cyan Nivel 100)
+  { num: '101', zone: 'Oro', fillColor: COLOR_ORO, textColor: '#FFFFFF', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 8, endDeg: 17 },
+  { num: '102', zone: 'Oro', fillColor: COLOR_ORO, textColor: '#FFFFFF', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 17, endDeg: 26 },
+  { num: '103', zone: 'Oro', fillColor: COLOR_ORO, textColor: '#FFFFFF', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 26, endDeg: 35 },
+  { num: '104', zone: 'Oro', fillColor: COLOR_ORO, textColor: '#FFFFFF', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 35, endDeg: 44 },
+
+  // Plus (Verde Lima Nivel 200)
+  { num: '201', zone: 'Plus', fillColor: COLOR_PLUS, textColor: '#102A05', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 8, endDeg: 17 },
+  { num: '202', zone: 'Plus', fillColor: COLOR_PLUS, textColor: '#102A05', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 17, endDeg: 26 },
+  { num: '203', zone: 'Plus', fillColor: COLOR_PLUS, textColor: '#102A05', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 26, endDeg: 35 },
+  { num: '204', zone: 'Plus', fillColor: COLOR_PLUS, textColor: '#102A05', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 35, endDeg: 44 },
+
+  // Sky (Morado Nivel 300)
+  { num: '301', zone: 'Sky', fillColor: COLOR_SKY, textColor: '#FFFFFF', rIn: R_T3_IN, rOut: R_T3_OUT, startDeg: 8, endDeg: 17 },
+  { num: '302', zone: 'Sky', fillColor: COLOR_SKY, textColor: '#FFFFFF', rIn: R_T3_IN, rOut: R_T3_OUT, startDeg: 17, endDeg: 26 },
+  { num: '303', zone: 'Sky', fillColor: COLOR_SKY, textColor: '#FFFFFF', rIn: R_T3_IN, rOut: R_T3_OUT, startDeg: 26, endDeg: 35 },
+  { num: '304', zone: 'Sky', fillColor: COLOR_SKY, textColor: '#FFFFFF', rIn: R_T3_IN, rOut: R_T3_OUT, startDeg: 35, endDeg: 44 },
+
+  // =========================================================================
+  // 4. ANILLO INFERIOR (PLATINO ROJO + PALCOS CENTRALES 1-12)
+  // =========================================================================
+  // Platino Izquierdo (3ra Base: 117, 116, 115)
+  { num: '117', zone: 'Platino', fillColor: COLOR_PLATINO, textColor: '#FFFFFF', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 131.2, endDeg: 136 },
+  { num: '116', zone: 'Platino', fillColor: COLOR_PLATINO, textColor: '#FFFFFF', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 126.3, endDeg: 131.2 },
+  { num: '115', zone: 'Platino', fillColor: COLOR_PLATINO, textColor: '#FFFFFF', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 121.5, endDeg: 126.3 },
+
+  // Palcos Deluxe Supreme (Blanco/Lavanda: 12 al 1 de izquierda a derecha)
+  { num: '12', zone: 'Deluxe Supreme', fillColor: COLOR_DELUXE, textColor: '#0F172A', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 116.6, endDeg: 121.5 },
+  { num: '11', zone: 'Deluxe Supreme', fillColor: COLOR_DELUXE, textColor: '#0F172A', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 111.8, endDeg: 116.6 },
+  { num: '10', zone: 'Deluxe Supreme', fillColor: COLOR_DELUXE, textColor: '#0F172A', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 106.9, endDeg: 111.8 },
+  { num: '9', zone: 'Deluxe Supreme', fillColor: COLOR_DELUXE, textColor: '#0F172A', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 102.1, endDeg: 106.9 },
+  { num: '8', zone: 'Deluxe Supreme', fillColor: COLOR_DELUXE, textColor: '#0F172A', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 97.2, endDeg: 102.1 },
+  { num: '7', zone: 'Deluxe Supreme', fillColor: COLOR_DELUXE, textColor: '#0F172A', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 92.4, endDeg: 97.2 },
+  { num: '6', zone: 'Deluxe Supreme', fillColor: COLOR_DELUXE, textColor: '#0F172A', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 87.5, endDeg: 92.4 },
+  { num: '5', zone: 'Deluxe Supreme', fillColor: COLOR_DELUXE, textColor: '#0F172A', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 82.7, endDeg: 87.5 },
+  { num: '4', zone: 'Deluxe Supreme', fillColor: COLOR_DELUXE, textColor: '#0F172A', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 77.8, endDeg: 82.7 },
+  { num: '3', zone: 'Deluxe Supreme', fillColor: COLOR_DELUXE, textColor: '#0F172A', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 73.0, endDeg: 77.8 },
+  { num: '2', zone: 'Deluxe Supreme', fillColor: COLOR_DELUXE, textColor: '#0F172A', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 68.1, endDeg: 73.0 },
+  { num: '1', zone: 'Deluxe Supreme', fillColor: COLOR_DELUXE, textColor: '#0F172A', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 63.3, endDeg: 68.1 },
+
+  // Platino Derecho (1ra Base: 108, 107, 106, 105)
+  { num: '108', zone: 'Platino', fillColor: COLOR_PLATINO, textColor: '#FFFFFF', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 58.5, endDeg: 63.3 },
+  { num: '107', zone: 'Platino', fillColor: COLOR_PLATINO, textColor: '#FFFFFF', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 53.6, endDeg: 58.5 },
+  { num: '106', zone: 'Platino', fillColor: COLOR_PLATINO, textColor: '#FFFFFF', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 48.8, endDeg: 53.6 },
+  { num: '105', zone: 'Platino', fillColor: COLOR_PLATINO, textColor: '#FFFFFF', rIn: R_T1_IN, rOut: R_T1_OUT, startDeg: 44.0, endDeg: 48.8 },
+
+  // =========================================================================
+  // 5. NIVEL 200 CENTRAL (DIAMANTE NARANJA: 217 AL 205)
+  // =========================================================================
+  { num: '217', zone: 'Diamante', fillColor: COLOR_DIAMANTE, textColor: '#FFFFFF', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 128.9, endDeg: 136.0 },
+  { num: '216', zone: 'Diamante', fillColor: COLOR_DIAMANTE, textColor: '#FFFFFF', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 121.8, endDeg: 128.9 },
+  { num: '215', zone: 'Diamante', fillColor: COLOR_DIAMANTE, textColor: '#FFFFFF', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 114.8, endDeg: 121.8 },
+  { num: '214', zone: 'Diamante', fillColor: COLOR_DIAMANTE, textColor: '#FFFFFF', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 107.7, endDeg: 114.8 },
+  { num: '213', zone: 'Diamante', fillColor: COLOR_DIAMANTE, textColor: '#FFFFFF', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 100.6, endDeg: 107.7 },
+  { num: '212', zone: 'Diamante', fillColor: COLOR_DIAMANTE, textColor: '#FFFFFF', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 93.5, endDeg: 100.6 },
+  // Pasillo central en 90°
+  { num: '211', zone: 'Diamante', fillColor: COLOR_DIAMANTE, textColor: '#FFFFFF', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 86.5, endDeg: 93.5 },
+  { num: '210', zone: 'Diamante', fillColor: COLOR_DIAMANTE, textColor: '#FFFFFF', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 79.4, endDeg: 86.5 },
+  { num: '209', zone: 'Diamante', fillColor: COLOR_DIAMANTE, textColor: '#FFFFFF', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 72.3, endDeg: 79.4 },
+  { num: '208', zone: 'Diamante', fillColor: COLOR_DIAMANTE, textColor: '#FFFFFF', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 65.2, endDeg: 72.3 },
+  { num: '207', zone: 'Diamante', fillColor: COLOR_DIAMANTE, textColor: '#FFFFFF', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 58.1, endDeg: 65.2 },
+  { num: '206', zone: 'Diamante', fillColor: COLOR_DIAMANTE, textColor: '#FFFFFF', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 51.0, endDeg: 58.1 },
+  { num: '205', zone: 'Diamante', fillColor: COLOR_DIAMANTE, textColor: '#FFFFFF', rIn: R_T2_IN, rOut: R_T2_OUT, startDeg: 44.0, endDeg: 51.0 },
+
+  // =========================================================================
+  // 6. NIVEL 300 CENTRAL (SKY PLUS MELOCOTÓN: 312-310 Y 307-305)
+  // Con apertura central técnica entre 310 y 307
+  // =========================================================================
+  { num: '312', zone: 'Sky Plus', fillColor: COLOR_SKY_PLUS, textColor: '#0F172A', rIn: R_T3_IN, rOut: R_T3_OUT, startDeg: 122.0, endDeg: 136.0 },
+  { num: '311', zone: 'Sky Plus', fillColor: COLOR_SKY_PLUS, textColor: '#0F172A', rIn: R_T3_IN, rOut: R_T3_OUT, startDeg: 108.0, endDeg: 122.0 },
+  { num: '310', zone: 'Sky Plus', fillColor: COLOR_SKY_PLUS, textColor: '#0F172A', rIn: R_T3_IN, rOut: R_T3_OUT, startDeg: 95.0, endDeg: 108.0 },
+  // Espacio abierto en el centro (95° a 85°)
+  { num: '307', zone: 'Sky Plus', fillColor: COLOR_SKY_PLUS, textColor: '#0F172A', rIn: R_T3_IN, rOut: R_T3_OUT, startDeg: 72.0, endDeg: 85.0 },
+  { num: '306', zone: 'Sky Plus', fillColor: COLOR_SKY_PLUS, textColor: '#0F172A', rIn: R_T3_IN, rOut: R_T3_OUT, startDeg: 58.0, endDeg: 72.0 },
+  { num: '305', zone: 'Sky Plus', fillColor: COLOR_SKY_PLUS, textColor: '#0F172A', rIn: R_T3_IN, rOut: R_T3_OUT, startDeg: 44.0, endDeg: 58.0 },
 ];
 
 export const TeodoroMariscalStadiumMap: React.FC<TeodoroMariscalStadiumMapProps> = ({
@@ -153,9 +249,9 @@ export const TeodoroMariscalStadiumMap: React.FC<TeodoroMariscalStadiumMapProps>
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [showZoneGuide, setShowZoneGuide] = useState<boolean>(false);
 
-  // Centros de referencia geométrica
-  const outfieldCenter = { x: 420, y: 400 };
-  const infieldCenter = { x: 420, y: 510 };
+  // Centro geométrico global del campo circular y las gradas
+  const CX = 500;
+  const CY = 480;
 
   const isDimmed = (zoneName: string) => {
     if (!activeZoneFilter || activeZoneFilter === 'Todas') return false;
@@ -164,7 +260,7 @@ export const TeodoroMariscalStadiumMap: React.FC<TeodoroMariscalStadiumMapProps>
 
   const isSelected = (secNumber: string) => activeSectionNumber === secNumber;
 
-  // Mapa rápido de secciones para disponibilidad
+  // Mapa de secciones para rápido acceso
   const sectionMetaMap = useMemo(() => {
     const map = new Map<string, SeatSection>();
     for (const sec of sections) {
@@ -174,302 +270,253 @@ export const TeodoroMariscalStadiumMap: React.FC<TeodoroMariscalStadiumMapProps>
   }, [sections]);
 
   return (
-    <div className="space-y-4">
-      {/* Contenedor SVG principal con atmósfera nocturna oficial */}
-      <div className="relative w-full aspect-[4/5] sm:aspect-[4/3] max-h-[640px] bg-slate-950 rounded-3xl overflow-hidden border border-slate-800 shadow-2xl flex flex-col items-center justify-center p-2 sm:p-4 select-none">
-        {/* Fondo decorativo con luces de estadio */}
-        <div className="absolute inset-0 bg-radial from-slate-900 via-slate-950 to-[#060910] pointer-events-none" />
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-red-600/5 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-amber-600/5 rounded-full blur-3xl pointer-events-none" />
-
-        {/* Encabezado con marca oficial Venados */}
-        <div className="absolute top-3 left-4 right-4 flex items-center justify-between z-10 pointer-events-none">
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-950/80 border border-red-700/60 shadow-xs backdrop-blur-xs">
-              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-              <span className="text-[11px] font-black uppercase tracking-widest text-red-200">
-                VENADOS • TEODORO MARISCAL
-              </span>
-            </div>
-            <span className="hidden sm:inline-block text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-              Distribución Oficial 2026
+    <div className="space-y-2.5">
+      {/* Barra superior de herramientas limpia fuera del mapa para no tapar ninguna butaca */}
+      <div className="flex items-center justify-between gap-2 px-1">
+        <div className="flex items-center gap-2">
+          {activeSectionNumber ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs font-black text-amber-700">
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              Sección #{activeSectionNumber} elegida
             </span>
-          </div>
-
-          {/* Controles de zoom */}
-          <div className="flex items-center gap-1 pointer-events-auto bg-slate-900/90 border border-slate-700/80 rounded-xl p-1 shadow-lg backdrop-blur-xs">
-            <button
-              onClick={() => setZoomLevel((z) => Math.min(1.5, z + 0.15))}
-              className="p-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-              title="Acercar"
-            >
-              <ZoomIn className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setZoomLevel((z) => Math.max(0.85, z - 0.15))}
-              className="p-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-              title="Alejar"
-            >
-              <ZoomOut className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setZoomLevel(1)}
-              className="p-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-              title="Restablecer vista"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setShowZoneGuide(!showZoneGuide)}
-              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                showZoneGuide ? 'bg-red-700 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-800'
-              }`}
-              title="Guía de colores y puertas"
-            >
-              <Info className="w-3.5 h-3.5" />
-            </button>
-          </div>
+          ) : (
+            <span className="text-xs font-bold text-slate-500">
+              Toca cualquier bloque del mapa para elegir asientos
+            </span>
+          )}
         </div>
 
-        {/* SVG Interactivo */}
+        {/* Controles de zoom compactos */}
+        <div className="flex items-center gap-1 bg-[#0F1626] border border-slate-700/80 rounded-xl p-0.5 shadow-sm">
+          <button
+            onClick={() => setZoomLevel((z) => Math.min(1.5, z + 0.15))}
+            className="p-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+            title="Acercar"
+          >
+            <ZoomIn className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setZoomLevel((z) => Math.max(0.8, z - 0.15))}
+            className="p-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+            title="Alejar"
+          >
+            <ZoomOut className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setZoomLevel(1)}
+            className="p-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+            title="Restablecer vista"
+          >
+            <RotateCcw className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setShowZoneGuide(!showZoneGuide)}
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+              showZoneGuide ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-300 hover:text-white hover:bg-slate-800'
+            }`}
+            title="Guía de colores y precios"
+          >
+            <Info className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Contenedor del mapa 100% libre de overlays obstructivos */}
+      <div className="relative w-full aspect-square max-h-[720px] bg-[#0A0E17] rounded-3xl overflow-hidden border border-slate-800/80 shadow-2xl flex flex-col items-center justify-center p-1 sm:p-3 select-none">
+        {/* Fondo sutil con luces de estadio nocturno */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,_rgba(30,41,59,0.5)_0%,_rgba(10,14,23,0.95)_75%,_#050811_100%)] pointer-events-none" />
+        <div className="absolute top-0 left-1/4 w-80 h-80 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-0 right-1/4 w-80 h-80 bg-red-500/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 inset-x-0 h-44 bg-[radial-gradient(ellipse_at_bottom,_rgba(15,23,42,0.6)_0%,_transparent_70%)] pointer-events-none" />
+
+        {/* SVG exacto a la imagen del póster */}
         <div className="w-full h-full flex items-center justify-center overflow-hidden">
           <svg
-            viewBox="0 0 840 920"
-            className="w-full h-full max-h-[580px] transition-transform duration-200"
+            viewBox="0 0 1000 1000"
+            className="w-full h-full max-h-[680px] transition-transform duration-200"
             style={{ transform: `scale(${zoomLevel})` }}
           >
             <defs>
-              {/* Gradiente césped del Outfield */}
-              <radialGradient id="tmOutfieldGrass" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor="#78C646" />
-                <stop offset="80%" stopColor="#6DB83B" />
-                <stop offset="100%" stopColor="#5E9E30" />
-              </radialGradient>
-
-              {/* Arcilla del Infield */}
-              <radialGradient id="tmInfieldClay" cx="50%" cy="60%" r="60%">
-                <stop offset="0%" stopColor="#E59458" />
-                <stop offset="90%" stopColor="#D97A38" />
-                <stop offset="100%" stopColor="#B45A1E" />
-              </radialGradient>
-
-              {/* Sombra de secciones */}
-              <filter id="boxShadow" x="-20%" y="-20%" width="140%" height="140%">
-                <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#000000" floodOpacity="0.6" />
+              {/* Filtro de sección seleccionada */}
+              <filter id="activeGlow" x="-30%" y="-30%" width="160%" height="160%">
+                <feDropShadow dx="0" dy="0" stdDeviation="5" floodColor="#FFFFFF" floodOpacity="0.95" />
+                <feDropShadow dx="0" dy="0" stdDeviation="8" floodColor="#F59E0B" floodOpacity="0.9" />
               </filter>
             </defs>
 
-            {/* 1. TERRENO DE JUEGO (CAMPO CIRCULAR EXACTO DEL AFICHE OFICIAL) */}
-            <g id="field-ground">
-              {/* Círculo verde del Outfield */}
+            {/* ======================================================== */}
+            {/* 1. CAMPO CIRCULAR DE BÉISBOL (VERDE VIBRANTE)            */}
+            {/* ======================================================== */}
+            <g id="central-field">
+              {/* Círculo completo del campo verde césped */}
               <circle
-                cx={outfieldCenter.x}
-                cy={outfieldCenter.y}
-                r="180"
-                fill="url(#tmOutfieldGrass)"
-                stroke="#4E8C22"
-                strokeWidth="2.5"
+                cx={CX}
+                cy={CY}
+                r={250}
+                fill="#77B82E"
+                stroke="#1B3308"
+                strokeWidth="1.5"
               />
 
-              {/* Barda de jonrón (curva perimetral) */}
-              <circle
-                cx={outfieldCenter.x}
-                cy={outfieldCenter.y}
-                r="180"
-                fill="none"
-                stroke="#FACC15"
-                strokeWidth="3.5"
-                strokeDasharray="8 4"
-                opacity="0.9"
-              />
-
-              {/* Arcilla del Infield (Abanico de béisbol) */}
+              {/* ======================================================== */}
+              {/* 2. INFIELD DIAMOND: ARCILLA NARANJA + CUADRADO VERDE     */}
+              {/* ======================================================== */}
+              {/* Arco de arcilla naranja con borde blanco impecable (más amplio) */}
               <path
-                d="M 345 505 Q 420 425 495 505 L 420 568 Z"
-                fill="url(#tmInfieldClay)"
-                stroke="#C26A28"
-                strokeWidth="1.5"
+                d="
+                  M 388,622
+                  C 372,510 416,424 500,424
+                  C 584,424 628,510 612,622
+                  L 535,698
+                  C 522,708 478,708 465,698
+                  Z
+                "
+                fill="#F79422"
+                stroke="#FFFFFF"
+                strokeWidth="3"
+                strokeLinejoin="round"
               />
 
-              {/* Diamante de pasto interior */}
+              {/* Diamante de pasto verde interior (cuadrado girado a 45° más grande) */}
               <polygon
-                points="420,460 460,500 420,540 380,500"
-                fill="#6DB83B"
-                stroke="#88D650"
-                strokeWidth="1.5"
+                points="500,466 574,540 500,614 426,540"
+                fill="#77B82E"
+                stroke="#A3E635"
+                strokeWidth="1.2"
               />
 
-              {/* Líneas de Cal (Foul Lines) */}
+              {/* Líneas de Cal (Foul lines desde home hacia los jardines) */}
               <line
-                x1="420"
-                y1="560"
-                x2="293"
-                y2="433"
+                x1="500"
+                y1="614"
+                x2="355"
+                y2="469"
                 stroke="#FFFFFF"
-                strokeWidth="2.5"
-                strokeOpacity="0.9"
+                strokeWidth="3"
+                strokeLinecap="round"
               />
               <line
-                x1="420"
-                y1="560"
-                x2="547"
-                y2="433"
+                x1="500"
+                y1="614"
+                x2="645"
+                y2="469"
                 stroke="#FFFFFF"
-                strokeWidth="2.5"
-                strokeOpacity="0.9"
+                strokeWidth="3"
+                strokeLinecap="round"
               />
 
-              {/* Montículo del Lanzador */}
-              <circle cx="420" cy="500" r="11" fill="#D97A38" stroke="#FFFFFF" strokeWidth="1" />
-              <rect x="416" y="498.5" width="8" height="3" fill="#FFFFFF" rx="0.5" />
+              {/* Montículo del Pitcher (Círculo blanco central en el diamante) */}
+              <circle cx={500} cy={540} r={13} fill="#FFFFFF" />
+              <circle cx={500} cy={540} r={9.5} fill="#F79422" />
+              <rect x={497} y={538.5} width={6} height={3} fill="#FFFFFF" rx={0.5} />
 
-              {/* Bases (1ra, 2da, 3ra y Home) */}
-              {/* Home Plate */}
-              <polygon points="420,563 415,558 415,553 425,553 425,558" fill="#FFFFFF" />
-              {/* Primera Base (1B) */}
-              <rect x="456" y="496" width="8" height="8" fill="#FFFFFF" transform="rotate(45 460 500)" />
-              {/* Segunda Base (2B) */}
-              <rect x="416" y="456" width="8" height="8" fill="#FFFFFF" transform="rotate(45 420 460)" />
-              {/* Tercera Base (3B) */}
-              <rect x="376" y="496" width="8" height="8" fill="#FFFFFF" transform="rotate(45 380 500)" />
+              {/* Almohadillas (1B, 2B, 3B en color blanco giradas a 45°) */}
+              <rect x={494.5} y={460.5} width={11} height={11} fill="#FFFFFF" transform="rotate(45 500 466)" />
+              <rect x={568.5} y={534.5} width={11} height={11} fill="#FFFFFF" transform="rotate(45 574 540)" />
+              <rect x={420.5} y={534.5} width={11} height={11} fill="#FFFFFF" transform="rotate(45 426 540)" />
 
-              {/* Textos del terreno */}
-              <text
-                x="420"
-                y="300"
-                fill="#FFFFFF"
-                opacity="0.35"
-                fontSize="12"
-                fontWeight="900"
-                textAnchor="middle"
-                letterSpacing="3"
-              >
-                JARDÍN CENTRAL
-              </text>
-              <text
-                x="320"
-                y="350"
-                fill="#FFFFFF"
-                opacity="0.25"
-                fontSize="10"
-                fontWeight="bold"
-                textAnchor="middle"
-              >
-                JARDÍN IZQ.
-              </text>
-              <text
-                x="520"
-                y="350"
-                fill="#FFFFFF"
-                opacity="0.25"
-                fontSize="10"
-                fontWeight="bold"
-                textAnchor="middle"
-              >
-                JARDÍN DER.
-              </text>
+              {/* Zona de Home Plate (caja con plato pentagonal y círculos de apoyo) */}
+              <g transform="translate(500, 618)">
+                {/* Plato pentagonal blanco */}
+                <polygon points="0,0 -6,-6 -6,-11 6,-11 6,-6" fill="#FFFFFF" />
+                {/* Círculos blancos laterales de guía */}
+                <circle cx={-22} cy={-5} r={4.5} fill="#FFFFFF" />
+                <circle cx={22} cy={-5} r={4.5} fill="#FFFFFF" />
+              </g>
             </g>
 
-            {/* 2. RENDERIZADO DE LAS 86 SECCIONES RADIALES */}
-            <g id="stadium-sections">
-              {SECTIONS_CONFIG.map((sec) => {
-                const zoneMeta = MARISCAL_ZONES[sec.zone] || {
-                  colorHex: '#64748B',
-                  fillColor: '#64748B',
-                  name: sec.zone,
-                };
+            {/* ======================================================== */}
+            {/* 3. TODOS LOS 86 SECTORES RADIALES CONCÉNTRICOS          */}
+            {/* ======================================================== */}
+            <g id="stadium-radial-sectors">
+              {SECTOR_DEFINITIONS.map((sec) => {
+                const pathD = createAnnularSectorPath(
+                  CX,
+                  CY,
+                  sec.rIn,
+                  sec.rOut,
+                  sec.startDeg,
+                  sec.endDeg,
+                  0.7
+                );
 
-                const center = sec.centerType === 'outfield' ? outfieldCenter : infieldCenter;
-                const rad = (sec.angleDeg * Math.PI) / 180;
-                const posX = center.x + sec.radius * Math.cos(rad);
-                const posY = center.y + sec.radius * Math.sin(rad);
-
-                // Rotación del bloque para apuntar perpendicularmente al diamante
-                let rot = sec.angleDeg - 90;
-                // Si el texto queda de cabeza, rotar 180 grados para óptima legibilidad
-                let textRot = 0;
-                if (rot > 90 || rot < -90) {
-                  textRot = 180;
-                }
+                const { x: tx, y: ty, rotDeg } = getSectorCenterAndRotation(
+                  CX,
+                  CY,
+                  sec.rIn,
+                  sec.rOut,
+                  sec.startDeg,
+                  sec.endDeg
+                );
 
                 const selected = isSelected(sec.num);
                 const hovered = hoveredSection === sec.num;
                 const dimmed = isDimmed(sec.zone);
                 const price = getZonePrice(sec.zone, event);
 
-                // Determinar color de texto legible según el fondo de zona
-                const isDarkText = sec.zone === 'Fan' || sec.zone === 'Fan Plus' || sec.zone === 'Plus';
-                const textColor = selected ? '#0F172A' : isDarkText ? '#0F172A' : '#FFFFFF';
-
                 return (
                   <g
                     key={sec.num}
-                    transform={`translate(${posX}, ${posY}) rotate(${rot})`}
                     className="cursor-pointer transition-transform duration-100"
                     onClick={() => onSelectSection(sec.num)}
                     onMouseEnter={() => setHoveredSection(sec.num)}
                     onMouseLeave={() => setHoveredSection(null)}
                   >
-                    {/* Caja de sección */}
-                    <rect
-                      x={-sec.width / 2}
-                      y={-sec.height / 2}
-                      width={sec.width}
-                      height={sec.height}
-                      rx={3}
-                      fill={selected ? '#FFFFFF' : zoneMeta.colorHex}
-                      stroke={selected ? '#F59E0B' : hovered ? '#FFFFFF' : '#0F172A'}
-                      strokeWidth={selected ? 3 : hovered ? 2 : 0.8}
-                      opacity={dimmed ? 0.25 : 1}
-                      filter="url(#boxShadow)"
+                    {/* Sector curvado */}
+                    <path
+                      d={pathD}
+                      fill={selected ? '#FFFFFF' : sec.fillColor}
+                      stroke={selected ? '#F59E0B' : hovered ? '#FFFFFF' : '#0B0F19'}
+                      strokeWidth={selected ? 3 : hovered ? 2 : 1.2}
+                      opacity={dimmed ? 0.22 : 1}
+                      filter={selected ? 'url(#activeGlow)' : undefined}
                     />
 
-                    {/* Número de sección */}
+                    {/* Número de la sección centrado y rotado a lo largo del arco */}
                     <text
-                      x={0}
-                      y={textRot === 180 ? 3.5 : 3.5}
-                      transform={`rotate(${textRot})`}
-                      fill={textColor}
-                      fontSize={sec.num.length > 2 ? 7.5 : 8.5}
+                      x={tx}
+                      y={ty + 2.5}
+                      transform={`rotate(${rotDeg} ${tx} ${ty})`}
+                      fill={selected ? '#0F172A' : sec.textColor}
+                      fontSize={sec.num.length >= 3 ? 9 : 10.5}
                       fontWeight="900"
+                      letterSpacing="0.2"
                       textAnchor="middle"
                       style={{ pointerEvents: 'none', userSelect: 'none' }}
                     >
                       {sec.num}
                     </text>
 
-                    {/* Tooltip dinámico al posar el cursor */}
+                    {/* Tooltip flotante con información de zona y precio */}
                     {hovered && (
-                      <g
-                        transform={`rotate(${-rot}) translate(0, -28)`}
-                        className="pointer-events-none z-50"
-                      >
+                      <g transform={`translate(${tx}, ${ty - 28})`} className="pointer-events-none z-50">
                         <rect
-                          x={-55}
-                          y={-14}
-                          width={110}
-                          height={24}
-                          rx={6}
-                          fill="#0F172A"
+                          x={-56}
+                          y={-16}
+                          width={112}
+                          height={32}
+                          rx={7}
+                          fill="#0A0E17"
                           stroke="#F59E0B"
-                          strokeWidth={1.5}
+                          strokeWidth={1.8}
+                          opacity={0.98}
                         />
                         <text
                           x={0}
                           y={-2}
                           fill="#F8FAFC"
-                          fontSize="8.5"
-                          fontWeight="bold"
+                          fontSize="9.5"
+                          fontWeight="900"
                           textAnchor="middle"
                         >
-                          Sec. #{sec.num} • {sec.zone}
+                          Sección {sec.num} • {sec.zone}
                         </text>
                         <text
                           x={0}
-                          y={7}
-                          fill="#FCD34D"
-                          fontSize="7.5"
-                          fontWeight="black"
+                          y={10}
+                          fill="#FBBF24"
+                          fontSize="9"
+                          fontWeight="bold"
                           textAnchor="middle"
                         >
                           ${price} MXN
@@ -480,91 +527,44 @@ export const TeodoroMariscalStadiumMap: React.FC<TeodoroMariscalStadiumMapProps>
                 );
               })}
             </g>
-
-            {/* 3. LOGOS & PIE DE PÁGINA DEL PÓSTER */}
-            <g id="poster-footer" transform="translate(0, 830)">
-              <line x1="120" y1="0" x2="720" y2="0" stroke="#334155" strokeWidth="1" strokeDasharray="4 4" />
-              
-              {/* Emblema 80 Aniversario */}
-              <text x="310" y="32" fill="#E2E8F0" fontSize="13" fontWeight="900" textAnchor="middle">
-                80 ANIVERSARIO
-              </text>
-              <text x="310" y="46" fill="#EF4444" fontSize="9" fontWeight="extrabold" textAnchor="middle" letterSpacing="1">
-                VENADOS DE MAZATLÁN
-              </text>
-
-              {/* Separador */}
-              <circle cx="420" cy="35" r="2.5" fill="#64748B" />
-
-              {/* Liga Arco Mexicana del Pacífico */}
-              <text x="530" y="32" fill="#E2E8F0" fontSize="12" fontWeight="900" textAnchor="middle">
-                LIGA ARCO
-              </text>
-              <text x="530" y="46" fill="#38BDF8" fontSize="8.5" fontWeight="black" textAnchor="middle" letterSpacing="1">
-                MEXICANA DEL PACÍFICO
-              </text>
-
-              {/* Mensaje de taquilla */}
-              <text x="420" y="70" fill="#94A3B8" fontSize="10" fontWeight="500" textAnchor="middle">
-                Boletos en taquilla (sólo en días de juego), y en línea en esta plataforma oficial.
-              </text>
-            </g>
           </svg>
-        </div>
-
-        {/* Notificación flotante de sección activa */}
-        <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between pointer-events-none z-10">
-          <div className="bg-slate-900/90 border border-slate-700/80 px-3 py-1.5 rounded-2xl shadow-xl backdrop-blur-xs flex items-center gap-2">
-            <MapPin className="w-3.5 h-3.5 text-amber-400" />
-            <span className="text-xs font-semibold text-slate-300">
-              Sección: <strong className="text-white font-black">#{activeSectionNumber}</strong>
-            </span>
-          </div>
-
-          <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-slate-400 bg-slate-900/80 px-3 py-1.5 rounded-2xl border border-slate-800">
-            <Sparkles className="w-3 h-3 text-red-400" />
-            <span>Haz clic en cualquier bloque para ver sus butacas</span>
-          </div>
         </div>
       </div>
 
-      {/* Modal / Panel desplegable con Guía Oficial de Zonas */}
+      {/* Guía expandible de Zonas y Precios */}
       {showZoneGuide && (
-        <div className="bg-slate-900 text-slate-100 p-4 rounded-3xl border border-slate-700 shadow-xl space-y-3 animate-fade-in">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-            <h4 className="text-xs font-black uppercase tracking-wider text-slate-300 flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-red-400" />
-              Guía Oficial de Zonas y Secciones • Teodoro Mariscal
-            </h4>
+        <div className="p-3.5 bg-slate-900 border border-slate-800 rounded-2xl space-y-2.5 shadow-xl animate-in fade-in duration-200">
+          <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
+            <div className="flex items-center gap-1.5 text-xs font-black uppercase text-amber-400 tracking-wider">
+              <Sparkles className="w-3.5 h-3.5" />
+              Zonas y Precios Oficiales
+            </div>
             <button
               onClick={() => setShowZoneGuide(false)}
-              className="text-xs text-slate-400 hover:text-white cursor-pointer"
+              className="text-[10px] text-slate-400 hover:text-white cursor-pointer px-2 py-0.5 rounded bg-slate-800"
             >
               Cerrar
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 text-xs">
-            {Object.entries(MARISCAL_ZONES).map(([name, meta]) => {
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {Object.entries(MARISCAL_ZONES).map(([name, zone]) => {
               const price = getZonePrice(name, event);
               return (
                 <div
                   key={name}
-                  onClick={() => onSelectSection(name === 'Deluxe Supreme' ? '6' : name === 'Platino' ? '106' : name === 'Oro' ? '103' : name === 'Fan' ? '125' : name === 'Fan Plus' ? '225' : name === 'Plus' ? '203' : name === 'Diamante' ? '211' : name === 'Sky' ? '303' : '306')}
-                  className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 hover:border-slate-500 cursor-pointer transition-all flex items-start gap-2.5"
+                  className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-800/60 border border-slate-700/50"
                 >
                   <span
-                    className="w-4 h-4 rounded-md shrink-0 mt-0.5 border border-white/20 shadow-xs"
-                    style={{ backgroundColor: meta.colorHex }}
+                    className="w-4 h-4 rounded-md shrink-0 border border-white/20 shadow-xs"
+                    style={{ backgroundColor: zone.colorHex }}
                   />
-                  <div className="space-y-0.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-bold text-slate-100">{name}</span>
-                      <span className="font-mono font-black text-amber-400">${price}</span>
-                    </div>
-                    <p className="text-[11px] text-slate-400 line-clamp-1">{meta.description}</p>
-                    <span className="text-[10px] text-slate-500 block font-medium">
-                      Acceso: {meta.gate}
+                  <div className="min-w-0">
+                    <span className="text-[11px] font-bold text-slate-200 block truncate">
+                      {name}
+                    </span>
+                    <span className="text-[10px] text-amber-400 font-extrabold block">
+                      ${price} MXN
                     </span>
                   </div>
                 </div>

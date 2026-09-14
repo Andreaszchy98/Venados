@@ -12,12 +12,16 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: (isSuccess?: boolean) => void;
   onSuccess?: () => void;
+  customTitle?: string;
+  customSubtitle?: string;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
+  customTitle,
+  customSubtitle,
 }) => {
   const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState('');
@@ -70,13 +74,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 bg-slate-900/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 bg-black/80 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-150">
       <div
         id="auth-modal-container"
-        className="relative w-full max-w-sm sm:max-w-md bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-100 overflow-hidden my-auto flex flex-col max-h-[92vh]"
+        className="relative w-full max-w-sm sm:max-w-md bg-[#0F1420] rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-700/80 overflow-hidden my-auto flex flex-col max-h-[92vh] text-slate-100"
       >
-        {/* Encabezado con imagen/identidad Venados */}
-        <div className="bg-gradient-to-r from-red-800 to-red-900 text-white p-5 sm:p-6 text-center relative shrink-0">
+        {/* Encabezado con identidad deportiva VXP */}
+        <div className="bg-gradient-to-r from-red-700 via-red-600 to-red-700 text-white p-5 sm:p-6 text-center relative shrink-0 border-b border-red-500/30">
           <button
             onClick={() => onClose(false)}
             className="absolute top-3.5 right-3.5 sm:top-4 sm:right-4 text-white/80 hover:text-white p-1.5 rounded-full hover:bg-white/10 transition-colors cursor-pointer"
@@ -84,14 +88,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           >
             <X className="w-5 h-5" />
           </button>
-          <div className="inline-flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white/10 border border-white/20 mb-2 sm:mb-3">
-            <span className="text-lg sm:text-xl font-black tracking-tighter">V</span>
+          <div className="inline-flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-black/30 border border-white/20 mb-2 sm:mb-3 shadow-inner">
+            <span className="text-xl sm:text-2xl font-black tracking-wider text-amber-400 font-scoreboard">V</span>
           </div>
-          <h2 className="text-lg sm:text-xl font-bold tracking-tight">
-            {isRegister ? t('auth.title_register', 'Crear Cuenta en VXP') : t('auth.title_login', 'Iniciar Sesión en VXP')}
+          <h2 className="text-xl sm:text-2xl font-black tracking-wide uppercase font-sports">
+            {customTitle || (isRegister ? t('auth.title_register', 'Crear Cuenta en VXP') : t('auth.title_login', 'Iniciar Sesión en VXP'))}
           </h2>
-          <p className="text-[11px] sm:text-xs text-red-100/90 mt-1">
-            {t('auth.subtitle', 'Accede a tus boletos, pedidos y membresía')}
+          <p className="text-[11px] sm:text-xs text-white/80 mt-1 font-medium">
+            {customSubtitle || t('auth.subtitle', 'Accede a tus boletos, pedidos y membresía')}
           </p>
         </div>
 
@@ -110,7 +114,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             type="button"
             onClick={handleGoogleSignIn}
             disabled={loading}
-            className="w-full flex items-center justify-center gap-3 py-2.5 px-4 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-medium text-sm rounded-lg shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+            className="w-full flex items-center justify-center gap-3 py-2.5 px-4 bg-[#161F30] border border-slate-700/80 hover:bg-[#1C283E] text-slate-200 font-bold text-sm rounded-xl shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24">
               <path
@@ -134,15 +138,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </button>
 
           <div className="flex items-center gap-3">
-            <div className="flex-1 border-t border-slate-200"></div>
-            <span className="text-xs text-slate-400 font-medium">{t('auth.or_email', 'o con correo')}</span>
-            <div className="flex-1 border-t border-slate-200"></div>
+            <div className="flex-1 border-t border-slate-800"></div>
+            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider font-sports">{t('auth.or_email', 'o con correo')}</span>
+            <div className="flex-1 border-t border-slate-800"></div>
           </div>
 
           <form onSubmit={handleEmailSubmit} className="space-y-3">
             {isRegister && (
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-black text-slate-300 mb-1 font-sports uppercase tracking-wider">
                   {t('auth.name', 'Nombre completo')}
                 </label>
                 <div className="relative">
@@ -153,14 +157,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                     placeholder={t('auth.name_placeholder', 'Ej. Carlos Mendoza')}
-                    className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-red-600 focus:border-red-600"
+                    className="w-full pl-9 pr-3 py-2 bg-[#131A28] border border-slate-700 text-white placeholder-slate-500 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-red-500 focus:border-red-500 font-medium"
                   />
                 </div>
               </div>
             )}
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-black text-slate-300 mb-1 font-sports uppercase tracking-wider">
                 {t('auth.email', 'Correo electrónico')}
               </label>
               <div className="relative">
@@ -171,13 +175,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder={t('auth.email_placeholder', 'ejemplo@correo.com')}
-                  className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-red-600 focus:border-red-600"
+                  className="w-full pl-9 pr-3 py-2 bg-[#131A28] border border-slate-700 text-white placeholder-slate-500 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-red-500 focus:border-red-500 font-medium"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-black text-slate-300 mb-1 font-sports uppercase tracking-wider">
                 {t('auth.password', 'Contraseña')}
               </label>
               <div className="relative">
@@ -188,7 +192,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-red-600 focus:border-red-600"
+                  className="w-full pl-9 pr-3 py-2 bg-[#131A28] border border-slate-700 text-white placeholder-slate-500 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-red-500 focus:border-red-500 font-medium"
                 />
               </div>
             </div>
@@ -197,7 +201,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               id="submit-auth-btn"
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 px-4 bg-red-700 hover:bg-red-800 text-white font-semibold text-sm rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-50 mt-2 cursor-pointer"
+              className="w-full py-2.5 px-4 bg-red-600 hover:bg-red-500 text-white font-black text-sm uppercase tracking-wider rounded-xl shadow-md shadow-red-950/40 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 mt-2 cursor-pointer active:scale-98 font-sports border border-red-500/40"
             >
               {loading ? (
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
@@ -214,7 +218,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </form>
 
           {/* Selector de Alternancia Login/Registro */}
-          <div className="pt-2 text-center text-xs text-slate-600">
+          <div className="pt-2 text-center text-xs text-slate-400">
             {isRegister ? (
               <span>
                 {t('auth.switch_to_login', '¿Ya tienes una cuenta? Inicia sesión')}{' '}
@@ -224,7 +228,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     setIsRegister(false);
                     setErrorMessage(null);
                   }}
-                  className="text-red-700 font-bold hover:underline cursor-pointer"
+                  className="text-red-400 font-bold hover:underline cursor-pointer"
                 >
                   {t('auth.title_login', 'Iniciar sesión')}
                 </button>
@@ -238,7 +242,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     setIsRegister(true);
                     setErrorMessage(null);
                   }}
-                  className="text-red-700 font-bold hover:underline cursor-pointer"
+                  className="text-red-400 font-bold hover:underline cursor-pointer"
                 >
                   {t('auth.submit_register', 'Regístrate aquí')}
                 </button>

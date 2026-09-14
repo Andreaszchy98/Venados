@@ -20,21 +20,44 @@ import {
   ArrowRight,
   ShieldCheck,
   Package,
+  Maximize2,
 } from 'lucide-react';
 
 interface TiendaMerchProps {
   user: UserProfile;
   onOrderCompleted?: () => void;
+  onRequireAuth?: () => void;
 }
 
-export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted }) => {
+export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted, onRequireAuth }) => {
   const [products, setProducts] = useState<InventoryProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
-  const [cart, setCart] = useState<{ product: InventoryProduct; size: string; quantity: number }[]>([]);
+  const [cart, setCart] = useState<{ product: InventoryProduct; size: string; quantity: number }[]>(() => {
+    try {
+      const saved = sessionStorage.getItem('vxp_merch_cart');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<{ src: string; title: string; category?: string } | null>(null);
+
+  // Sincronizar carrito con sessionStorage para no perder artículos ante recarga o inicio de sesión
+  useEffect(() => {
+    try {
+      if (cart.length > 0) {
+        sessionStorage.setItem('vxp_merch_cart', JSON.stringify(cart));
+      } else {
+        sessionStorage.removeItem('vxp_merch_cart');
+      }
+    } catch (e) {
+      console.warn('Error guardando carrito de merch en sessionStorage:', e);
+    }
+  }, [cart]);
 
   // Formulario de Envío
   const [shippingType, setShippingType] = useState<'domicilio' | 'tienda'>('domicilio');
@@ -114,6 +137,15 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (cart.length === 0) return;
+
+    // Si el usuario no tiene sesión iniciada, solicitamos login manteniendo su carrito intacto
+    if (!user || !user.uid) {
+      if (onRequireAuth) {
+        onRequireAuth();
+      }
+      return;
+    }
+
     setSubmittingOrder(true);
 
     try {
@@ -176,6 +208,9 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
       }
 
       setCart([]);
+      try {
+        sessionStorage.removeItem('vxp_merch_cart');
+      } catch {}
       setIsCheckingOut(false);
       setIsCartOpen(false);
       setOrderSuccess(`¡Pedido confirmado con éxito! Total: $${total.toLocaleString('es-MX')} MXN. Puedes seguir el envío en la pestaña "Mis Pedidos".`);
@@ -236,15 +271,15 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
       )}
 
       {/* Selector de Categorías */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none font-sports">
         {categories.map((cat) => (
           <button
             key={cat}
             onClick={() => setSelectedCategory(cat)}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all shrink-0 cursor-pointer ${
               selectedCategory === cat
-                ? 'bg-red-800 text-white shadow-xs'
-                : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+                ? 'bg-red-600 text-white shadow-md'
+                : 'bg-[#0F1626] text-slate-300 hover:text-white border border-slate-700/80'
             }`}
           >
             {cat}
@@ -256,55 +291,88 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
       {loading ? (
         <LoadingSpinner message={`Cargando catálogo oficial de ${storeProfile.storeName}...`} />
       ) : filteredProducts.length === 0 ? (
-        <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center text-slate-500 space-y-2">
-          <Package className="w-10 h-10 text-slate-300 mx-auto" />
-          <p className="text-sm font-bold text-slate-800">No hay productos en esta categoría</p>
-          <p className="text-xs">Prueba seleccionando otra categoría o regresa más tarde.</p>
+        <div className="bg-[#0F1626] border border-slate-700/80 rounded-2xl p-12 text-center text-slate-400 space-y-2">
+          <Package className="w-10 h-10 text-slate-500 mx-auto" />
+          <p className="text-sm font-bold text-white font-sports uppercase tracking-wide">No hay productos en esta categoría</p>
+          <p className="text-xs text-slate-400">Prueba seleccionando otra categoría o regresa más tarde.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredProducts.map((prod) => (
             <div
               key={prod.id}
-              className="bg-white rounded-2xl border border-slate-200/90 shadow-xs hover:shadow-md transition-shadow overflow-hidden flex flex-col justify-between group"
+              className="bg-[#0F1626] rounded-2xl border border-slate-700/80 shadow-xl hover:border-red-600/50 hover:shadow-red-950/20 transition-all overflow-hidden flex flex-col justify-between group"
             >
               <div>
-                <div className="relative h-52 bg-slate-100 overflow-hidden">
-                  <img
-                    src={normalizeGoogleDriveImageUrl(prod.image) || getDefaultProductPlaceholder(prod.category)}
-                    alt={prod.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    referrerPolicy="no-referrer"
-                    onError={(e) => {
-                      (e.currentTarget as HTMLImageElement).src = getDefaultProductPlaceholder(prod.category);
-                    }}
-                  />
-                  <div className="absolute top-3 left-3 bg-slate-900/80 backdrop-blur-xs text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">
-                    {prod.category}
-                  </div>
-                  {prod.stock <= prod.minStockAlert && (
-                    <div className="absolute top-3 right-3 bg-amber-500 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-full shadow-xs">
-                      ¡Últimas {prod.stock} pzas!
+                {(() => {
+                  const resolvedImg = normalizeGoogleDriveImageUrl(prod.image) || getDefaultProductPlaceholder(prod.category);
+                  return (
+                    <div
+                      className="relative h-64 sm:h-72 bg-[#060911] p-4 flex items-center justify-center overflow-hidden border-b border-slate-700/60 cursor-pointer group/img"
+                      onClick={() => setPreviewImage({ src: resolvedImg, title: prod.name, category: prod.category })}
+                    >
+                      {/* Fondo de brillo ambiental suave */}
+                      <img
+                        src={resolvedImg}
+                        alt=""
+                        aria-hidden="true"
+                        className="absolute inset-0 w-full h-full object-cover blur-md opacity-25 scale-110 pointer-events-none"
+                        referrerPolicy="no-referrer"
+                      />
+
+                      {/* Imagen de mercancía completa sin recortar */}
+                      <img
+                        src={resolvedImg}
+                        alt={prod.name}
+                        className="relative z-10 w-full h-full object-contain group-hover:scale-105 transition-transform duration-300 drop-shadow-md"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src = getDefaultProductPlaceholder(prod.category);
+                        }}
+                      />
+
+                      {/* Botón para inspeccionar imagen en grande */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPreviewImage({ src: resolvedImg, title: prod.name, category: prod.category });
+                        }}
+                        className="absolute bottom-3 right-3 p-2 bg-[#0F1626]/90 hover:bg-red-600 border border-slate-700 hover:border-red-500 rounded-lg text-white shadow-lg opacity-0 group-hover/img:opacity-100 transition-all z-20 flex items-center gap-1.5 text-[11px] font-sports font-bold tracking-wider cursor-pointer"
+                        title="Ver imagen completa"
+                      >
+                        <Maximize2 className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">AMPLIAR</span>
+                      </button>
+
+                      <div className="absolute top-3 left-3 bg-[#0A0E17]/90 backdrop-blur-xs text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider border border-slate-700 font-sports z-20">
+                        {prod.category}
+                      </div>
+                      {prod.stock <= prod.minStockAlert && (
+                        <div className="absolute top-3 right-3 bg-amber-500 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-full shadow-xs font-sports uppercase z-20">
+                          ¡Últimas {prod.stock} pzas!
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+                  );
+                })()}
 
                 <div className="p-5 space-y-2">
                   <div className="text-[11px] text-slate-400 font-mono">SKU: {prod.sku}</div>
-                  <h3 className="font-extrabold text-slate-900 text-sm leading-snug line-clamp-2">
+                  <h3 className="font-extrabold text-white text-sm leading-snug line-clamp-2 font-sports tracking-wide">
                     {prod.name}
                   </h3>
-                  <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
+                  <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
                     {prod.description}
                   </p>
 
                   {prod.sizes && prod.sizes.length > 0 && (
-                    <div className="pt-2 flex flex-wrap items-center gap-1.5">
-                      <span className="text-[11px] text-slate-400 mr-1">Tallas:</span>
+                    <div className="pt-2 flex flex-wrap items-center gap-1.5 font-sports">
+                      <span className="text-[11px] text-slate-400 mr-1 uppercase">Tallas:</span>
                       {prod.sizes.map((s) => (
                         <span
                           key={s}
-                          className="px-2 py-0.5 bg-slate-100 text-slate-700 text-[10px] font-bold rounded border border-slate-200"
+                          className="px-2 py-0.5 bg-[#141C2E] text-slate-200 text-[10px] font-bold rounded border border-slate-700"
                         >
                           {s}
                         </span>
@@ -314,18 +382,18 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                 </div>
               </div>
 
-              <div className="p-5 pt-0 border-t border-slate-100 flex items-center justify-between gap-3 mt-3">
+              <div className="p-5 pt-0 border-t border-slate-700/70 flex items-center justify-between gap-3 mt-3">
                 <div>
-                  <span className="text-[11px] text-slate-400 block font-medium">Precio</span>
-                  <span className="text-lg font-black text-red-900">
-                    ${prod.price.toLocaleString('es-MX')} <span className="text-xs font-semibold text-slate-500">MXN</span>
+                  <span className="text-[11px] text-slate-400 block font-sports uppercase tracking-wider">Precio</span>
+                  <span className="text-lg font-black text-emerald-400 font-scoreboard">
+                    ${prod.price.toLocaleString('es-MX')} <span className="text-xs font-semibold text-slate-400 font-sans">MXN</span>
                   </span>
                 </div>
 
                 <button
                   disabled={prod.stock <= 0}
                   onClick={() => addToCart(prod)}
-                  className="px-4 py-2.5 bg-red-700 hover:bg-red-800 disabled:bg-slate-300 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+                  className="px-4 py-2.5 bg-red-600 hover:bg-red-500 active:bg-red-700 disabled:bg-slate-800 disabled:text-slate-500 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-1.5 font-sports uppercase tracking-wider cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   {prod.stock <= 0 ? 'Agotado' : 'Agregar'}
@@ -338,20 +406,20 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
 
       {/* Carrito Lateral / Modal */}
       {isCartOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-end bg-slate-900/60 backdrop-blur-xs">
-          <div className="w-full max-w-md h-full bg-white shadow-2xl flex flex-col justify-between overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/80 backdrop-blur-sm">
+          <div className="w-full max-w-md h-full bg-[#0F1626] border-l border-slate-700/80 shadow-2xl flex flex-col justify-between overflow-hidden text-white">
             {/* Header del Carrito */}
-            <div className="p-5 bg-slate-900 text-white flex items-center justify-between">
+            <div className="p-5 bg-[#0A0E17] border-b border-slate-700/80 text-white flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <ShoppingCart className="w-5 h-5 text-red-400" />
-                <h3 className="font-bold text-sm">Tu Carrito ({totalItemsCount} artículos)</h3>
+                <h3 className="font-bold text-sm font-sports tracking-wide uppercase">Tu Carrito ({totalItemsCount} artículos)</h3>
               </div>
               <button
                 onClick={() => {
                   setIsCartOpen(false);
                   setIsCheckingOut(false);
                 }}
-                className="p-1 rounded-lg text-slate-400 hover:text-white"
+                className="p-1 rounded-lg text-slate-400 hover:text-white cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -360,114 +428,114 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
             {/* Contenido del Carrito o Checkout */}
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
               {cart.length === 0 ? (
-                <div className="text-center py-16 text-slate-400 space-y-3">
-                  <ShoppingCart className="w-12 h-12 mx-auto text-slate-300" />
-                  <p className="text-sm font-semibold">Tu carrito está vacío</p>
-                  <p className="text-xs">Agrega jerseys, gorras o souvenirs para continuar.</p>
+                <div className="text-center py-16 text-slate-400 space-y-3 font-sports">
+                  <ShoppingCart className="w-12 h-12 mx-auto text-slate-600" />
+                  <p className="text-sm font-bold uppercase tracking-wider text-slate-300">Tu carrito está vacío</p>
+                  <p className="text-xs text-slate-500 font-sans">Agrega jerseys, gorras o souvenirs para continuar.</p>
                 </div>
               ) : isCheckingOut ? (
                 /* Formulario de Checkout */
-                <form id="checkout-form" onSubmit={handlePlaceOrder} className="space-y-4 text-xs">
-                  <div className="bg-red-50 p-3 rounded-xl border border-red-200 text-red-900">
-                    <p className="font-bold flex items-center gap-1.5">
-                      <Truck className="w-4 h-4 text-red-700" /> Método de Entrega
+                <form id="checkout-form" onSubmit={handlePlaceOrder} className="space-y-4 text-xs font-sports">
+                  <div className="bg-[#0A0E17] p-3 rounded-xl border border-slate-700/80 text-white">
+                    <p className="font-bold uppercase tracking-wider flex items-center gap-1.5 text-slate-300">
+                      <Truck className="w-4 h-4 text-red-500" /> Método de Entrega
                     </p>
                     <div className="grid grid-cols-2 gap-2 mt-2">
                       <button
                         type="button"
                         onClick={() => setShippingType('domicilio')}
-                        className={`p-2.5 rounded-lg border text-left font-semibold ${
+                        className={`p-2.5 rounded-lg border text-left font-semibold cursor-pointer transition-all ${
                           shippingType === 'domicilio'
-                            ? 'bg-white border-red-700 text-red-900 shadow-xs'
-                            : 'bg-red-100/50 border-transparent text-slate-700'
+                            ? 'bg-red-950/40 border-red-500 text-white shadow-xs'
+                            : 'bg-[#141C2E] border-slate-700 text-slate-400 hover:text-white'
                         }`}
                       >
-                        <p className="font-bold">Envío a Domicilio</p>
-                        <span className="text-[10px] text-slate-500 block">DHL / Paquetexpress</span>
+                        <p className="font-bold uppercase">Envío a Domicilio</p>
+                        <span className="text-[10px] text-slate-400 block font-sans">DHL / Paquetexpress</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => setShippingType('tienda')}
-                        className={`p-2.5 rounded-lg border text-left font-semibold ${
+                        className={`p-2.5 rounded-lg border text-left font-semibold cursor-pointer transition-all ${
                           shippingType === 'tienda'
-                            ? 'bg-white border-red-700 text-red-900 shadow-xs'
-                            : 'bg-red-100/50 border-transparent text-slate-700'
+                            ? 'bg-red-950/40 border-red-500 text-white shadow-xs'
+                            : 'bg-[#141C2E] border-slate-700 text-slate-400 hover:text-white'
                         }`}
                       >
-                        <p className="font-bold">Recoger en Tienda</p>
-                        <span className="text-[10px] text-slate-500 block truncate">{storeProfile.stadiumName}</span>
+                        <p className="font-bold uppercase">Recoger en Tienda</p>
+                        <span className="text-[10px] text-slate-400 block truncate font-sans">{storeProfile.stadiumName}</span>
                       </button>
                     </div>
                   </div>
 
                   {shippingType === 'domicilio' && (
-                    <div className="space-y-2.5 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                      <p className="font-bold text-slate-800">Dirección de Envío</p>
+                    <div className="space-y-2.5 bg-[#0A0E17] p-3 rounded-xl border border-slate-700/80 text-slate-300 font-sans">
+                      <p className="font-bold text-white font-sports uppercase tracking-wider">Dirección de Envío</p>
                       <div>
-                        <label className="block text-slate-600 mb-0.5">Nombre de quien recibe</label>
+                        <label className="block text-slate-400 mb-0.5 text-[11px]">Nombre de quien recibe</label>
                         <input
                           type="text"
                           required
                           value={address.recipientName}
                           onChange={(e) => setAddress({ ...address, recipientName: e.target.value })}
-                          className="w-full p-2 border border-slate-300 rounded-lg bg-white"
+                          className="w-full p-2 border border-slate-700 rounded-lg bg-[#141C2E] text-white placeholder-slate-500 focus:outline-hidden focus:border-red-500"
                           placeholder="Ej. Juan Pérez"
                         />
                       </div>
                       <div>
-                        <label className="block text-slate-600 mb-0.5">Calle y Número</label>
+                        <label className="block text-slate-400 mb-0.5 text-[11px]">Calle y Número</label>
                         <input
                           type="text"
                           required
                           value={address.street}
                           onChange={(e) => setAddress({ ...address, street: e.target.value })}
-                          className="w-full p-2 border border-slate-300 rounded-lg bg-white"
+                          className="w-full p-2 border border-slate-700 rounded-lg bg-[#141C2E] text-white placeholder-slate-500 focus:outline-hidden focus:border-red-500"
                           placeholder="Av. Ejército Mexicano 405"
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="block text-slate-600 mb-0.5">Colonia</label>
+                          <label className="block text-slate-400 mb-0.5 text-[11px]">Colonia</label>
                           <input
                             type="text"
                             required
                             value={address.neighborhood}
                             onChange={(e) => setAddress({ ...address, neighborhood: e.target.value })}
-                            className="w-full p-2 border border-slate-300 rounded-lg bg-white"
+                            className="w-full p-2 border border-slate-700 rounded-lg bg-[#141C2E] text-white placeholder-slate-500 focus:outline-hidden focus:border-red-500"
                             placeholder="Palos Prietos"
                           />
                         </div>
                         <div>
-                          <label className="block text-slate-600 mb-0.5">Código Postal</label>
+                          <label className="block text-slate-400 mb-0.5 text-[11px]">Código Postal</label>
                           <input
                             type="text"
                             required
                             value={address.zipCode}
                             onChange={(e) => setAddress({ ...address, zipCode: e.target.value })}
-                            className="w-full p-2 border border-slate-300 rounded-lg bg-white"
+                            className="w-full p-2 border border-slate-700 rounded-lg bg-[#141C2E] text-white placeholder-slate-500 focus:outline-hidden focus:border-red-500"
                             placeholder="82000"
                           />
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="block text-slate-600 mb-0.5">Ciudad</label>
+                          <label className="block text-slate-400 mb-0.5 text-[11px]">Ciudad</label>
                           <input
                             type="text"
                             required
                             value={address.city}
                             onChange={(e) => setAddress({ ...address, city: e.target.value })}
-                            className="w-full p-2 border border-slate-300 rounded-lg bg-white"
+                            className="w-full p-2 border border-slate-700 rounded-lg bg-[#141C2E] text-white placeholder-slate-500 focus:outline-hidden focus:border-red-500"
                           />
                         </div>
                         <div>
-                          <label className="block text-slate-600 mb-0.5">Teléfono</label>
+                          <label className="block text-slate-400 mb-0.5 text-[11px]">Teléfono</label>
                           <input
                             type="tel"
                             required
                             value={address.phone}
                             onChange={(e) => setAddress({ ...address, phone: e.target.value })}
-                            className="w-full p-2 border border-slate-300 rounded-lg bg-white"
+                            className="w-full p-2 border border-slate-700 rounded-lg bg-[#141C2E] text-white placeholder-slate-500 focus:outline-hidden focus:border-red-500"
                             placeholder="669 123 4567"
                           />
                         </div>
@@ -475,8 +543,8 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                     </div>
                   )}
 
-                  <div className="space-y-2">
-                    <label className="block font-bold text-slate-800 text-xs">
+                  <div className="space-y-2 font-sports">
+                    <label className="block font-bold text-slate-300 uppercase tracking-wider text-xs">
                       Selecciona tu Método de Pago
                     </label>
 
@@ -484,24 +552,24 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                       <button
                         type="button"
                         onClick={() => setPaymentMethod('Efectivo / Terminal física')}
-                        className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between ${
+                        className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between cursor-pointer ${
                           paymentMethod === 'Efectivo / Terminal física'
-                            ? 'border-emerald-600 bg-emerald-50/70 shadow-xs'
-                            : 'border-slate-200 hover:border-slate-300 bg-white'
+                            ? 'border-emerald-500 bg-emerald-950/40 shadow-xs'
+                            : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17]'
                         }`}
                       >
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-base">💵</span>
                           {paymentMethod === 'Efectivo / Terminal física' && (
-                            <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+                            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
                           )}
                         </div>
                         <div>
-                          <p className="font-extrabold text-[11px] text-slate-900 leading-tight">
+                          <p className="font-extrabold text-[11px] text-white leading-tight uppercase">
                             Efectivo / Terminal física
                           </p>
-                          <p className="text-[10px] text-slate-500 mt-0.5">
-                            Paga en efectivo o con tarjeta en la terminal física al recibir o recoger
+                          <p className="text-[10px] text-slate-400 mt-0.5 font-sans">
+                            Paga en efectivo o con tarjeta física al recibir o recoger
                           </p>
                         </div>
                       </button>
@@ -509,23 +577,23 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                       <button
                         type="button"
                         onClick={() => setPaymentMethod('Tarjeta')}
-                        className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between ${
+                        className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between cursor-pointer ${
                           paymentMethod === 'Tarjeta'
-                            ? 'border-red-700 bg-red-50/70 shadow-xs'
-                            : 'border-slate-200 hover:border-slate-300 bg-white'
+                            ? 'border-red-500 bg-red-950/40 shadow-xs'
+                            : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17]'
                         }`}
                       >
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-base">💳</span>
                           {paymentMethod === 'Tarjeta' && (
-                            <span className="w-2 h-2 rounded-full bg-red-700"></span>
+                            <span className="w-2 h-2 rounded-full bg-red-500"></span>
                           )}
                         </div>
                         <div>
-                          <p className="font-extrabold text-[11px] text-slate-900 leading-tight">
+                          <p className="font-extrabold text-[11px] text-white leading-tight uppercase">
                             Tarjeta en Línea
                           </p>
-                          <p className="text-[10px] text-slate-500 mt-0.5">
+                          <p className="text-[10px] text-slate-400 mt-0.5 font-sans">
                             Visa, Mastercard, American Express
                           </p>
                         </div>
@@ -534,23 +602,23 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                       <button
                         type="button"
                         onClick={() => setPaymentMethod('MercadoPago')}
-                        className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between ${
+                        className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between cursor-pointer ${
                           paymentMethod === 'MercadoPago'
-                            ? 'border-sky-600 bg-sky-50/70 shadow-xs'
-                            : 'border-slate-200 hover:border-slate-300 bg-white'
+                            ? 'border-sky-500 bg-sky-950/40 shadow-xs'
+                            : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17]'
                         }`}
                       >
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-base">📱</span>
                           {paymentMethod === 'MercadoPago' && (
-                            <span className="w-2 h-2 rounded-full bg-sky-600"></span>
+                            <span className="w-2 h-2 rounded-full bg-sky-400"></span>
                           )}
                         </div>
                         <div>
-                          <p className="font-extrabold text-[11px] text-slate-900 leading-tight">
+                          <p className="font-extrabold text-[11px] text-white leading-tight uppercase">
                             Mercado Pago
                           </p>
-                          <p className="text-[10px] text-slate-500 mt-0.5">
+                          <p className="text-[10px] text-slate-400 mt-0.5 font-sans">
                             Saldo en cuenta, débito o crédito
                           </p>
                         </div>
@@ -559,23 +627,23 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                       <button
                         type="button"
                         onClick={() => setPaymentMethod('Transferencia SPEI')}
-                        className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between ${
+                        className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between cursor-pointer ${
                           paymentMethod === 'Transferencia SPEI'
-                            ? 'border-purple-700 bg-purple-50/70 shadow-xs'
-                            : 'border-slate-200 hover:border-slate-300 bg-white'
+                            ? 'border-purple-500 bg-purple-950/40 shadow-xs'
+                            : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17]'
                         }`}
                       >
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-base">🏦</span>
                           {paymentMethod === 'Transferencia SPEI' && (
-                            <span className="w-2 h-2 rounded-full bg-purple-700"></span>
+                            <span className="w-2 h-2 rounded-full bg-purple-400"></span>
                           )}
                         </div>
                         <div>
-                          <p className="font-extrabold text-[11px] text-slate-900 leading-tight">
+                          <p className="font-extrabold text-[11px] text-white leading-tight uppercase">
                             Transferencia SPEI
                           </p>
-                          <p className="text-[10px] text-slate-500 mt-0.5">
+                          <p className="text-[10px] text-slate-400 mt-0.5 font-sans">
                             CLABE interbancaria directa
                           </p>
                         </div>
@@ -583,8 +651,8 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                     </div>
 
                     {paymentMethod === 'Efectivo / Terminal física' && (
-                      <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] text-emerald-900 font-medium flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0 animate-pulse"></span>
+                      <div className="p-2.5 bg-[#0A0E17] border border-emerald-500/50 rounded-xl text-[11px] text-emerald-300 font-medium flex items-center gap-2 font-sans">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 animate-pulse"></span>
                         <span>
                           {shippingType === 'tienda'
                             ? 'Pagas directamente en caja de la Tienda Oficial del Estadio al recoger tus artículos.'
@@ -596,30 +664,30 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                 </form>
               ) : (
                 /* Lista de Items en Carrito */
-                <div className="space-y-3">
+                <div className="space-y-3 font-sports">
                   {cart.map((item, idx) => (
-                    <div key={`${item.product.id}-${item.size}`} className="flex gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <div key={`${item.product.id}-${item.size}`} className="flex gap-3 p-3 bg-[#0A0E17] rounded-xl border border-slate-700/80">
                       <img
                         src={normalizeGoogleDriveImageUrl(item.product.image) || getDefaultProductPlaceholder(item.product.category)}
                         alt={item.product.name}
-                        className="w-16 h-16 object-cover rounded-lg bg-white"
+                        className="w-16 h-16 object-contain p-1 rounded-lg bg-[#060911] border border-slate-700/80 shrink-0"
                         referrerPolicy="no-referrer"
                         onError={(e) => {
                           (e.currentTarget as HTMLImageElement).src = getDefaultProductPlaceholder(item.product.category);
                         }}
                       />
                       <div className="flex-1 space-y-1">
-                        <p className="text-xs font-bold text-slate-900 leading-snug line-clamp-1">{item.product.name}</p>
-                        <p className="text-[11px] text-slate-500">Talla: <strong className="text-slate-800">{item.size}</strong></p>
-                        <p className="text-xs font-black text-red-900">${(item.product.price * item.quantity).toLocaleString('es-MX')} MXN</p>
+                        <p className="text-xs font-bold text-white leading-snug line-clamp-1">{item.product.name}</p>
+                        <p className="text-[11px] text-slate-400 font-sans">Talla: <strong className="text-amber-400">{item.size}</strong></p>
+                        <p className="text-xs font-black text-emerald-400 font-scoreboard">${(item.product.price * item.quantity).toLocaleString('es-MX')} MXN</p>
                       </div>
                       <div className="flex flex-col items-center justify-between">
-                        <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-lg p-0.5">
-                          <button onClick={() => updateCartQty(idx, -1)} className="p-1 text-slate-500 hover:text-red-700">
+                        <div className="flex items-center gap-1.5 bg-[#141C2E] border border-slate-700 rounded-lg p-0.5">
+                          <button onClick={() => updateCartQty(idx, -1)} className="p-1 text-slate-400 hover:text-red-400 cursor-pointer">
                             <Minus className="w-3 h-3" />
                           </button>
-                          <span className="text-xs font-bold px-1.5">{item.quantity}</span>
-                          <button onClick={() => updateCartQty(idx, 1)} className="p-1 text-slate-500 hover:text-red-700">
+                          <span className="text-xs font-bold text-white px-1.5 font-mono">{item.quantity}</span>
+                          <button onClick={() => updateCartQty(idx, 1)} className="p-1 text-slate-400 hover:text-emerald-400 cursor-pointer">
                             <Plus className="w-3 h-3" />
                           </button>
                         </div>
@@ -632,19 +700,19 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
 
             {/* Footer con Totales y Botón de Pago */}
             {cart.length > 0 && (
-              <div className="p-5 border-t border-slate-200 bg-slate-50 space-y-3">
-                <div className="space-y-1.5 text-xs text-slate-600">
+              <div className="p-5 border-t border-slate-700/80 bg-[#0A0E17] space-y-3 font-sports">
+                <div className="space-y-1.5 text-xs text-slate-300">
                   <div className="flex justify-between">
                     <span>Subtotal:</span>
-                    <span className="font-semibold">${subtotal.toLocaleString('es-MX')} MXN</span>
+                    <span className="font-semibold text-white font-mono">${subtotal.toLocaleString('es-MX')} MXN</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Envío:</span>
-                    <span>{shippingCost === 0 ? <strong className="text-emerald-600">GRATIS</strong> : `$${shippingCost} MXN`}</span>
+                    <span>{shippingCost === 0 ? <strong className="text-emerald-400">GRATIS</strong> : `$${shippingCost} MXN`}</span>
                   </div>
-                  <div className="flex justify-between text-sm font-black text-slate-900 pt-1 border-t border-slate-200">
-                    <span>Total a Pagar:</span>
-                    <span className="text-red-900">${total.toLocaleString('es-MX')} MXN</span>
+                  <div className="flex justify-between text-sm font-black text-white pt-1 border-t border-slate-700/80">
+                    <span className="uppercase tracking-wider">Total a Pagar:</span>
+                    <span className="text-emerald-400 font-scoreboard text-lg">${total.toLocaleString('es-MX')} MXN</span>
                   </div>
                 </div>
 
@@ -653,7 +721,7 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                     <button
                       type="button"
                       onClick={() => setIsCheckingOut(false)}
-                      className="px-4 py-2.5 bg-white border border-slate-300 text-slate-700 text-xs font-bold rounded-xl"
+                      className="px-4 py-2.5 bg-[#141C2E] border border-slate-700 text-slate-300 hover:text-white text-xs font-bold rounded-xl uppercase tracking-wider cursor-pointer"
                     >
                       Volver
                     </button>
@@ -661,15 +729,19 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                       type="submit"
                       form="checkout-form"
                       disabled={submittingOrder}
-                      className="flex-1 py-2.5 bg-red-700 hover:bg-red-800 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-sm flex items-center justify-center gap-2"
+                      className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 active:bg-red-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-lg flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider"
                     >
-                      {submittingOrder ? 'Procesando Pedido...' : `Confirmar y Pagar $${total.toLocaleString('es-MX')} MXN`}
+                      {submittingOrder
+                        ? 'Procesando Pedido...'
+                        : !user || !user.uid
+                        ? `Iniciar Sesión para Pagar $${total.toLocaleString('es-MX')} MXN`
+                        : `Confirmar y Pagar $${total.toLocaleString('es-MX')} MXN`}
                     </button>
                   </div>
                 ) : (
                   <button
                     onClick={() => setIsCheckingOut(true)}
-                    className="w-full py-3 bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl shadow-md flex items-center justify-center gap-2"
+                    className="w-full py-3 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-bold text-xs rounded-xl shadow-lg flex items-center justify-center gap-2 uppercase tracking-wider cursor-pointer"
                   >
                     <span>Proceder al Pago</span>
                     <ArrowRight className="w-4 h-4" />
@@ -677,6 +749,43 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {/* Modal de Imagen Completa (Lightbox) */}
+      {previewImage && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
+          onClick={() => setPreviewImage(null)}
+        >
+          <div
+            className="relative max-w-3xl w-full bg-[#0F1626] border border-slate-700 rounded-2xl p-4 sm:p-6 flex flex-col items-center shadow-2xl animate-in fade-in zoom-in duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-full flex items-center justify-between pb-3 mb-3 border-b border-slate-700/80">
+              <div>
+                <span className="text-[10px] font-sports uppercase tracking-wider text-red-400 font-bold">
+                  {previewImage.category || 'Mercancía Oficial'}
+                </span>
+                <h4 className="text-white font-sports font-extrabold text-base sm:text-lg">{previewImage.title}</h4>
+              </div>
+              <button
+                onClick={() => setPreviewImage(null)}
+                className="p-2 text-slate-400 hover:text-white bg-[#141C2E] hover:bg-slate-700 rounded-xl transition-colors cursor-pointer"
+                title="Cerrar vista previa"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="w-full max-h-[70vh] flex items-center justify-center p-4 bg-[#060911] rounded-xl border border-slate-800">
+              <img
+                src={previewImage.src}
+                alt={previewImage.title}
+                className="max-h-[60vh] max-w-full object-contain rounded-lg drop-shadow-2xl"
+                referrerPolicy="no-referrer"
+              />
+            </div>
           </div>
         </div>
       )}

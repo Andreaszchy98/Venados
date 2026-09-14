@@ -47,24 +47,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
   return (
     <div className="space-y-6">
       {/* Encabezado del Dashboard Admin */}
-      <div className="bg-slate-900 text-white rounded-2xl p-6 sm:p-8 border border-slate-800 shadow-lg relative overflow-hidden">
+      <div className="bg-[#0F1626] text-white rounded-2xl p-6 sm:p-8 border border-slate-700/80 shadow-2xl relative overflow-hidden">
         <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-red-700/10 rounded-full blur-2xl"></div>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
           <div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-600/20 text-red-300 border border-red-500/30 mb-2">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-red-600/20 text-red-400 border border-red-500/30 mb-2 font-sports">
               <Building2 className="w-3.5 h-3.5" /> Panel Operativo del Club
             </div>
-            <h1 className="text-xl sm:text-2xl font-black tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-black tracking-wider uppercase font-sports">
               Centro de Mando - VXP
             </h1>
-            <p className="text-xs sm:text-sm text-slate-400 mt-1">
+            <p className="text-xs sm:text-sm text-slate-400 mt-1 font-medium">
               Administrador conectado: <strong className="text-slate-200">{user.displayName || user.email}</strong>
             </p>
           </div>
 
           <div className="flex items-center gap-3">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 text-xs text-slate-300 border border-slate-700 font-mono">
-              <Clock className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#141E34] text-xs text-slate-300 border border-slate-700 font-scoreboard text-base tracking-wider uppercase">
+              <Clock className="w-4 h-4 text-emerald-400" />
               MVP Fase 1: Base Activa
             </span>
           </div>
@@ -72,16 +72,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
       </div>
 
       {/* Tarjeta de Base Lista para Expansión */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6 sm:p-8 shadow-xs">
+      <div className="bg-[#0F1626] rounded-2xl border border-slate-700/80 p-6 sm:p-8 shadow-xl">
         <div className="flex items-center gap-3 mb-4">
-          <div className="p-2.5 bg-red-50 rounded-lg text-red-700">
+          <div className="p-2.5 bg-red-950/60 rounded-xl text-red-400 border border-red-800/40">
             <LayoutDashboard className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-slate-900">
+            <h2 className="text-lg font-black text-white font-sports uppercase tracking-wider">
               Andamiaje de Administración Preparado
             </h2>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-400">
               La infraestructura de base de datos en Firestore, autenticación y reglas de seguridad por rol ya están configuradas.
             </p>
           </div>
@@ -89,7 +89,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
 
         {/* Grilla de módulos previstos para fases futuras */}
         <div className="mt-6">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
+          <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 mb-3 font-sports">
             Módulos del Negocio (Estructura lista para conectar en fases siguientes)
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -98,21 +98,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
               return (
                 <div
                   key={idx}
-                  className="p-4 rounded-xl border border-dashed border-slate-300 bg-slate-50/70 hover:bg-slate-50 transition-colors flex items-start gap-3.5"
+                  className="p-4 rounded-xl border border-dashed border-slate-700/90 bg-[#141E34]/50 hover:bg-[#141E34] transition-colors flex items-start gap-3.5"
                 >
-                  <div className="p-2 rounded-lg bg-white border border-slate-200 text-slate-600 shrink-0">
-                    <Icon className="w-5 h-5 text-red-700" />
+                  <div className="p-2.5 rounded-xl bg-[#0A0E17] border border-slate-700/80 text-red-400 shrink-0">
+                    <Icon className="w-5 h-5" />
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <h4 className="text-xs font-bold text-slate-800">
+                      <h4 className="text-sm font-black text-white font-sports uppercase tracking-wide">
                         {mod.title}
                       </h4>
-                      <span className="text-[10px] font-semibold text-slate-500 px-2 py-0.5 bg-white rounded border border-slate-200">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 px-2 py-0.5 bg-amber-950/40 rounded border border-amber-800/50 font-sports">
                         {mod.status}
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-500 mt-1">
+                    <p className="text-[11px] text-slate-400 mt-1">
                       {mod.desc}
                     </p>
                   </div>

@@ -13,7 +13,8 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { VenueEvent, EventPriceTier, EventType, HeroSlide, Venue } from '../types';
-import { DEFAULT_VENUE_ID, DEFAULT_VENUES } from './defaultVenue';
+import { DEFAULT_VENUE_ID } from './constants';
+import { DEFAULT_VENUES } from './defaultVenue';
 import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
 import { generateEventSeats } from './seatMap';
 import { normalizeGoogleDriveImageUrl, DEFAULT_STORE_PROMO_BANNER, getEventPosterPlaceholder } from './imageUtils';
@@ -21,6 +22,12 @@ import { normalizeGoogleDriveImageUrl, DEFAULT_STORE_PROMO_BANNER, getEventPoste
 export { getEventPosterPlaceholder };
 
 const COLLECTION_NAME = 'venueEvents';
+
+export function isDeletedMazatlanFCEvent(e: { id?: string; name?: string }): boolean {
+  if (e.id === 'event-futbol-mazatlan-2026') return true;
+  const name = (e.name || '').toLowerCase();
+  return name.includes('mazatlán fc') || name.includes('mazatlan fc');
+}
 
 /**
  * Parsea y normaliza un documento de evento asegurando que su posterUrl
@@ -133,27 +140,6 @@ export const DEFAULT_FALLBACK_EVENTS: VenueEvent[] = [
       { section: 'Bleachers / Grada General', price: 150 },
     ],
     createdAt: '2026-01-03T00:00:00.000Z',
-  },
-  {
-    id: 'event-futbol-mazatlan-2026',
-    venueId: DEFAULT_VENUE_ID,
-    type: 'football',
-    name: 'Mazatlán FC vs Club América',
-    opponent: 'Club América',
-    date: '2026-11-05',
-    time: '21:00 hrs',
-    gate: 'Puertas 1 a 6',
-    active: true,
-    ticketsAvailable: true,
-    posterUrl: getEventPosterPlaceholder('football'),
-    ...computeDefaultOrderingWindow('2026-11-05', '21:00 hrs'),
-    priceTiers: [
-      { section: 'Platea Baja Central', price: 600 },
-      { section: 'Preferente Lateral', price: 400 },
-      { section: 'Palco VIP Premier', price: 1200 },
-      { section: 'Bleachers / Grada General', price: 250 },
-    ],
-    createdAt: '2026-01-07T00:00:00.000Z',
   },
   {
     id: 'event-basquet-venados-2026',
@@ -456,7 +442,7 @@ export async function getActiveEventsForVenue(venueId: string): Promise<VenueEve
     const all = snap.docs.map((d) => parseVenueEventDoc(d.id, d.data()));
 
     const activeEvents = all
-      .filter((e) => e.active === true && e.ticketsAvailable === true)
+      .filter((e) => !isDeletedMazatlanFCEvent(e) && e.active === true && e.ticketsAvailable === true)
       .sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : 0));
 
     if (activeEvents.length === 0 && venueId === DEFAULT_VENUE_ID) {
@@ -510,6 +496,7 @@ export function subscribeVenueEvents(
 
       const events: VenueEvent[] = snapshot.docs
         .map((docSnap) => parseVenueEventDoc(docSnap.id, docSnap.data()))
+        .filter((e) => !isDeletedMazatlanFCEvent(e))
         .sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : 0));
 
       onUpdate(events);
@@ -769,7 +756,7 @@ export async function getUpcomingHeroEvents(
           normalizeGoogleDriveImageUrl(data.posterUrl) ||
           getEventPosterPlaceholder(data.type),
       } as VenueEvent;
-    });
+    }).filter((e) => !isDeletedMazatlanFCEvent(e));
 
     // Filtrar por ciudad si se especificó
     if (targetCity) {

@@ -123,29 +123,29 @@ export const RunnerView: React.FC<RunnerViewProps> = ({ user }) => {
         </div>
       </div>
 
-      {/* Selector de Pestañas: Alimentos vs Mercancía */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
+      {/* Selector de Pestañas Deportivo: Alimentos vs Mercancía */}
+      <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
         <button
           onClick={() => setActiveTab('alimentos')}
-          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
+          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs sm:text-sm uppercase tracking-wide transition-all cursor-pointer font-sports ${
             activeTab === 'alimentos'
-              ? 'bg-red-800 text-white shadow-xs'
-              : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+              ? 'bg-red-700 text-white shadow-lg shadow-red-950/40 border border-red-500/50'
+              : 'bg-[#101625] text-slate-300 hover:bg-[#162035] border border-slate-700/80 hover:text-white'
           }`}
         >
-          <Utensils className="w-4 h-4" />
+          <Utensils className="w-4 h-4 text-amber-400" />
           Comandas a Butaca (In-Seat Delivery)
         </button>
 
         <button
           onClick={() => setActiveTab('tienda')}
-          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
+          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs sm:text-sm uppercase tracking-wide transition-all cursor-pointer font-sports ${
             activeTab === 'tienda'
-              ? 'bg-red-800 text-white shadow-xs'
-              : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+              ? 'bg-red-700 text-white shadow-lg shadow-red-950/40 border border-red-500/50'
+              : 'bg-[#101625] text-slate-300 hover:bg-[#162035] border border-slate-700/80 hover:text-white'
           }`}
         >
-          <ShoppingBag className="w-4 h-4" />
+          <ShoppingBag className="w-4 h-4 text-red-400" />
           Entregas de Tienda Oficial ({merchOrders.filter((m) => m.shippingType === 'tienda').length})
         </button>
       </div>
@@ -157,18 +157,19 @@ export const RunnerView: React.FC<RunnerViewProps> = ({ user }) => {
 
       {/* Tab 2: Entregas de Tienda Oficial en Estadio */}
       {activeTab === 'tienda' && (
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="font-extrabold text-sm sm:text-base text-slate-900 flex items-center gap-2">
-              <ShoppingBag className="w-4 h-4 text-red-700" />
+        <div className="bg-[#0F1626] rounded-2xl sm:rounded-3xl border border-slate-700/80 shadow-xl p-5 sm:p-6 space-y-4 relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-600 via-amber-500 to-red-600" />
+          <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+            <h3 className="font-black text-base sm:text-lg text-white flex items-center gap-2 font-sports tracking-wide">
+              <ShoppingBag className="w-5 h-5 text-red-500" />
               Entregas de Mercancía en Estadio
             </h3>
-            <span className="text-xs text-slate-500">Retiro en tienda o entrega en butaca</span>
+            <span className="text-xs text-slate-400">Retiro en tienda o entrega en butaca</span>
           </div>
 
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-slate-800">
             {merchOrders.length === 0 ? (
-              <div className="py-8 text-center text-slate-400 text-xs">
+              <div className="py-10 text-center text-slate-400 text-xs">
                 No hay entregas de mercancía pendientes.
               </div>
             ) : (
@@ -176,22 +177,22 @@ export const RunnerView: React.FC<RunnerViewProps> = ({ user }) => {
                 <div key={order.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-900 text-sm">Pedido #{order.id.slice(0, 7)}</span>
+                      <span className="font-bold text-white text-sm">Pedido #{order.id.slice(0, 7)}</span>
                       <span
-                        className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
                           order.status === 'entregado'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-amber-100 text-amber-800'
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                            : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                         }`}
                       >
                         {order.status}
                       </span>
                     </div>
-                    <div className="text-xs text-slate-500 mt-1">
-                      Cliente: <strong>{order.customerName}</strong> ({order.customerEmail})
+                    <div className="text-xs text-slate-400 mt-1">
+                      Cliente: <strong className="text-slate-200">{order.customerName}</strong> ({order.customerEmail})
                     </div>
-                    <div className="text-xs text-slate-700 mt-0.5">
-                      {order.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')} • ${order.total} MXN
+                    <div className="text-xs text-slate-300 mt-0.5 font-medium">
+                      {order.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')} • <strong className="text-emerald-400">${order.total} MXN</strong>
                     </div>
                   </div>
 
@@ -199,7 +200,7 @@ export const RunnerView: React.FC<RunnerViewProps> = ({ user }) => {
                     <button
                       onClick={() => handleAdvanceMerchStatus(order.id)}
                       disabled={actionLoading === order.id}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all self-start sm:self-auto cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition-all self-start sm:self-auto cursor-pointer font-sports"
                     >
                       <CheckCircle2 className="w-4 h-4" />
                       Entregar a Cliente

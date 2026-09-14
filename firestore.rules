@@ -142,9 +142,9 @@ service cloud.firestore {
       allow update, delete: if isAdmin() || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal'));
     }
 
-    // 4. Inventario de Tienda y Almacén (Scoped por recinto)
+    // 4. Inventario de Tienda y Almacén (Scoped por recinto - Lectura de catálogo pública)
     match /inventory/{productId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create: if isAdmin() || isVenueAdmin(request.resource.data.get('venueId', 'venue-teodoro-mariscal'));
       allow update, delete: if isAdmin() || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal'));
       match /cost/{document} {
@@ -178,9 +178,9 @@ service cloud.firestore {
       allow delete: if isAdmin() || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal'));
     }
 
-    // 6. Concesiones / Puestos de Comida en Estadio (Scoped por recinto)
+    // 6. Concesiones / Puestos de Comida en Estadio (Scoped por recinto - Lectura de puestos pública)
     match /stands/{standId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create: if isAdmin() || isVenueAdmin(request.resource.data.get('venueId', 'venue-teodoro-mariscal')) || (isConcesionario() && request.resource.data.ownerId == request.auth.uid);
       allow update: if isAdmin() || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal')) || (
         isConcesionario() && (
@@ -192,9 +192,9 @@ service cloud.firestore {
       allow delete: if isAdmin() || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal'));
     }
 
-    // 7. Menú de Alimentos y Bebidas (Scoped por puesto y recinto)
+    // 7. Menú de Alimentos y Bebidas (Scoped por puesto y recinto - Lectura de menú pública)
     match /menuItems/{itemId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create, update, delete: if isAdmin() || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal')) || isStandOwnerOrAssigned(request.resource.data.standId);
     }
 
@@ -300,17 +300,17 @@ service cloud.firestore {
       allow update, delete: if isVenueAdmin(resource.data.venueId);
     }
 
-    // 13. Secciones del mapa físico de la sede
+    // 13. Secciones del mapa físico de la sede (Lectura de mapa pública)
     match /seatSections/{sectionId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create: if isVenueAdmin(request.resource.data.venueId);
       allow update: if isVenueAdmin(resource.data.venueId);
       allow delete: if isVenueAdmin(resource.data.venueId);
     }
 
-    // 14. Asientos y disponibilidad por evento
+    // 14. Asientos y disponibilidad por evento (Lectura de disponibilidad pública)
     match /eventSeats/{seatId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create: if isVenueAdmin(get(/databases/$(database)/documents/venueEvents/$(request.resource.data.eventId)).data.venueId);
       allow update: if isAuthenticated()
         && resource.data.status == 'disponible'

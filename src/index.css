@@ -1,1 +1,347 @@
 @import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+  --font-sports: 'Barlow Condensed', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-scoreboard: 'Teko', sans-serif;
+  --font-body: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+body {
+  background-color: #0A0E17;
+  color: #F8FAFC;
+  font-family: var(--font-body);
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tipografía y Estilo Deportivo */
+.font-sports {
+  font-family: var(--font-sports);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.font-scoreboard {
+  font-family: var(--font-scoreboard);
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+/* Marcos y Tarjetas Deportivas (Stadium & Arena Frames) */
+.sports-frame {
+  background-color: #0F1626;
+  border: 1px solid rgba(51, 65, 85, 0.75);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.sports-frame:hover {
+  border-color: rgba(220, 38, 38, 0.45);
+}
+
+.sports-frame-glow {
+  background-color: #111A2E;
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  box-shadow: 0 0 25px -5px rgba(220, 38, 38, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.sports-frame-subtle {
+  background-color: #131B2E;
+  border: 1px solid rgba(51, 65, 85, 0.6);
+}
+
+/* Indicadores de marcador en vivo */
+.badge-live-pulse {
+  position: relative;
+}
+.badge-live-pulse::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: inherit;
+  opacity: 0.4;
+  animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+  z-index: -1;
+}
+
+/* Barra de scroll temática estadio */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #0A0E17;
+}
+::-webkit-scrollbar-thumb {
+  background: #1E293B;
+  border-radius: 4px;
+  border: 1px solid #334155;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #DC2626;
+}
+
+/* ========================================================
+   ESTILO ILUMINADO (LIGHT THEME)
+   Tonos iluminados diurnos de alta legibilidad y contraste
+   ======================================================== */
+.theme-light,
+html.theme-light,
+body.theme-light {
+  color-scheme: light;
+  background-color: #F4F6F9 !important;
+  color: #0F172A !important;
+}
+
+/* Tarjetas y Contenedores en modo claro */
+.theme-light .sports-frame {
+  background-color: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  box-shadow: 0 4px 15px -2px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+}
+
+.theme-light .sports-frame:hover {
+  border-color: rgba(220, 38, 38, 0.45) !important;
+  box-shadow: 0 8px 25px -4px rgba(0, 0, 0, 0.08) !important;
+}
+
+.theme-light .sports-frame-glow {
+  background-color: #FFFFFF !important;
+  border: 1px solid rgba(220, 38, 38, 0.25) !important;
+  box-shadow: 0 4px 20px -2px rgba(220, 38, 38, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+}
+
+.theme-light .sports-frame-subtle {
+  background-color: #F8FAFC !important;
+  border: 1px solid #E2E8F0 !important;
+}
+
+/* Fondos oscuros de lienzo base a gris suave diurno */
+.theme-light [class*="bg-[#0A0E17]"] {
+  background-color: #F4F6F9 !important;
+}
+
+/* Tarjetas principales, modales y superficies */
+.theme-light [class*="bg-[#0F1626]"],
+.theme-light [class*="bg-[#101625]"],
+.theme-light [class*="bg-[#101624]"],
+.theme-light [class*="bg-[#131B2E]"],
+.theme-light [class*="bg-[#151D30]"],
+.theme-light [class*="bg-[#0B0F19]"],
+.theme-light [class*="bg-[#070A10]"],
+.theme-light [class*="bg-[#080D18]"],
+.theme-light [class*="bg-[#0B101B]"],
+.theme-light [class*="bg-[#0B101D]"],
+.theme-light [class*="bg-[#0D1424]"],
+.theme-light [class*="bg-[#0F1420]"],
+.theme-light [class*="bg-[#0e172a]"],
+.theme-light [class*="bg-[#0F172A]"],
+.theme-light [class*="bg-[#12192A]"],
+.theme-light [class*="bg-[#141C2E]"],
+.theme-light [class*="bg-[#161F30]"],
+.theme-light [class*="bg-[#162035]"] {
+  background-color: #FFFFFF !important;
+}
+
+/* Botones secundarios, píldoras, selectores y cintillos superiores */
+.theme-light [class*="bg-[#182032]"],
+.theme-light [class*="bg-[#0C121E]"],
+.theme-light [class*="bg-[#0C121F]"],
+.theme-light [class*="bg-[#0C1220]"],
+.theme-light [class*="bg-[#111A2E]"],
+.theme-light [class*="bg-[#131A28]"],
+.theme-light [class*="bg-[#131A29]"],
+.theme-light [class*="bg-[#141E34]"],
+.theme-light [class*="bg-[#161F36]"],
+.theme-light [class*="bg-[#1A2234]"],
+.theme-light [class*="bg-[#1A2338]"],
+.theme-light [class*="bg-[#1A253C]"],
+.theme-light [class*="bg-[#1A253D]"],
+.theme-light [class*="bg-[#1A2846]"],
+.theme-light [class*="bg-[#1C263B]"],
+.theme-light [class*="bg-[#1C283E]"],
+.theme-light [class*="bg-[#1C2842]"],
+.theme-light [class*="bg-[#1E293B]"],
+.theme-light [class*="bg-[#202B42]"] {
+  background-color: #F1F5F9 !important;
+}
+
+/* Fondos oscuros de pósters con arte completo */
+.theme-light [class*="bg-[#060911]"] {
+  background-color: #E2E8F0 !important;
+}
+
+/* Bordes en modo claro */
+.theme-light [class*="border-slate-800"],
+.theme-light [class*="border-slate-800/80"],
+.theme-light [class*="border-slate-700/80"],
+.theme-light [class*="border-slate-700"] {
+  border-color: #E2E8F0 !important;
+}
+
+/* Tipografía de títulos en modo claro (excluyendo banners oscuros y botones) */
+.theme-light h1:not([class*="text-white"]):not([class*="text-red"]):not([class*="text-amber"]):not([class*="text-emerald"]),
+.theme-light h2:not([class*="text-white"]):not([class*="text-red"]):not([class*="text-amber"]):not([class*="text-emerald"]),
+.theme-light h3:not([class*="text-white"]):not([class*="text-red"]):not([class*="text-amber"]):not([class*="text-emerald"]),
+.theme-light h4:not([class*="text-white"]):not([class*="text-red"]):not([class*="text-amber"]):not([class*="text-emerald"]),
+.theme-light h5:not([class*="text-white"]):not([class*="text-red"]):not([class*="text-amber"]):not([class*="text-emerald"]) {
+  color: #0F172A !important;
+}
+
+/* CRÍTICO: Garantizar que títulos y textos sobre gradientes oscuros o fondos rojos/rojo-oscuro mantengan contraste blanco */
+.theme-light [class*="bg-gradient-"] h1,
+.theme-light [class*="bg-gradient-"] h2,
+.theme-light [class*="bg-gradient-"] h3,
+.theme-light [class*="bg-gradient-"] h4,
+.theme-light [class*="bg-gradient-"] p,
+.theme-light [class*="bg-gradient-"] span:not([class*="bg-white"]):not([class*="text-slate-900"]),
+.theme-light [class*="bg-red-"] h1,
+.theme-light [class*="bg-red-"] h2,
+.theme-light [class*="bg-red-"] h3,
+.theme-light [class*="bg-red-"] h4,
+.theme-light [class*="bg-red-"] p,
+.theme-light [class*="bg-red-"] span,
+.theme-light button[class*="bg-red"] span,
+.theme-light button[class*="bg-red"] p,
+.theme-light [class*="from-red"] h1,
+.theme-light [class*="from-red"] h2,
+.theme-light [class*="from-red"] h3,
+.theme-light [class*="from-red"] h4,
+.theme-light [class*="from-red"] p,
+.theme-light [class*="from-red"] span:not([class*="bg-white"]):not([class*="text-slate-900"]) {
+  color: #FFFFFF !important;
+}
+
+/* Escalas de texto slate en modo claro sobre fondos estándar */
+.theme-light div:not([class*="bg-gradient-"]):not([class*="from-red"]):not([class*="bg-red-"]) > .text-slate-100,
+.theme-light span:not([class*="bg-gradient-"]):not([class*="from-red"]):not([class*="bg-red-"]) > .text-slate-100 {
+  color: #0F172A !important;
+}
+
+.theme-light .text-slate-100:not([class*="bg-red"]):not([class*="from-red"]):not(button[class*="bg-red"] *) {
+  color: #0F172A !important;
+}
+
+.theme-light .text-slate-200:not([class*="bg-red"]):not([class*="from-red"]):not(button[class*="bg-red"] *) {
+  color: #1E293B !important;
+}
+
+.theme-light .text-slate-300:not([class*="bg-red"]):not([class*="from-red"]):not(button[class*="bg-red"] *) {
+  color: #334155 !important;
+}
+
+.theme-light .text-slate-400:not([class*="bg-red"]):not([class*="from-red"]):not(button[class*="bg-red"] *) {
+  color: #475569 !important;
+}
+
+/* Cajas de Alerta Ámbar en Modo Claro (Legibilidad Óptima con Alto Contraste) */
+.theme-light [class*="bg-amber-500/10"],
+.theme-light [class*="bg-amber-500/5"] {
+  background-color: #FEF3C7 !important;
+  border-color: #FCD34D !important;
+}
+
+.theme-light [class*="bg-amber-500/10"] [class*="text-amber-200"],
+.theme-light [class*="bg-amber-500/10"] [class*="text-amber-300"],
+.theme-light [class*="bg-amber-500/10"] p {
+  color: #78350F !important;
+}
+
+.theme-light [class*="bg-amber-500/10"] span.text-white {
+  color: #451A03 !important;
+}
+
+.theme-light [class*="bg-amber-400/15"] {
+  background-color: #FDE68A !important;
+  border-color: #F59E0B !important;
+  color: #78350F !important;
+}
+
+/* Subtítulos de cartelera y acentos ámbar en modo claro */
+.theme-light span.text-amber-400\/90,
+.theme-light span.text-amber-400 {
+  color: #B45309 !important;
+}
+
+/* Inputs, Textareas y Selects en modo claro */
+.theme-light input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]),
+.theme-light textarea,
+.theme-light select {
+  background-color: #FFFFFF !important;
+  color: #0F172A !important;
+  border-color: #CBD5E1 !important;
+}
+
+.theme-light input::placeholder,
+.theme-light textarea::placeholder {
+  color: #94A3B8 !important;
+}
+
+.theme-light option {
+  background-color: #FFFFFF !important;
+  color: #0F172A !important;
+}
+
+/* Botones y hover de modo claro */
+.theme-light [class*="hover:bg-slate-800"]:hover,
+.theme-light [class*="hover:bg-[#202B42]"]:hover {
+  background-color: #E2E8F0 !important;
+  color: #0F172A !important;
+}
+
+.theme-light [class*="bg-slate-800/"] {
+  background-color: #F1F5F9 !important;
+}
+
+/* Barra inferior de navegación móvil en modo claro */
+.theme-light #aficionado-bottom-nav,
+.theme-light #cartelera-bottom-nav {
+  background-color: rgba(255, 255, 255, 0.98) !important;
+  border-top-color: #E2E8F0 !important;
+  box-shadow: 0 -8px 25px rgba(0, 0, 0, 0.06) !important;
+}
+
+.theme-light #aficionado-bottom-nav button:not(.text-red-400):not(.text-red-600) span,
+.theme-light #cartelera-bottom-nav button:not(.text-red-400):not(.text-red-600) span {
+  color: #475569 !important;
+}
+
+.theme-light #aficionado-bottom-nav button:not(.text-red-400):not(.text-red-600) svg,
+.theme-light #cartelera-bottom-nav button:not(.text-red-400):not(.text-red-600) svg {
+  color: #64748B !important;
+}
+
+.theme-light #aficionado-bottom-nav button:hover span,
+.theme-light #cartelera-bottom-nav button:hover span {
+  color: #0F172A !important;
+}
+
+.theme-light #aficionado-bottom-nav button:hover svg,
+.theme-light #cartelera-bottom-nav button:hover svg {
+  color: #0F172A !important;
+}
+
+/* Scrollbars en modo claro */
+.theme-light ::-webkit-scrollbar-track {
+  background: #F1F5F9;
+}
+
+.theme-light ::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border: 1px solid #94A3B8;
+}
+
+.theme-light ::-webkit-scrollbar-thumb:hover {
+  background: #DC2626;
+}
+
+/* Sombras en modo claro */
+.theme-light .shadow-xl,
+.theme-light .shadow-2xl {
+  box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04) !important;
+}
+
+

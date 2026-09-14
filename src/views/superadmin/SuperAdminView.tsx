@@ -62,40 +62,40 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ user }) => {
       </div>
 
       {/* Banner Informativo de Alcance de Seguridad */}
-      <div className="bg-amber-50/80 border border-amber-200/80 rounded-2xl p-4 flex items-start gap-3">
-        <div className="p-2 bg-amber-100 rounded-xl text-amber-800 shrink-0">
+      <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-start gap-3 font-sports">
+        <div className="p-2 bg-amber-500/20 rounded-xl text-amber-400 shrink-0">
           <Info className="w-4 h-4" />
         </div>
-        <div className="text-xs text-amber-900 leading-relaxed">
-          <strong className="font-bold">Principio de Mínimo Privilegio:</strong> Tu rol de Superadministrador tiene gobernanza exclusiva sobre la infraestructura (creación de sedes, eventos y asignación de administradores). Los datos transaccionales y operativos de cada sede (inventario, ventas, despachos) permanecen aislados para los administradores locales correspondientes.
+        <div className="text-xs text-amber-200 leading-relaxed font-sans">
+          <strong className="font-bold text-amber-300 font-sports uppercase tracking-wider">Principio de Mínimo Privilegio:</strong> Tu rol de Superadministrador tiene gobernanza exclusiva sobre la infraestructura (creación de sedes, eventos y asignación de administradores). Los datos transaccionales y operativos de cada sede (inventario, ventas, despachos) permanecen aislados para los administradores locales correspondientes.
         </div>
       </div>
 
       {/* Pestañas Principales */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+      <div className="flex items-center gap-2 border-b border-slate-800 pb-2 font-sports">
         <button
           id="tab-venues"
           onClick={() => setActiveTab('venues')}
-          className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+          className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
             activeTab === 'venues'
-              ? 'bg-slate-900 text-white shadow-sm'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              ? 'bg-red-600 text-white shadow-md shadow-red-950/50 ring-1 ring-red-500/50'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800/70'
           }`}
         >
-          <Building2 className="w-4 h-4 text-red-500" />
+          <Building2 className="w-4 h-4 text-white" />
           Sedes & Eventos
         </button>
 
         <button
           id="tab-admins"
           onClick={() => setActiveTab('admins')}
-          className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+          className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
             activeTab === 'admins'
-              ? 'bg-slate-900 text-white shadow-sm'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              ? 'bg-red-600 text-white shadow-md shadow-red-950/50 ring-1 ring-red-500/50'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800/70'
           }`}
         >
-          <ShieldCheck className="w-4 h-4 text-amber-500" />
+          <ShieldCheck className="w-4 h-4 text-amber-400" />
           Administradores de Sede
         </button>
       </div>

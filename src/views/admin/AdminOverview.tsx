@@ -84,24 +84,25 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ user, onNavigateTa
   return (
     <div className="space-y-6">
       {/* Banner Principal del Negocio */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-950 via-slate-900 to-red-950 text-white p-6 sm:p-8 border border-slate-800 shadow-xl">
+      <div className="relative overflow-hidden rounded-2xl bg-[#0F1626] text-white p-6 sm:p-8 border border-slate-700/80 shadow-xl">
+        <div className="absolute inset-0 bg-gradient-to-r from-red-950/20 via-slate-900/40 to-slate-950/80 pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-800/80 text-red-200 border border-red-700/50">
-              <ShieldCheck className="w-3.5 h-3.5" /> Centro de Mando Empresarial Venados
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-950/80 text-red-300 border border-red-500/40 font-sports uppercase tracking-wider">
+              <ShieldCheck className="w-3.5 h-3.5 text-red-400" /> Centro de Mando Empresarial Venados
             </div>
-            <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-wider font-sports uppercase text-white">
               Gestión Integral del Negocio y Operaciones
             </h2>
-            <p className="text-xs sm:text-sm text-slate-300 max-w-xl">
+            <p className="text-xs sm:text-sm text-slate-300 max-w-xl font-body">
               Monitoreo centralizado de ventas multicanal, despacho logístico de mercancía y control de inventario de almacén en tiempo real.
             </p>
           </div>
 
-          <div className="flex flex-col items-start md:items-end bg-white/5 backdrop-blur-md p-4 rounded-xl border border-white/10 shrink-0">
-            <span className="text-xs text-slate-400 font-medium">Facturación Bruta Consolidada</span>
-            <span className="text-2xl sm:text-3xl font-black text-white">
-              ${stats.totalGrossRevenue.toLocaleString('es-MX')} <span className="text-xs font-semibold text-red-400">MXN</span>
+          <div className="flex flex-col items-start md:items-end bg-[#0A0E17]/80 p-4 rounded-xl border border-slate-700/80 shrink-0">
+            <span className="text-xs text-slate-400 font-sports uppercase tracking-wider font-bold">Facturación Bruta Consolidada</span>
+            <span className="text-3xl sm:text-4xl font-scoreboard font-bold text-white tracking-wider">
+              ${stats.totalGrossRevenue.toLocaleString('es-MX')} <span className="text-sm font-sports uppercase tracking-normal text-red-400">MXN</span>
             </span>
           </div>
         </div>
@@ -110,28 +111,28 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ user, onNavigateTa
       {/* Tarjetas de Control Rápido */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {/* Módulo Ventas */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between space-y-4 hover:border-slate-300 transition-colors">
+        <div className="bg-[#0F1626] rounded-2xl border border-slate-700/80 p-5 shadow-lg flex flex-col justify-between space-y-4 hover:border-slate-600 transition-colors">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <div className="p-2.5 rounded-xl bg-red-50 text-red-700">
+              <div className="p-2.5 rounded-xl bg-red-950/60 text-red-400 border border-red-500/30">
                 <TrendingUp className="w-5 h-5" />
               </div>
-              <span className="text-xs font-bold text-slate-400">Canales Activos</span>
+              <span className="text-xs font-bold text-slate-400 font-sports uppercase tracking-wider">Canales Activos</span>
             </div>
-            <h3 className="font-extrabold text-base text-slate-900">Administración de Ventas</h3>
-            <p className="text-xs text-slate-500 leading-relaxed">
+            <h3 className="font-bold text-lg text-white font-sports uppercase tracking-wider">Administración de Ventas</h3>
+            <p className="text-xs text-slate-400 leading-relaxed font-body">
               Auditoría unificada de ingresos por boletaje, venta en línea de uniformes y alimentos del estadio.
             </p>
           </div>
 
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+          <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
             <div>
-              <span className="text-[11px] text-slate-400 block font-medium">Transacciones</span>
-              <span className="text-base font-black text-slate-900">{stats.totalTransactions} registradas</span>
+              <span className="text-[11px] text-slate-400 block font-sports uppercase tracking-wider">Transacciones</span>
+              <span className="text-lg font-scoreboard font-bold text-white tracking-wider">{stats.totalTransactions} registradas</span>
             </div>
             <button
               onClick={() => onNavigateTab('ventas')}
-              className="px-3 py-1.5 bg-red-800 hover:bg-red-900 text-white text-xs font-bold rounded-lg flex items-center gap-1 shadow-xs transition-colors"
+              className="px-3.5 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold font-sports uppercase tracking-wider rounded-xl flex items-center gap-1.5 shadow-md transition-colors cursor-pointer"
             >
               <span>Ver Auditoría</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -140,32 +141,32 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ user, onNavigateTa
         </div>
 
         {/* Módulo Inventario */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between space-y-4 hover:border-slate-300 transition-colors">
+        <div className="bg-[#0F1626] rounded-2xl border border-slate-700/80 p-5 shadow-lg flex flex-col justify-between space-y-4 hover:border-slate-600 transition-colors">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <div className="p-2.5 rounded-xl bg-blue-50 text-blue-700">
+              <div className="p-2.5 rounded-xl bg-blue-950/60 text-blue-400 border border-blue-500/30">
                 <Boxes className="w-5 h-5" />
               </div>
               {stats.lowStockCount > 0 && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full">
-                  <AlertTriangle className="w-3 h-3" /> {stats.lowStockCount} alertas
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-amber-950/80 text-amber-300 border border-amber-500/40 rounded-full font-sports uppercase tracking-wider">
+                  <AlertTriangle className="w-3 h-3 text-amber-400" /> {stats.lowStockCount} alertas
                 </span>
               )}
             </div>
-            <h3 className="font-extrabold text-base text-slate-900">Gestión de Inventario</h3>
-            <p className="text-xs text-slate-500 leading-relaxed">
+            <h3 className="font-bold text-lg text-white font-sports uppercase tracking-wider">Gestión de Inventario</h3>
+            <p className="text-xs text-slate-400 leading-relaxed font-body">
               Catálogo de mercancía oficial, conteo de stock, costos y alertas de reabastecimiento en almacén.
             </p>
           </div>
 
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+          <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
             <div>
-              <span className="text-[11px] text-slate-400 block font-medium">Almacén Tienda</span>
-              <span className="text-base font-black text-slate-900">Stock en Línea</span>
+              <span className="text-[11px] text-slate-400 block font-sports uppercase tracking-wider">Almacén Tienda</span>
+              <span className="text-lg font-scoreboard font-bold text-white tracking-wider">Stock en Línea</span>
             </div>
             <button
               onClick={() => onNavigateTab('inventario')}
-              className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg flex items-center gap-1 shadow-xs transition-colors"
+              className="px-3.5 py-2 bg-[#1E293B] hover:bg-slate-700 border border-slate-700 text-white text-xs font-bold font-sports uppercase tracking-wider rounded-xl flex items-center gap-1.5 shadow-md transition-colors cursor-pointer"
             >
               <span>Gestionar Stock</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -174,28 +175,28 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ user, onNavigateTa
         </div>
 
         {/* Módulo Logística */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between space-y-4 hover:border-slate-300 transition-colors">
+        <div className="bg-[#0F1626] rounded-2xl border border-slate-700/80 p-5 shadow-lg flex flex-col justify-between space-y-4 hover:border-slate-600 transition-colors">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <div className="p-2.5 rounded-xl bg-purple-50 text-purple-700">
+              <div className="p-2.5 rounded-xl bg-purple-950/60 text-purple-400 border border-purple-500/30">
                 <Truck className="w-5 h-5" />
               </div>
-              <span className="text-xs font-bold text-slate-400">Despacho</span>
+              <span className="text-xs font-bold text-slate-400 font-sports uppercase tracking-wider">Despacho</span>
             </div>
-            <h3 className="font-extrabold text-base text-slate-900">Logística de Envíos</h3>
-            <p className="text-xs text-slate-500 leading-relaxed">
+            <h3 className="font-bold text-lg text-white font-sports uppercase tracking-wider">Logística de Envíos</h3>
+            <p className="text-xs text-slate-400 leading-relaxed font-body">
               Preparación de paquetes, asignación de números de guía DHL/Estafeta y tracking de entregas.
             </p>
           </div>
 
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+          <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
             <div>
-              <span className="text-[11px] text-slate-400 block font-medium">Por Despachar</span>
-              <span className="text-base font-black text-purple-900">{stats.pendingShipmentsCount} pedidos</span>
+              <span className="text-[11px] text-slate-400 block font-sports uppercase tracking-wider">Por Despachar</span>
+              <span className="text-lg font-scoreboard font-bold text-purple-300 tracking-wider">{stats.pendingShipmentsCount} pedidos</span>
             </div>
             <button
               onClick={() => onNavigateTab('logistica')}
-              className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg flex items-center gap-1 shadow-xs transition-colors"
+              className="px-3.5 py-2 bg-[#1E293B] hover:bg-slate-700 border border-slate-700 text-white text-xs font-bold font-sports uppercase tracking-wider rounded-xl flex items-center gap-1.5 shadow-md transition-colors cursor-pointer"
             >
               <span>Ver Envíos</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -204,31 +205,31 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ user, onNavigateTa
         </div>
 
         {/* Módulo Negocios & Concesiones Estadio */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between space-y-4 hover:border-slate-300 transition-colors">
+        <div className="bg-[#0F1626] rounded-2xl border border-slate-700/80 p-5 shadow-lg flex flex-col justify-between space-y-4 hover:border-slate-600 transition-colors">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <div className="p-2.5 rounded-xl bg-amber-50 text-amber-700">
+              <div className="p-2.5 rounded-xl bg-amber-950/60 text-amber-400 border border-amber-500/30">
                 <Store className="w-5 h-5" />
               </div>
-              <span className="inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full">
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 rounded-full font-sports uppercase tracking-wider">
                 {stats.activeStandsCount} activos
               </span>
             </div>
-            <h3 className="font-extrabold text-base text-slate-900">Negocios del Estadio</h3>
-            <p className="text-xs text-slate-500 leading-relaxed">
+            <h3 className="font-bold text-lg text-white font-sports uppercase tracking-wider">Negocios del Estadio</h3>
+            <p className="text-xs text-slate-400 leading-relaxed font-body">
               Administración de puestos, concesiones comerciales, cartas de menú, comisiones y ubicación en estadio.
             </p>
           </div>
 
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+          <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
             <div>
-              <span className="text-[11px] text-slate-400 block font-medium">Concesiones</span>
-              <span className="text-base font-black text-amber-900">Puestos y Menú</span>
+              <span className="text-[11px] text-slate-400 block font-sports uppercase tracking-wider">Concesiones</span>
+              <span className="text-lg font-scoreboard font-bold text-amber-300 tracking-wider">Puestos y Menú</span>
             </div>
             <button
               id="overview-goto-negocios"
               onClick={() => onNavigateTab('negocios')}
-              className="px-3 py-1.5 bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold rounded-lg flex items-center gap-1 shadow-xs transition-colors"
+              className="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold font-sports uppercase tracking-wider rounded-xl flex items-center gap-1.5 shadow-md transition-colors cursor-pointer"
             >
               <span>Administrar</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -237,62 +238,63 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ user, onNavigateTa
         </div>
 
         {/* Módulo Personal & Roles (Concesionarios y Runners) */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between space-y-4 hover:border-slate-300 transition-colors">
+        <div className="bg-[#0F1626] rounded-2xl border border-slate-700/80 p-5 shadow-lg flex flex-col justify-between space-y-4 hover:border-slate-600 transition-colors">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-700">
+              <div className="p-2.5 rounded-xl bg-emerald-950/60 text-emerald-400 border border-emerald-500/30">
                 <Users className="w-5 h-5" />
               </div>
-              <span className="text-xs font-bold text-emerald-700 bg-emerald-100/60 px-2 py-0.5 rounded-full">
+              <span className="text-xs font-bold text-emerald-300 bg-emerald-950/80 border border-emerald-500/40 px-2.5 py-0.5 rounded-full font-sports uppercase tracking-wider">
                 Operaciones
               </span>
             </div>
-            <h3 className="font-extrabold text-base text-slate-900">Personal & Roles</h3>
-            <p className="text-xs text-slate-500 leading-relaxed">
+            <h3 className="font-bold text-lg text-white font-sports uppercase tracking-wider">Personal & Roles</h3>
+            <p className="text-xs text-slate-400 leading-relaxed font-body">
               Declarar concesionarios de puestos, runners de estadio, taquilla y permisos de acceso.
             </p>
           </div>
 
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+          <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
             <div>
-              <span className="text-[11px] text-slate-400 block font-medium">Estadio & Ventas</span>
-              <span className="text-base font-black text-slate-900">Asignar Roles</span>
+              <span className="text-[11px] text-slate-400 block font-sports uppercase tracking-wider">Estadio & Ventas</span>
+              <span className="text-lg font-scoreboard font-bold text-white tracking-wider">Asignar Roles</span>
             </div>
             <button
               onClick={() => onNavigateTab('personal')}
-              className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-lg flex items-center gap-1 shadow-xs transition-colors"
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold font-sports uppercase tracking-wider rounded-xl flex items-center gap-1.5 shadow-md transition-colors cursor-pointer"
             >
               <span>Gestionar</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
+
         {/* Módulo Eventos & Partidos de Sede */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between space-y-4 hover:border-slate-300 transition-colors">
+        <div className="bg-[#0F1626] rounded-2xl border border-slate-700/80 p-5 shadow-lg flex flex-col justify-between space-y-4 hover:border-slate-600 transition-colors">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <div className="p-2.5 rounded-xl bg-red-50 text-red-700">
+              <div className="p-2.5 rounded-xl bg-red-950/60 text-red-400 border border-red-500/30">
                 <Calendar className="w-5 h-5" />
               </div>
-              <span className="text-xs font-bold text-red-700 bg-red-100/60 px-2 py-0.5 rounded-full">
+              <span className="text-xs font-bold text-red-300 bg-red-950/80 border border-red-500/40 px-2.5 py-0.5 rounded-full font-sports uppercase tracking-wider">
                 Sede
               </span>
             </div>
-            <h3 className="font-extrabold text-base text-slate-900">Eventos & Partidos</h3>
-            <p className="text-xs text-slate-500 leading-relaxed">
+            <h3 className="font-bold text-lg text-white font-sports uppercase tracking-wider">Eventos & Partidos</h3>
+            <p className="text-xs text-slate-400 leading-relaxed font-body">
               Programar partidos y eventos, abrir/cerrar venta de boletos y configurar precios por sección.
             </p>
           </div>
 
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+          <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
             <div>
-              <span className="text-[11px] text-slate-400 block font-medium">Taquilla Sede</span>
-              <span className="text-base font-black text-slate-900">Calendario</span>
+              <span className="text-[11px] text-slate-400 block font-sports uppercase tracking-wider">Taquilla Sede</span>
+              <span className="text-lg font-scoreboard font-bold text-white tracking-wider">Calendario</span>
             </div>
             <button
               id="overview-goto-eventos"
               onClick={() => onNavigateTab('eventos')}
-              className="px-3 py-1.5 bg-red-700 hover:bg-red-800 text-white text-xs font-bold rounded-lg flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
+              className="px-3.5 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold font-sports uppercase tracking-wider rounded-xl flex items-center gap-1.5 shadow-md transition-colors cursor-pointer"
             >
               <span>Gestionar</span>
               <ArrowRight className="w-3.5 h-3.5" />

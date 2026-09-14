@@ -42,6 +42,7 @@ interface MisBoletosProps {
   onClearInitialEvent?: () => void;
   selectedVenueId?: string;
   onSelectVenue?: (venueId: string) => void;
+  onRequireAuth?: () => void;
 }
 
 export const MisBoletos: React.FC<MisBoletosProps> = ({
@@ -50,9 +51,13 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
   onClearInitialEvent,
   selectedVenueId: propSelectedVenueId,
   onSelectVenue,
+  onRequireAuth,
 }) => {
   const { t } = useLanguage();
-  const [activeTab, setActiveTab] = useState<'mis-boletos' | 'comprar'>('mis-boletos');
+  const [activeTab, setActiveTab] = useState<'mis-boletos' | 'comprar'>(() => {
+    if (!user || !user.uid) return 'comprar';
+    return 'mis-boletos';
+  });
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loadingTickets, setLoadingTickets] = useState(true);
   const [filter, setFilter] = useState<'todos' | 'activo' | 'usado'>('todos');
@@ -87,6 +92,11 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
 
   // Escuchar boletos del aficionado
   useEffect(() => {
+    if (!user || !user.uid) {
+      setTickets([]);
+      setLoadingTickets(false);
+      return;
+    }
     setLoadingTickets(true);
     const unsubscribe = subscribeUserTickets(
       user.uid,
@@ -100,7 +110,7 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
     );
 
     return () => unsubscribe();
-  }, [user.uid]);
+  }, [user?.uid]);
 
   // Escuchar sedes en tiempo real
   useEffect(() => {
@@ -264,6 +274,13 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
     if (e) e.preventDefault();
     if (!selectedEvent || !selectedTier) return;
 
+    if (!user || !user.uid) {
+      if (onRequireAuth) {
+        onRequireAuth();
+      }
+      return;
+    }
+
     setPurchasing(true);
     try {
       // Snapshot de los datos del evento al momento de la compra
@@ -378,26 +395,26 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
       )}
 
       {/* Encabezado: Título con contador informativo y Botón de Acción Primario */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-3xl border border-slate-200 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#0F1626] p-4 sm:p-5 rounded-3xl border border-slate-700/80 shadow-xl">
         <div>
           <div className="flex flex-wrap items-center gap-2.5">
-            <h2 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2 tracking-tight">
-              <TicketIcon className="w-5 h-5 text-red-700" />
+            <h2 className="text-base sm:text-lg font-black text-white flex items-center gap-2 tracking-wide font-sports uppercase">
+              <TicketIcon className="w-5 h-5 text-red-500" />
               <span>{activeTab === 'comprar' ? 'Comprar Boletos para Partidos' : 'Mis Boletos Digitales'}</span>
             </h2>
 
             {/* Contador informativo discreto (no compite visualmente con el botón de acción) */}
             <span
               id="info-counter-mis-boletos"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#141C2E] text-slate-300 border border-slate-700 font-sports"
               title="Cantidad total de boletos registrados en tu cuenta"
             >
-              <TicketIcon className="w-3.5 h-3.5 text-slate-400" />
+              <TicketIcon className="w-3.5 h-3.5 text-red-400" />
               <span>{tickets.length} {tickets.length === 1 ? 'boleto registrado' : 'boletos registrados'}</span>
             </span>
           </div>
 
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-slate-400 mt-1">
             {activeTab === 'comprar'
               ? 'Selecciona partido, zona y butacas para adquirir nuevas entradas con venta abierta.'
               : 'Pases de acceso digital con código QR de torniquete para ingresar a los partidos.'}
@@ -411,7 +428,7 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
               id="btn-action-comprar-boletos"
               type="button"
               onClick={() => setActiveTab('comprar')}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-red-700 hover:bg-red-800 text-white font-black text-xs sm:text-sm rounded-xl shadow-sm hover:shadow-md transition-all cursor-pointer shrink-0"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white font-sports font-bold tracking-wider text-xs sm:text-sm rounded-xl shadow-lg shadow-red-950/50 transition-all cursor-pointer shrink-0 uppercase"
             >
               <PlusCircle className="w-4 h-4" />
               <span>{t('tickets.buy_tickets', 'Comprar Boletos')}</span>
@@ -421,9 +438,9 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
               id="btn-action-volver-mis-boletos"
               type="button"
               onClick={() => setActiveTab('mis-boletos')}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs sm:text-sm rounded-xl border border-slate-200 transition-all cursor-pointer shrink-0"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#141C2E] hover:bg-[#1A253D] text-slate-200 font-sports font-bold tracking-wider text-xs sm:text-sm rounded-xl border border-slate-700 transition-all cursor-pointer shrink-0 uppercase"
             >
-              <TicketIcon className="w-4 h-4 text-red-700" />
+              <TicketIcon className="w-4 h-4 text-red-400" />
               <span>{t('tickets.view_my_tickets', 'Ver Mis Boletos')}</span>
             </button>
           )}
@@ -431,18 +448,51 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
       </div>
 
       {/* PESTAÑA 1: MIS BOLETOS DIGITALES */}
-      {activeTab === 'mis-boletos' && (
+      {activeTab === 'mis-boletos' && (!user || !user.uid) && (
+        <div className="py-12 px-4 max-w-md mx-auto text-center space-y-5 bg-[#0F1626] p-6 sm:p-8 rounded-3xl border border-slate-700/80 shadow-xl">
+          <div className="w-16 h-16 rounded-3xl bg-red-900/30 border border-red-700/50 text-red-400 flex items-center justify-center mx-auto shadow-md">
+            <TicketIcon className="w-8 h-8" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-xl font-black text-white font-sports tracking-wide uppercase">
+              Inicia sesión para ver tus boletos
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
+              Accede a tus entradas digitales con código QR para ingresar por torniquetes y consulta tus butacas asignadas.
+            </p>
+          </div>
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              id="btn-login-boletos-guest"
+              type="button"
+              onClick={onRequireAuth}
+              className="w-full sm:w-auto px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-sports font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-red-950/50 transition-colors cursor-pointer"
+            >
+              Iniciar Sesión
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('comprar')}
+              className="w-full sm:w-auto px-6 py-3 bg-[#141C2E] hover:bg-[#1A253D] text-slate-200 font-sports font-bold text-xs uppercase tracking-wider rounded-xl border border-slate-700 transition-colors cursor-pointer"
+            >
+              Ver Cartelera de Boletos
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'mis-boletos' && user && user.uid && (
         <div className="space-y-4">
           {/* Barra de Filtros: Estado + Filtro desplegable de Sedes */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200 text-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#0F1626] p-3 sm:p-4 rounded-2xl border border-slate-700/80 shadow-xl">
+            <div className="inline-flex rounded-xl bg-[#0A0E17] p-1 border border-slate-800 text-xs font-sports">
               <button
                 id="ticket-filter-all"
                 onClick={() => setFilter('todos')}
-                className={`px-3 py-1 font-medium rounded-lg transition-colors cursor-pointer ${
+                className={`px-3 py-1 font-bold rounded-lg transition-colors cursor-pointer uppercase tracking-wider ${
                   filter === 'todos'
-                    ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-red-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-white'
                 }`}
               >
                 {t('tickets.filter.all', 'Todos')} ({tickets.length})
@@ -450,10 +500,10 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
               <button
                 id="ticket-filter-active"
                 onClick={() => setFilter('activo')}
-                className={`px-3 py-1 font-medium rounded-lg transition-colors cursor-pointer ${
+                className={`px-3 py-1 font-bold rounded-lg transition-colors cursor-pointer uppercase tracking-wider ${
                   filter === 'activo'
-                    ? 'bg-white text-emerald-700 shadow-xs font-semibold'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-emerald-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-white'
                 }`}
               >
                 {t('tickets.filter.active', 'Activos')} ({tickets.filter((t) => t.status === 'activo').length})
@@ -461,10 +511,10 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
               <button
                 id="ticket-filter-used"
                 onClick={() => setFilter('usado')}
-                className={`px-3 py-1 font-medium rounded-lg transition-colors cursor-pointer ${
+                className={`px-3 py-1 font-bold rounded-lg transition-colors cursor-pointer uppercase tracking-wider ${
                   filter === 'usado'
-                    ? 'bg-white text-slate-700 shadow-xs font-semibold'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-slate-700 text-slate-200 shadow-md'
+                    : 'text-slate-400 hover:text-white'
                 }`}
               >
                 {t('tickets.filter.used', 'Utilizados')} ({tickets.filter((t) => t.status === 'usado').length})
@@ -473,7 +523,7 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
 
             {/* Filtro por sede como <select> simple con etiqueta "Ver boletos de:" */}
             <div className="flex items-center gap-2 text-xs">
-              <label htmlFor="ticket-venue-filter-select" className="font-bold text-slate-600 shrink-0">
+              <label htmlFor="ticket-venue-filter-select" className="font-sports font-bold text-slate-300 uppercase tracking-wider shrink-0">
                 Ver boletos de:
               </label>
               <div className="relative min-w-[170px] sm:min-w-[220px]">
@@ -481,19 +531,19 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
                   id="ticket-venue-filter-select"
                   value={ticketVenueFilter}
                   onChange={(e) => setTicketVenueFilter(e.target.value)}
-                  className="w-full pl-3 pr-8 py-1.5 bg-slate-100 hover:bg-slate-200/70 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-600 appearance-none cursor-pointer transition-colors"
+                  className="w-full pl-3 pr-8 py-1.5 bg-[#0A0E17] hover:bg-[#141C2E] border border-slate-700 rounded-xl text-xs font-sports font-bold text-white focus:outline-none focus:ring-2 focus:ring-red-600 appearance-none cursor-pointer transition-colors"
                 >
-                  <option value="todas">Todas las sedes ({tickets.length})</option>
+                  <option value="todas" className="bg-[#0A0E17] text-white">Todas las sedes ({tickets.length})</option>
                   {userTicketVenues.map((v) => {
                     const count = tickets.filter((t) => (t.venueId || DEFAULT_VENUE_ID) === v.id).length;
                     return (
-                      <option key={v.id} value={v.id}>
+                      <option key={v.id} value={v.id} className="bg-[#0A0E17] text-white">
                         {v.name} ({count})
                       </option>
                     );
                   })}
                 </select>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
             </div>
           </div>
@@ -502,16 +552,16 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
           {loadingTickets ? (
             <LoadingSpinner message="Cargando tus boletos desde Firestore..." />
           ) : filteredTickets.length === 0 ? (
-            <div className="bg-white border border-dashed border-slate-300 rounded-3xl p-8 sm:p-12 text-center space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-700 flex items-center justify-center mx-auto">
+            <div className="bg-[#0F1626] border border-dashed border-slate-700 rounded-3xl p-8 sm:p-12 text-center space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-red-900/30 border border-red-700/50 text-red-400 flex items-center justify-center mx-auto">
                 <TicketIcon className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-slate-800">
+                <h3 className="text-base font-black text-white font-sports tracking-wide uppercase">
                   No tienes boletos{' '}
                   {filter !== 'todos' ? `en estado "${filter}"` : 'disponibles'}
                 </h3>
-                <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
+                <p className="text-xs text-slate-400 max-w-md mx-auto mt-1">
                   Aquí se mostrarán tus pases de acceso con código QR dinámico para ingresar a los partidos del estadio.
                 </p>
               </div>
@@ -523,77 +573,77 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
                 <div
                   key={grp.key}
                   id={`joint-purchase-group-${grp.purchaseId}`}
-                  className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200 shadow-xs overflow-hidden"
+                  className="bg-[#0F1626] rounded-2xl sm:rounded-3xl border border-slate-700/80 shadow-xl overflow-hidden"
                 >
                   {/* Encabezado Único del Evento para todo el grupo */}
-                  <div className="bg-gradient-to-r from-slate-50 to-white p-4 sm:p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div className="bg-gradient-to-r from-[#141C2E] to-[#0F1626] p-4 sm:p-5 border-b border-slate-700/80 flex flex-col md:flex-row md:items-center justify-between gap-3">
                     <div>
                       <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-black uppercase tracking-wider bg-red-700 text-white">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-black uppercase tracking-wider bg-red-600 text-white font-sports">
                           🎟️ Compra Conjunta ({grp.tickets.length} asientos)
                         </span>
-                        <span className="font-mono text-xs font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                        <span className="font-mono text-xs font-bold text-slate-300 bg-[#0A0E17] px-2 py-0.5 rounded border border-slate-700">
                           Ref: #{grp.purchaseId.slice(-7)}
                         </span>
                       </div>
-                      <h3 className="text-base sm:text-lg font-black text-slate-900 leading-tight">
+                      <h3 className="text-base sm:text-lg font-black text-white leading-tight font-sports tracking-wide">
                         {grp.matchTitle}
                       </h3>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
-                        <span className="inline-flex items-center gap-1.5 font-semibold text-slate-700">
-                          <Calendar className="w-3.5 h-3.5 text-red-700" />
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-300">
+                        <span className="inline-flex items-center gap-1.5 font-semibold text-slate-200">
+                          <Calendar className="w-3.5 h-3.5 text-red-500" />
                           {grp.matchDate} {grp.matchTime && `• ${grp.matchTime}`}
                         </span>
-                        <span className="inline-flex items-center gap-1.5 text-slate-600">
-                          <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                        <span className="inline-flex items-center gap-1.5 text-slate-300">
+                          <MapPin className="w-3.5 h-3.5 text-amber-400" />
                           {grp.stadium}
                         </span>
                       </div>
                     </div>
 
-                    <div className="flex items-center md:flex-col md:items-end justify-between border-t md:border-t-0 pt-2 md:pt-0 border-slate-100">
-                      <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                    <div className="flex items-center md:flex-col md:items-end justify-between border-t md:border-t-0 pt-2 md:pt-0 border-slate-700/50">
+                      <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider font-sports">
                         Total compra
                       </span>
-                      <span className="text-base sm:text-lg font-black text-slate-900">
+                      <span className="text-base sm:text-lg font-scoreboard font-bold text-emerald-400">
                         ${grp.tickets.reduce((sum, t) => sum + (t.price || 0), 0)} MXN
                       </span>
                     </div>
                   </div>
 
                   {/* Listado Compacto de Asientos del Grupo (sin repetir datos del partido) */}
-                  <div className="divide-y divide-slate-100 p-2 sm:p-4">
+                  <div className="divide-y divide-slate-800 p-2 sm:p-4">
                     {grp.tickets.map((ticket, idx) => (
                       <div
                         key={ticket.id}
                         id={`joint-seat-row-${ticket.id}`}
-                        className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/70 rounded-xl transition-colors"
+                        className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#141C2E]/60 rounded-xl transition-colors"
                       >
                         {/* Ubicación del asiento: Zona, Fila, Butaca y Precio */}
                         <div className="flex items-center gap-3">
-                          <div className="w-7 h-7 rounded-lg bg-red-50 text-red-700 font-black text-xs flex items-center justify-center shrink-0">
+                          <div className="w-7 h-7 rounded-lg bg-red-900/30 text-red-400 border border-red-700/40 font-sports font-bold text-xs flex items-center justify-center shrink-0">
                             #{idx + 1}
                           </div>
                           <div className="space-y-0.5">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-xs sm:text-sm font-bold text-slate-900">
+                              <span className="text-xs sm:text-sm font-black text-white font-sports">
                                 {ticket.section}
                               </span>
-                              <span className="text-slate-300">•</span>
-                              <span className="text-xs text-slate-600">
+                              <span className="text-slate-600">•</span>
+                              <span className="text-xs text-amber-400 font-mono font-bold">
                                 {ticket.row}
                               </span>
-                              <span className="text-slate-300">•</span>
-                              <span className="text-xs font-black text-red-700">
+                              <span className="text-slate-600">•</span>
+                              <span className="text-xs font-mono font-bold text-red-400">
                                 {ticket.seat}
                               </span>
                             </div>
-                            <div className="flex items-center gap-2 text-[11px] text-slate-500">
-                              <span>Precio: <strong className="text-slate-800">${ticket.price} MXN</strong></span>
+                            <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                              <span>Precio: <strong className="text-emerald-400 font-bold">${ticket.price} MXN</strong></span>
                               {ticket.gate && (
                                 <>
-                                  <span className="text-slate-300">•</span>
-                                  <span>Puerta: <strong className="text-slate-700">{ticket.gate}</strong></span>
+                                  <span className="text-slate-600">•</span>
+                                  <span>Puerta: <strong className="text-slate-200">{ticket.gate}</strong></span>
                                 </>
                               )}
                             </div>
@@ -601,34 +651,34 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
                         </div>
 
                         {/* Estado y QR individual para torniquete */}
-                        <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                        <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-800">
                           {ticket.status === 'activo' ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-sports">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
                               Válido
                             </span>
                           ) : ticket.status === 'usado' ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600">
-                              <Clock className="w-3 h-3 text-slate-500" />
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-800 text-slate-400 border border-slate-700 font-sports">
+                              <Clock className="w-3 h-3 text-slate-400" />
                               Usado
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-100 text-red-700">
-                              <XCircle className="w-3 h-3 text-red-600" />
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-500/20 text-red-300 border border-red-500/40 font-sports">
+                              <XCircle className="w-3 h-3 text-red-400" />
                               Cancelado
                             </span>
                           )}
 
                           {/* Código QR individual del asiento para torniquete */}
-                          <div className="flex items-center gap-2 bg-slate-50 p-1.5 pr-2.5 rounded-xl border border-slate-200">
-                            <div className="p-1 bg-white rounded border border-slate-200 shadow-2xs">
-                              <QrCode className="w-7 h-7 text-slate-900" />
+                          <div className="flex items-center gap-2 bg-[#0A0E17] p-1.5 pr-2.5 rounded-xl border border-slate-700">
+                            <div className="p-1 bg-white rounded border border-slate-600 shadow-2xs">
+                              <QrCode className="w-7 h-7 text-slate-950" />
                             </div>
                             <div className="text-left">
-                              <span className="text-[10px] font-mono block font-bold text-slate-700 leading-tight">
+                              <span className="text-[10px] font-mono block font-bold text-slate-200 leading-tight">
                                 {ticket.qrId || ticket.id.slice(0, 8)}
                               </span>
-                              <span className="text-[9px] text-slate-400 block">Torniquete</span>
+                              <span className="text-[9px] text-slate-400 block font-sports uppercase tracking-wider">Torniquete</span>
                             </div>
                           </div>
                         </div>
@@ -653,17 +703,17 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
           {loadingEvents ? (
             <LoadingSpinner message={`Consultando cartelera de eventos para ${stadiumName}...`} />
           ) : activeEvents.length === 0 ? (
-            <div className="bg-white border border-dashed border-slate-300 rounded-3xl p-8 sm:p-12 text-center space-y-3">
-              <Calendar className="w-10 h-10 text-slate-400 mx-auto" />
-              <h3 className="text-base font-bold text-slate-800">
+            <div className="bg-[#0F1626] border border-dashed border-slate-700 rounded-3xl p-8 sm:p-12 text-center space-y-3">
+              <Calendar className="w-10 h-10 text-red-500 mx-auto" />
+              <h3 className="text-base font-black text-white font-sports tracking-wide uppercase">
                 No hay eventos con venta abierta en {stadiumName}
               </h3>
-              <p className="text-xs text-slate-500 max-w-md mx-auto">
+              <p className="text-xs text-slate-400 max-w-md mx-auto">
                 La administración de este recinto aún no ha publicado eventos activos o habilitado la taquilla. Puedes seleccionar otra sede en el menú superior para revisar otros partidos o espectáculos.
               </p>
               <button
                 onClick={() => setActiveTab('mis-boletos')}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                className="px-4 py-2 bg-[#141C2E] hover:bg-[#1A253D] text-slate-200 rounded-xl text-xs font-sports font-bold tracking-wider border border-slate-700 transition-colors cursor-pointer uppercase"
               >
                 Volver a Mis Boletos
               </button>
@@ -674,6 +724,7 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
               event={selectedEvent}
               user={user}
               stadiumName={stadiumName}
+              onRequireAuth={onRequireAuth}
               onPurchaseSuccess={(purchaseId, count) => {
                 setPurchaseSuccessMsg(
                   `¡Compra completada con éxito! Se emitieron ${count} entrada(s) con identificador de compra #${purchaseId.slice(-7)}.`
@@ -687,24 +738,24 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
           ) : (
             <div className="space-y-6">
               {/* Encabezado de Cartelera */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 sm:p-5 rounded-3xl border border-slate-200 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#0F1626] p-4 sm:p-5 rounded-3xl border border-slate-700/80 shadow-xl">
                 <div>
                   <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-red-600" />
-                    <span className="text-xs font-black uppercase tracking-wider text-red-700">
+                    <Sparkles className="w-4 h-4 text-red-500" />
+                    <span className="text-xs font-black uppercase tracking-wider text-red-400 font-sports">
                       Cartelera Oficial
                     </span>
                   </div>
-                  <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight mt-0.5">
+                  <h3 className="text-base sm:text-lg font-black text-white tracking-wide font-sports uppercase mt-0.5">
                     Próximos Partidos & Espectáculos en {stadiumName}
                   </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <p className="text-xs text-slate-400 mt-0.5">
                     Elige el evento para ingresar a la selección de butacas en el mapa interactivo del estadio.
                   </p>
                 </div>
 
                 <div className="flex items-center gap-2 self-start sm:self-center">
-                  <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
+                  <span className="text-xs font-sports font-bold uppercase tracking-wider text-slate-300 bg-[#141C2E] px-3 py-1.5 rounded-xl border border-slate-700">
                     {activeEvents.length}{' '}
                     {activeEvents.length === 1
                       ? t('events.for_sale_single', 'evento en venta')
@@ -725,7 +776,7 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
                   return (
                     <div
                       key={ev.id}
-                      className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col justify-between group"
+                      className="bg-[#0F1626] rounded-3xl border border-slate-700/80 overflow-hidden shadow-xl hover:border-slate-600 transition-all flex flex-col justify-between group"
                     >
                       <div>
                         {/* Póster Promocional del Evento (completo y sin recortes) */}
@@ -748,10 +799,10 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
 
                           {/* Badges superiores */}
                           <div className="absolute top-3 left-3 right-3 z-20 flex items-center justify-between gap-2">
-                            <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-700/90 backdrop-blur-xs text-white border border-red-500/50 shadow-xs">
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-600/90 backdrop-blur-xs text-white border border-red-500/50 shadow-xs font-sports">
                               {ev.type}
                             </span>
-                            <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-600/90 backdrop-blur-xs text-white border border-emerald-400/50 shadow-xs flex items-center gap-1">
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-600/90 backdrop-blur-xs text-white border border-emerald-400/50 shadow-xs flex items-center gap-1 font-sports">
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />
                               Venta Abierta
                             </span>
@@ -760,41 +811,41 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
 
                         {/* Metadatos y detalles en el cuerpo de la tarjeta para no tapar el póster */}
                         <div className="p-4 space-y-2.5">
-                          <div className="flex items-center gap-2 text-xs font-bold text-red-700">
-                            <Calendar className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                          <div className="flex items-center gap-2 text-xs font-bold text-red-400 font-sports tracking-wider">
+                            <Calendar className="w-3.5 h-3.5 text-red-500 shrink-0" />
                             <span>{ev.date}</span>
                             <span>•</span>
-                            <Clock className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                            <Clock className="w-3.5 h-3.5 text-red-500 shrink-0" />
                             <span>{ev.time || '20:00 hrs'}</span>
                           </div>
 
-                          <h4 className="text-base font-black text-slate-900 leading-snug line-clamp-2">
+                          <h4 className="text-base font-black text-white leading-snug line-clamp-2 font-sports tracking-wide">
                             {ev.name}
                           </h4>
 
                           {ev.opponent && (
-                            <p className="text-xs text-slate-600 font-medium">
-                              Rival: <span className="font-bold text-slate-900">{ev.opponent}</span>
+                            <p className="text-xs text-slate-300 font-medium">
+                              Rival: <span className="font-bold text-white">{ev.opponent}</span>
                             </p>
                           )}
 
-                          <div className="flex items-center justify-between text-xs text-slate-500 pt-0.5">
+                          <div className="flex items-center justify-between text-xs text-slate-400 pt-0.5">
                             <span className="flex items-center gap-1 truncate max-w-[170px]">
-                              <MapPin className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                              <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                               <span className="truncate">{stadiumName}</span>
                             </span>
                             {ev.gate && (
-                              <span className="flex items-center gap-1 text-[11px] text-slate-500 shrink-0">
-                                <DoorOpen className="w-3.5 h-3.5 text-slate-400" />
+                              <span className="flex items-center gap-1 text-[11px] text-slate-400 shrink-0">
+                                <DoorOpen className="w-3.5 h-3.5 text-slate-500" />
                                 {ev.gate}
                               </span>
                             )}
                           </div>
 
-                          <div className="pt-2 border-t border-slate-100 flex items-baseline justify-between">
-                            <span className="text-xs text-slate-500">Boletos desde</span>
-                            <span className="text-lg font-black text-red-900">
-                              ${minPrice} <span className="text-xs font-normal text-slate-500">MXN</span>
+                          <div className="pt-2 border-t border-slate-800 flex items-baseline justify-between">
+                            <span className="text-xs text-slate-400 font-sports uppercase tracking-wider">Boletos desde</span>
+                            <span className="text-lg font-scoreboard font-bold text-emerald-400">
+                              ${minPrice} <span className="text-xs font-normal text-slate-400">MXN</span>
                             </span>
                           </div>
                         </div>
@@ -808,7 +859,7 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
                             setSelectedEvent(ev);
                             setShowSeatMap(true);
                           }}
-                          className="w-full py-2.5 px-4 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-black shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                          className="w-full py-2.5 px-4 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-sports font-bold tracking-wider uppercase shadow-lg shadow-red-950/50 transition-colors flex items-center justify-center gap-2 cursor-pointer"
                         >
                           <TicketIcon className="w-4 h-4" />
                           <span>Ver Boletos</span>
@@ -821,7 +872,7 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
                             setSelectedTier(ev.priceTiers?.[0] || null);
                             setQuickBuyEvent(ev);
                           }}
-                          className="w-full py-1 text-center text-[11px] font-bold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                          className="w-full py-1 text-center text-[11px] font-sports font-bold uppercase tracking-wider text-slate-400 hover:text-white transition-colors cursor-pointer"
                         >
                           O comprar rápido sin mapa
                         </button>
@@ -833,20 +884,20 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
 
               {/* Modal de Compra Rápida sin mapa (opcional para usuarios rápidos) */}
               {quickBuyEvent && (
-                <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-                  <div className="bg-white w-full max-w-md rounded-3xl p-6 shadow-xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-150">
-                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+                  <div className="bg-[#0F1626] w-full max-w-md rounded-3xl p-6 shadow-2xl border border-slate-700/80 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                       <div>
-                        <span className="text-[10px] font-black uppercase tracking-wider text-red-700 block">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-red-400 block font-sports">
                           Compra Rápida
                         </span>
-                        <h3 className="text-base font-black text-slate-900 leading-tight">
+                        <h3 className="text-base font-black text-white leading-tight font-sports tracking-wide">
                           {quickBuyEvent.name}
                         </h3>
                       </div>
                       <button
                         onClick={() => setQuickBuyEvent(null)}
-                        className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 cursor-pointer"
+                        className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 cursor-pointer"
                       >
                         <X className="w-5 h-5" />
                       </button>
@@ -854,7 +905,7 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
 
                     <div className="space-y-3">
                       <div>
-                        <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                        <label className="text-xs font-bold text-slate-300 block mb-1.5 font-sports uppercase tracking-wider">
                           Selecciona la sección
                         </label>
                         <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
@@ -866,14 +917,14 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
                                   key={idx}
                                   type="button"
                                   onClick={() => setSelectedTier(tier)}
-                                  className={`w-full p-2.5 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer text-xs ${
+                                  className={`w-full p-2.5 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer text-xs font-sports ${
                                     isTierSelected
-                                      ? 'border-red-600 bg-red-50 text-red-950 font-bold ring-1 ring-red-600'
-                                      : 'border-slate-200 hover:border-slate-300 bg-white'
+                                      ? 'border-red-500 bg-red-950/40 text-white font-bold ring-1 ring-red-500'
+                                      : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17] text-slate-300'
                                   }`}
                                 >
                                   <span>{tier.section}</span>
-                                  <span className="font-black text-red-900">${tier.price} MXN</span>
+                                  <span className="font-scoreboard font-bold text-emerald-400">${tier.price} MXN</span>
                                 </button>
                               );
                             })
@@ -885,17 +936,17 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
 
                       {/* Método de pago */}
                       <div>
-                        <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                        <label className="text-xs font-bold text-slate-300 block mb-1.5 font-sports uppercase tracking-wider">
                           Método de pago
                         </label>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-2 gap-2 font-sports">
                           <button
                             type="button"
                             onClick={() => setPaymentMethod('Efectivo / Terminal física en Taquilla')}
                             className={`p-2 rounded-xl border text-center text-xs font-bold transition-all cursor-pointer ${
                               paymentMethod === 'Efectivo / Terminal física en Taquilla'
-                                ? 'border-emerald-600 bg-emerald-50 text-emerald-950'
-                                : 'border-slate-200 hover:border-slate-300 bg-white text-slate-600'
+                                ? 'border-emerald-500 bg-emerald-950/40 text-emerald-300'
+                                : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17] text-slate-400'
                             }`}
                           >
                             💵 Taquilla
@@ -905,8 +956,8 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
                             onClick={() => setPaymentMethod('Tarjeta en Línea')}
                             className={`p-2 rounded-xl border text-center text-xs font-bold transition-all cursor-pointer ${
                               paymentMethod === 'Tarjeta en Línea'
-                                ? 'border-red-600 bg-red-50 text-red-950'
-                                : 'border-slate-200 hover:border-slate-300 bg-white text-slate-600'
+                                ? 'border-red-500 bg-red-950/40 text-red-300'
+                                : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17] text-slate-400'
                             }`}
                           >
                             💳 En Línea
@@ -915,22 +966,22 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
                       </div>
 
                       {/* Total */}
-                      <div className="p-3 bg-slate-50 rounded-2xl flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-600">Total:</span>
-                        <span className="text-base font-black text-red-900">
+                      <div className="p-3 bg-[#0A0E17] rounded-2xl border border-slate-800 flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-400 font-sports uppercase tracking-wider">Total:</span>
+                        <span className="text-base font-scoreboard font-bold text-emerald-400">
                           ${selectedTier?.price || 0} MXN
                         </span>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 pt-2">
+                    <div className="flex items-center gap-2 pt-2 font-sports uppercase tracking-wider">
                       <button
                         type="button"
                         onClick={() => {
                           setQuickBuyEvent(null);
                           setShowSeatMap(true);
                         }}
-                        className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition-colors cursor-pointer text-center"
+                        className="flex-1 py-2.5 bg-[#141C2E] hover:bg-[#1A253D] text-slate-200 rounded-xl text-xs font-bold border border-slate-700 transition-colors cursor-pointer text-center"
                       >
                         Ver Mapa
                       </button>
@@ -941,7 +992,7 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
                           setQuickBuyEvent(null);
                         }}
                         disabled={purchasing || !selectedTier}
-                        className="flex-1 py-2.5 bg-red-700 hover:bg-red-800 disabled:opacity-50 text-white rounded-xl text-xs font-black shadow-xs transition-colors cursor-pointer text-center"
+                        className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-lg shadow-red-950/50 transition-colors cursor-pointer text-center"
                       >
                         {purchasing ? 'Emitiendo...' : 'Confirmar'}
                       </button>

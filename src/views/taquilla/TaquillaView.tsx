@@ -52,39 +52,43 @@ export const TaquillaView: React.FC<TaquillaViewProps> = ({ user }) => {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-[#0F1626] p-5 sm:p-6 rounded-2xl border border-slate-700/80 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 via-red-600 to-amber-500" />
         <div>
-          <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <TicketIcon className="w-5 h-5 text-amber-600" />
-            Módulo de Taquilla y Control de Accesos
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/40 mb-1.5 font-sports">
+            <span>Control de Torniquetes & Acceso</span>
+          </div>
+          <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2 font-sports tracking-wide">
+            <TicketIcon className="w-5 h-5 text-amber-500" />
+            Taquilla & Validación de Accesos
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Validación de boletos y consulta de accesos en puertas del estadio
+          <p className="text-xs text-slate-300 mt-0.5">
+            Escaneo de códigos QR, validación en puertas y control de entradas para el evento
           </p>
         </div>
 
         {/* Buscador de boletos por QR o datos */}
-        <div className="relative w-full sm:w-72">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+        <div className="relative w-full sm:w-80">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar por código QR, zona..."
-            className="w-full pl-9 pr-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+            placeholder="Buscar por código QR, fila, butaca..."
+            className="w-full pl-10 pr-3.5 py-2 bg-[#141C2E] border border-slate-700 rounded-xl text-xs sm:text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all font-medium"
           />
         </div>
       </div>
 
       {statusMessage && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-xs font-semibold flex items-center justify-between">
+        <div className="p-3.5 bg-emerald-950/80 border border-emerald-500/50 text-emerald-200 rounded-xl text-xs font-bold flex items-center justify-between shadow-lg">
           <span className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
             {statusMessage}
           </span>
           <button
             onClick={() => setStatusMessage(null)}
-            className="text-emerald-700 hover:text-emerald-900 underline"
+            className="text-emerald-300 hover:text-white underline cursor-pointer"
           >
             Cerrar
           </button>
@@ -94,10 +98,11 @@ export const TaquillaView: React.FC<TaquillaViewProps> = ({ user }) => {
       {loading ? (
         <LoadingSpinner message="Consultando boletos en taquilla..." />
       ) : filteredTickets.length === 0 ? (
-        <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-500 space-y-2">
-          <p className="text-sm font-semibold">No se encontraron boletos para mostrar.</p>
-          <p className="text-xs">
-            Inicia sesión como aficionado o genera boletos de prueba para que aparezcan en taquilla.
+        <div className="bg-[#0F1626] border border-slate-800 rounded-2xl p-10 text-center text-slate-400 space-y-2">
+          <TicketIcon className="w-10 h-10 text-slate-600 mx-auto" />
+          <p className="text-sm font-bold text-white">No se encontraron boletos con el criterio ingresado</p>
+          <p className="text-xs text-slate-400">
+            Los boletos generados en compras o taquilla aparecerán automáticamente listos para su validación.
           </p>
         </div>
       ) : (

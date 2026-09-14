@@ -5,6 +5,7 @@ import { MiMembresia } from './MiMembresia';
 import { TiendaMerch } from './TiendaMerch';
 import { MenuStand } from './MenuStand';
 import { MisPedidos } from './MisPedidos';
+import { CarteleraLanding } from '../../components/cartelera/CarteleraLanding';
 import { useLanguage } from '../../context/LanguageContext';
 import { subscribeVenues } from '../../lib/venues';
 import { DEFAULT_VENUES, DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
@@ -22,13 +23,15 @@ import {
   ChevronDown,
   Sparkles,
   CheckCircle2,
+  Film,
 } from 'lucide-react';
 
 interface AficionadoViewProps {
   user: UserProfile;
   pendingEventId?: string | null;
   onClearPendingEvent?: () => void;
-  initialTab?: 'boletos' | 'membresia' | 'tienda' | 'comida' | 'pedidos';
+  initialTab?: 'cartelera' | 'boletos' | 'membresia' | 'tienda' | 'comida' | 'pedidos';
+  onRequireAuth?: () => void;
 }
 
 export const AficionadoView: React.FC<AficionadoViewProps> = ({
@@ -36,12 +39,14 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
   pendingEventId,
   onClearPendingEvent,
   initialTab,
+  onRequireAuth,
 }) => {
-  const [activeTab, setActiveTab] = useState<'boletos' | 'membresia' | 'tienda' | 'comida' | 'pedidos'>(() => {
+  const [activeTab, setActiveTab] = useState<'cartelera' | 'boletos' | 'membresia' | 'tienda' | 'comida' | 'pedidos'>(() => {
     if (pendingEventId) return 'boletos';
     if (initialTab) return initialTab;
-    return 'boletos';
+    return 'cartelera';
   });
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(pendingEventId || null);
   const { t } = useLanguage();
 
   // Gestión de sedes (Venues) para el aficionado
@@ -120,6 +125,7 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
   // Si hay un pendingEventId al montar o cambiar, asegurarse de mostrar la pestaña de boletos
   useEffect(() => {
     if (pendingEventId) {
+      setSelectedEventId(pendingEventId);
       setActiveTab('boletos');
     } else if (initialTab) {
       setActiveTab(initialTab);
@@ -127,166 +133,217 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
   }, [pendingEventId, initialTab]);
 
   return (
-    <div className="space-y-6 pb-24">
-      {/* Saludo con selector de sede integrado al lado del nombre */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-200">
-        <div>
-          <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-1.5">
-              <span>{t('aficionado.hello', 'Hola,')}</span>
-              <span>{user.displayName || 'Aficionado'}</span>
-            </h1>
+    <div className="space-y-6 pb-24 text-slate-100">
+      {/* Saludo con selector de sede integrado al lado del nombre (solo en vistas internas de sede) */}
+      {activeTab !== 'cartelera' && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-800">
+          <div>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-1.5 font-sports">
+                <span>{t('aficionado.hello', 'Hola,')}</span>
+                <span>{user.displayName || 'Aficionado'}</span>
+              </h1>
 
-            {/* Selector de Estadio integrado al lado del nombre del aficionado */}
-            <div className="relative inline-flex items-center">
-              <label htmlFor="client-venue-selector-header" className="sr-only">
-                Seleccionar estadio o recinto
-              </label>
-              <div className="flex items-center gap-1.5 pl-2.5 pr-2 py-1 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl transition-all shadow-xs group cursor-pointer">
-                <MapPin className="w-3.5 h-3.5 text-red-700 shrink-0" />
-                <select
-                  id="client-venue-selector-header"
-                  value={selectedVenueId}
-                  onChange={(e) => handleSelectVenue(e.target.value)}
-                  disabled={loadingVenues || venues.length === 0}
-                  className="bg-transparent text-xs font-bold text-slate-800 pr-5 focus:outline-none cursor-pointer appearance-none"
-                  title="Cambiar estadio visualizado"
-                >
-                  {venues.map((venue) => (
-                    <option key={venue.id} value={venue.id} className="text-slate-900 font-medium">
-                      {venue.name} ({venue.city})
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2 pointer-events-none group-hover:text-slate-700 transition-colors" />
+              {/* Selector de Estadio integrado al lado del nombre del aficionado */}
+              <div className="relative inline-flex items-center">
+                <label htmlFor="client-venue-selector-header" className="sr-only">
+                  Seleccionar estadio o recinto
+                </label>
+                <div className="flex items-center gap-1.5 pl-2.5 pr-2 py-1 bg-[#101625] hover:bg-[#182032] border border-slate-700 rounded-xl transition-all shadow-xs group cursor-pointer">
+                  <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                  <select
+                    id="client-venue-selector-header"
+                    value={selectedVenueId}
+                    onChange={(e) => handleSelectVenue(e.target.value)}
+                    disabled={loadingVenues || venues.length === 0}
+                    className="bg-transparent text-xs font-bold text-slate-200 pr-5 focus:outline-none cursor-pointer appearance-none"
+                    title="Cambiar estadio visualizado"
+                  >
+                    {venues.map((venue) => (
+                      <option key={venue.id} value={venue.id} className="bg-[#101625] text-white font-medium">
+                        {venue.name} ({venue.city})
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2 pointer-events-none group-hover:text-slate-200 transition-colors" />
+                </div>
               </div>
             </div>
-          </div>
 
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            {t('aficionado.tagline', 'Portal de Experiencia del Aficionado • Boletos, eventos, consumos y tienda en tu sede')}
-          </p>
+            <p className="text-xs sm:text-sm text-slate-400 mt-1">
+              {t('aficionado.tagline', 'Portal de Experiencia del Aficionado • Boletos, eventos, consumos y tienda en tu sede')}
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Contenido de la vista según pestaña activa */}
+      {activeTab === 'cartelera' && (
+        <CarteleraLanding
+          onSelectEvent={(eventId) => {
+            setSelectedEventId(eventId);
+            setActiveTab('boletos');
+          }}
+          onSelectStore={(type) => setActiveTab(type)}
+          onSelectTab={(tab) => setActiveTab(tab)}
+          onOpenAuth={onRequireAuth}
+          showBottomNav={false}
+        />
+      )}
       {activeTab === 'boletos' && (
         <MisBoletos
           user={effectiveUser}
-          initialEventId={pendingEventId}
-          onClearInitialEvent={onClearPendingEvent}
+          initialEventId={selectedEventId}
+          onClearInitialEvent={() => {
+            setSelectedEventId(null);
+            onClearPendingEvent?.();
+          }}
           selectedVenueId={selectedVenueId}
           onSelectVenue={handleSelectVenue}
+          onRequireAuth={onRequireAuth}
         />
       )}
       {activeTab === 'membresia' && <MiMembresia user={effectiveUser} />}
       {activeTab === 'tienda' && (
-        <TiendaMerch user={effectiveUser} onOrderCompleted={() => setActiveTab('pedidos')} />
+        <TiendaMerch
+          user={effectiveUser}
+          onOrderCompleted={() => setActiveTab('pedidos')}
+          onRequireAuth={onRequireAuth}
+        />
       )}
       {activeTab === 'comida' && (
         <MenuStand
           user={effectiveUser}
           onOrderSuccess={() => setActiveTab('pedidos')}
           onGoToTickets={() => setActiveTab('boletos')}
+          onRequireAuth={onRequireAuth}
         />
       )}
-      {activeTab === 'pedidos' && <MisPedidos user={effectiveUser} />}
+      {activeTab === 'pedidos' && (
+        <MisPedidos
+          user={effectiveUser}
+          onOpenAuth={onRequireAuth}
+        />
+      )}
 
-      {/* Menú de Navegación Inferior Fijo (Estilo Cine/Retail - 4 opciones sin scroll) */}
+      {/* Menú de Navegación Inferior Fijo (5 Pestañas: Cartelera, Boletos, Tienda, Comida, Pedidos) */}
       <nav
         id="aficionado-bottom-nav"
         aria-label="Navegación principal del aficionado"
-        className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-[0_-4px_20px_rgba(0,0,0,0.07)]"
+        className="fixed bottom-0 left-0 right-0 z-40 bg-[#0F172A]/98 backdrop-blur-xl border-t-2 border-red-600/80 shadow-[0_-10px_35px_rgba(0,0,0,0.85)]"
       >
-        <div className="max-w-md mx-auto grid grid-cols-4 px-2 py-1.5 sm:py-2 text-center">
-          {/* 1. Boletos */}
+        <div className="max-w-md mx-auto grid grid-cols-5 px-1 py-1.5 sm:py-2 text-center">
+          {/* 1. Cartelera */}
+          <button
+            id="bottom-nav-cartelera"
+            type="button"
+            onClick={() => setActiveTab('cartelera')}
+            className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer font-sports tracking-wider ${
+              activeTab === 'cartelera'
+                ? 'text-red-400 font-bold'
+                : 'text-slate-400 hover:text-white font-medium'
+            }`}
+          >
+            <div
+              className={`p-1.5 rounded-xl transition-all ${
+                activeTab === 'cartelera' ? 'bg-red-600 text-white shadow-md shadow-red-950/50 ring-1 ring-red-500/50' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Film className="w-5 h-5" />
+            </div>
+            <span className="text-[10px] leading-tight mt-1 uppercase">
+              {t('nav.billboard', 'Cartelera')}
+            </span>
+          </button>
+
+          {/* 2. Boletos */}
           <button
             id="bottom-nav-boletos"
             type="button"
             onClick={() => setActiveTab('boletos')}
-            className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer ${
+            className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer font-sports tracking-wider ${
               activeTab === 'boletos'
-                ? 'text-red-700 font-black'
-                : 'text-slate-400 hover:text-slate-600 font-medium'
+                ? 'text-red-400 font-bold'
+                : 'text-slate-400 hover:text-white font-medium'
             }`}
           >
             <div
-              className={`p-1.5 rounded-xl transition-colors ${
-                activeTab === 'boletos' ? 'bg-red-50 text-red-700 shadow-2xs' : 'text-slate-400'
+              className={`p-1.5 rounded-xl transition-all ${
+                activeTab === 'boletos' ? 'bg-red-600 text-white shadow-md shadow-red-950/50 ring-1 ring-red-500/50' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               <Ticket className="w-5 h-5" />
             </div>
-            <span className="text-[11px] leading-tight tracking-tight mt-0.5">
+            <span className="text-[10px] leading-tight mt-1 uppercase">
               {t('nav.tickets', 'Boletos')}
             </span>
           </button>
 
-          {/* 2. Tienda */}
+          {/* 3. Tienda */}
           <button
             id="bottom-nav-tienda"
             type="button"
             onClick={() => setActiveTab('tienda')}
-            className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer ${
+            className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer font-sports tracking-wider ${
               activeTab === 'tienda'
-                ? 'text-red-700 font-black'
-                : 'text-slate-400 hover:text-slate-600 font-medium'
+                ? 'text-red-400 font-bold'
+                : 'text-slate-400 hover:text-white font-medium'
             }`}
           >
             <div
-              className={`p-1.5 rounded-xl transition-colors ${
-                activeTab === 'tienda' ? 'bg-red-50 text-red-700 shadow-2xs' : 'text-slate-400'
+              className={`p-1.5 rounded-xl transition-all ${
+                activeTab === 'tienda' ? 'bg-red-600 text-white shadow-md shadow-red-950/50 ring-1 ring-red-500/50' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               <ShoppingBag className="w-5 h-5" />
             </div>
-            <span className="text-[11px] leading-tight tracking-tight mt-0.5">
+            <span className="text-[10px] leading-tight mt-1 uppercase">
               {t('nav.store', 'Tienda')}
             </span>
           </button>
 
-          {/* 3. Comida */}
+          {/* 4. Comida */}
           <button
             id="bottom-nav-comida"
             type="button"
             onClick={() => setActiveTab('comida')}
-            className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer ${
+            className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer font-sports tracking-wider ${
               activeTab === 'comida'
-                ? 'text-red-700 font-black'
-                : 'text-slate-400 hover:text-slate-600 font-medium'
+                ? 'text-red-400 font-bold'
+                : 'text-slate-400 hover:text-white font-medium'
             }`}
           >
             <div
-              className={`p-1.5 rounded-xl transition-colors ${
-                activeTab === 'comida' ? 'bg-red-50 text-red-700 shadow-2xs' : 'text-slate-400'
+              className={`p-1.5 rounded-xl transition-all ${
+                activeTab === 'comida' ? 'bg-red-600 text-white shadow-md shadow-red-950/50 ring-1 ring-red-500/50' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               <Utensils className="w-5 h-5" />
             </div>
-            <span className="text-[11px] leading-tight tracking-tight mt-0.5">
+            <span className="text-[10px] leading-tight mt-1 uppercase">
               {t('nav.food', 'Comida')}
             </span>
           </button>
 
-          {/* 4. Pedidos */}
+          {/* 5. Pedidos */}
           <button
             id="bottom-nav-pedidos"
             type="button"
             onClick={() => setActiveTab('pedidos')}
-            className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer ${
+            className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer font-sports tracking-wider ${
               activeTab === 'pedidos'
-                ? 'text-red-700 font-black'
-                : 'text-slate-400 hover:text-slate-600 font-medium'
+                ? 'text-red-400 font-bold'
+                : 'text-slate-400 hover:text-white font-medium'
             }`}
           >
             <div
-              className={`p-1.5 rounded-xl transition-colors ${
-                activeTab === 'pedidos' ? 'bg-red-50 text-red-700 shadow-2xs' : 'text-slate-400'
+              className={`p-1.5 rounded-xl transition-all ${
+                activeTab === 'pedidos' ? 'bg-red-600 text-white shadow-md shadow-red-950/50 ring-1 ring-red-500/50' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               <Package className="w-5 h-5" />
             </div>
-            <span className="text-[11px] leading-tight tracking-tight mt-0.5">
+            <span className="text-[10px] leading-tight mt-1 uppercase">
               {t('nav.orders', 'Pedidos')}
             </span>
           </button>

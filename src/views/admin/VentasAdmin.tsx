@@ -75,24 +75,24 @@ export const VentasAdmin: React.FC<VentasAdminProps> = ({ user }) => {
     switch (channel) {
       case 'boletos':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
-            <Ticket className="w-3 h-3 text-blue-600" /> Boletos / Taquilla
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-blue-950/70 text-blue-400 border border-blue-800/60 font-sports">
+            <Ticket className="w-3 h-3 text-blue-400" /> Boletos / Taquilla
           </span>
         );
       case 'tienda_merch':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-50 text-red-800 border border-red-200">
-            <ShoppingBag className="w-3 h-3 text-red-600" /> Tienda Oficial
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-red-950/70 text-red-400 border border-red-800/60 font-sports">
+            <ShoppingBag className="w-3 h-3 text-red-400" /> Tienda Oficial
           </span>
         );
       case 'concesion_alimentos':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-            <Utensils className="w-3 h-3 text-amber-600" /> Concesión Alimentos
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-amber-950/70 text-amber-400 border border-amber-800/60 font-sports">
+            <Utensils className="w-3 h-3 text-amber-400" /> Concesión Alimentos
           </span>
         );
       default:
-        return <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs">{channel}</span>;
+        return <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-xs font-mono">{channel}</span>;
     }
   };
 
@@ -122,89 +122,89 @@ export const VentasAdmin: React.FC<VentasAdminProps> = ({ user }) => {
       {/* Header y Exportar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-            <Receipt className="w-6 h-6 text-red-700" />
+          <h2 className="text-2xl font-black text-white tracking-wide uppercase font-sports flex items-center gap-2">
+            <Receipt className="w-6 h-6 text-red-500" />
             <span>Administración & Auditoría de Ventas</span>
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-900 border border-emerald-300">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-950/70 text-emerald-400 border border-emerald-800/60 font-sports">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
               En Vivo
             </span>
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-slate-400 mt-0.5">
             Registro unificado y en tiempo real de transacciones de taquilla, tienda oficial y concesiones
           </p>
         </div>
 
         <button
           onClick={handleExportCSV}
-          className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-2 self-start sm:self-auto"
+          className="px-4 py-2.5 bg-[#141E34] hover:bg-[#1A2846] text-white font-black text-xs uppercase tracking-wider rounded-xl border border-slate-700 shadow-sm flex items-center gap-2 self-start sm:self-auto font-sports transition-colors cursor-pointer"
         >
           <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
           <span>Exportar a CSV / Excel</span>
         </button>
       </div>
 
-      {/* Tarjetas KPI de Ventas por Canal */}
+      {/* Tarjetas KPI de Ventas por Canal (Scoreboard Style) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-slate-900 text-white">
-            <TrendingUp className="w-5 h-5 text-red-400" />
+        <div className="bg-[#0F1626] p-4 rounded-2xl border border-slate-700/80 shadow-lg flex items-center gap-3">
+          <div className="p-3 rounded-xl bg-red-950/50 text-red-400 border border-red-800/40">
+            <TrendingUp className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs text-slate-500 font-semibold">Ventas Totales Brutas</p>
-            <p className="text-lg font-black text-slate-900">
-              ${metrics.totalGrossRevenue.toLocaleString('es-MX')} MXN
+            <p className="text-xs text-slate-400 font-bold uppercase tracking-wider font-sports">Ventas Totales Brutas</p>
+            <p className="text-2xl font-black text-white font-scoreboard tracking-wide">
+              ${metrics.totalGrossRevenue.toLocaleString('es-MX')} <span className="text-xs text-slate-400 font-sans">MXN</span>
             </p>
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-blue-50 text-blue-700">
+        <div className="bg-[#0F1626] p-4 rounded-2xl border border-slate-700/80 shadow-lg flex items-center gap-3">
+          <div className="p-3 rounded-xl bg-blue-950/50 text-blue-400 border border-blue-800/40">
             <Ticket className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs text-slate-500 font-semibold">Taquilla & Boletos</p>
-            <p className="text-lg font-black text-blue-900">
-              ${metrics.ticketsRevenue.toLocaleString('es-MX')} MXN
+            <p className="text-xs text-slate-400 font-bold uppercase tracking-wider font-sports">Taquilla & Boletos</p>
+            <p className="text-2xl font-black text-blue-400 font-scoreboard tracking-wide">
+              ${metrics.ticketsRevenue.toLocaleString('es-MX')} <span className="text-xs text-slate-400 font-sans">MXN</span>
             </p>
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-red-50 text-red-700">
+        <div className="bg-[#0F1626] p-4 rounded-2xl border border-slate-700/80 shadow-lg flex items-center gap-3">
+          <div className="p-3 rounded-xl bg-red-950/50 text-red-400 border border-red-800/40">
             <ShoppingBag className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs text-slate-500 font-semibold">Tienda Oficial (Merch)</p>
-            <p className="text-lg font-black text-red-900">
-              ${metrics.merchRevenue.toLocaleString('es-MX')} MXN
+            <p className="text-xs text-slate-400 font-bold uppercase tracking-wider font-sports">Tienda Oficial (Merch)</p>
+            <p className="text-2xl font-black text-red-400 font-scoreboard tracking-wide">
+              ${metrics.merchRevenue.toLocaleString('es-MX')} <span className="text-xs text-slate-400 font-sans">MXN</span>
             </p>
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-amber-50 text-amber-700">
+        <div className="bg-[#0F1626] p-4 rounded-2xl border border-slate-700/80 shadow-lg flex items-center gap-3">
+          <div className="p-3 rounded-xl bg-amber-950/50 text-amber-400 border border-amber-800/40">
             <Utensils className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs text-slate-500 font-semibold">Alimentos & Bebidas</p>
-            <p className="text-lg font-black text-amber-900">
-              ${metrics.foodRevenue.toLocaleString('es-MX')} MXN
+            <p className="text-xs text-slate-400 font-bold uppercase tracking-wider font-sports">Alimentos & Bebidas</p>
+            <p className="text-2xl font-black text-amber-400 font-scoreboard tracking-wide">
+              ${metrics.foodRevenue.toLocaleString('es-MX')} <span className="text-xs text-slate-400 font-sans">MXN</span>
             </p>
           </div>
         </div>
       </div>
 
       {/* Barra de Filtros de Auditoría */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div className="bg-[#0F1626] p-4 rounded-2xl border border-slate-700/80 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="relative flex-1">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Buscar por cliente, descripción o ID de referencia..."
-            className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-hidden focus:ring-2 focus:ring-red-600"
+            className="w-full pl-9 pr-3 py-2 bg-[#141E34] border border-slate-700 text-white placeholder-slate-500 rounded-xl text-xs focus:outline-hidden focus:ring-2 focus:ring-red-500 font-medium"
           />
         </div>
 
@@ -212,7 +212,7 @@ export const VentasAdmin: React.FC<VentasAdminProps> = ({ user }) => {
           <select
             value={selectedChannel}
             onChange={(e) => setSelectedChannel(e.target.value)}
-            className="px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold bg-white text-slate-700"
+            className="px-3 py-2 border border-slate-700 rounded-xl text-xs font-bold bg-[#141E34] text-white focus:outline-hidden focus:ring-2 focus:ring-red-500 font-sports uppercase tracking-wider cursor-pointer"
           >
             <option value="Todos">Todos los Canales</option>
             <option value="boletos">Taquilla / Boletos</option>
@@ -226,14 +226,14 @@ export const VentasAdmin: React.FC<VentasAdminProps> = ({ user }) => {
       {loading ? (
         <LoadingSpinner message="Generando reporte de auditoría de ventas..." />
       ) : filteredSales.length === 0 ? (
-        <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center text-slate-500">
+        <div className="bg-[#0F1626] border border-slate-700/80 rounded-2xl p-12 text-center text-slate-400">
           No hay transacciones registradas que coincidan con los filtros.
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="bg-[#0F1626] rounded-2xl border border-slate-700/80 shadow-xl overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-700">
-              <thead className="bg-slate-900 text-white font-bold uppercase tracking-wider text-[11px]">
+            <table className="w-full text-left text-xs text-slate-300">
+              <thead className="bg-[#141E34] text-slate-400 font-black uppercase tracking-wider text-[11px] font-sports border-b border-slate-700/80">
                 <tr>
                   <th className="py-3.5 px-4">Canal de Venta</th>
                   <th className="py-3.5 px-4">Concepto / Descripción</th>
@@ -243,23 +243,23 @@ export const VentasAdmin: React.FC<VentasAdminProps> = ({ user }) => {
                   <th className="py-3.5 px-4 text-right">Monto</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
+              <tbody className="divide-y divide-slate-800">
                 {filteredSales.map((sale) => (
-                  <tr key={sale.id} className="hover:bg-slate-50 transition-colors">
+                  <tr key={sale.id} className="hover:bg-[#141E34]/50 transition-colors">
                     <td className="py-3.5 px-4">{getChannelBadge(sale.channel)}</td>
                     <td className="py-3.5 px-4">
-                      <p className="font-extrabold text-slate-900">{sale.description}</p>
+                      <p className="font-bold text-white text-sm">{sale.description}</p>
                       {sale.referenceId && (
                         <span className="font-mono text-[10px] text-slate-400">Ref: {sale.referenceId}</span>
                       )}
                     </td>
-                    <td className="py-3.5 px-4 font-semibold text-slate-700">{sale.customerName || 'Público General'}</td>
-                    <td className="py-3.5 px-4 text-slate-600 font-medium">{sale.paymentMethod}</td>
-                    <td className="py-3.5 px-4 text-slate-500">
+                    <td className="py-3.5 px-4 font-semibold text-slate-200">{sale.customerName || 'Público General'}</td>
+                    <td className="py-3.5 px-4 text-slate-400 font-medium">{sale.paymentMethod}</td>
+                    <td className="py-3.5 px-4 text-slate-400 font-mono text-[11px]">
                       {new Date(sale.date).toLocaleDateString()} {new Date(sale.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </td>
-                    <td className="py-3.5 px-4 text-right font-black text-sm text-slate-900">
-                      +${sale.amount.toLocaleString('es-MX')} MXN
+                    <td className="py-3.5 px-4 text-right font-black text-base text-emerald-400 font-scoreboard tracking-wide">
+                      +${sale.amount.toLocaleString('es-MX')} <span className="text-[10px] text-slate-400 font-sans">MXN</span>
                     </td>
                   </tr>
                 ))}
