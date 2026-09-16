@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { VenueEvent, Venue, EventType } from '../../types';
+import { VenueEvent, Venue, EventType, UserProfile, EventPriceTier } from '../../types';
 import { DEFAULT_VENUES, DEFAULT_VENUE_ID, DEFAULT_FALLBACK_EVENT } from '../../lib/defaultVenue';
 import { subscribeVenues } from '../../lib/venues';
 import { DEFAULT_FALLBACK_EVENTS } from '../../lib/venueEvents';
 import { normalizeGoogleDriveImageUrl, getEventPosterPlaceholder } from '../../lib/imageUtils';
+import { getOfficialPriceTiersForEvent } from '../../lib/seatMap';
+import { purchaseTicketWithSaleRecord } from '../../lib/tickets';
+import { SeatMapSelector } from '../../views/aficionado/SeatMapSelector';
 import { collection, query, limit, onSnapshot, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useTheme } from '../../context/ThemeContext';
@@ -24,26 +27,52 @@ import {
   Layers,
   Maximize2,
   Check,
+  Zap,
+  ArrowLeft,
+  CheckCircle2,
+  Minus,
+  Plus,
+  CreditCard,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface CarteleraLandingProps {
-  onSelectEvent: (eventId: string) => void;
+  user?: UserProfile;
+  initialEventId?: string | null;
+  onClearInitialEvent?: () => void;
+  onSelectEvent?: (eventId: string) => void;
   onOpenAuth: (context?: 'login' | 'boletos' | 'tienda' | 'comida') => void;
   onSelectStore?: (type: 'tienda' | 'comida') => void;
   onSelectTab?: (tab: 'cartelera' | 'boletos' | 'tienda' | 'comida') => void;
+  onTicketPurchased?: () => void;
   showBottomNav?: boolean;
 }
 
 export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
+  user,
+  initialEventId,
+  onClearInitialEvent,
   onSelectEvent,
   onOpenAuth,
   onSelectStore,
   onSelectTab,
+  onTicketPurchased,
   showBottomNav = true,
 }) => {
   const { theme } = useTheme();
   // Sedes disponibles
   const [venues, setVenues] = useState<Venue[]>(DEFAULT_VENUES);
+
+  // Evento activo para cargar el mapa interactivo de asientos en esta misma pantalla
+  const [selectedMapEvent, setSelectedMapEvent] = useState<VenueEvent | null>(null);
+
+  // Estados para compra rápida sin mapa
+  const [quickBuyEvent, setQuickBuyEvent] = useState<VenueEvent | null>(null);
+  const [quickBuyTier, setQuickBuyTier] = useState<EventPriceTier | null>(null);
+  const [quickBuyQuantity, setQuickBuyQuantity] = useState<number>(1);
+  const [quickBuyPayment, setQuickBuyPayment] = useState<'Efectivo / Taquilla' | 'Tarjeta en Línea' | 'Venados Pay'>('Efectivo / Taquilla');
+  const [quickBuyLoading, setQuickBuyLoading] = useState<boolean>(false);
+  const [quickBuySuccessMsg, setQuickBuySuccessMsg] = useState<string | null>(null);
 
   // 1. Selector de Ciudad (restaurado como estaba originalmente)
   const [selectedCity, setSelectedCity] = useState<string>(() => {
@@ -264,12 +293,156 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
     return 150;
   };
 
+  // Si se proporciona initialEventId, abrir automáticamente el mapa para ese evento
+  useEffect(() => {
+    if (initialEventId && allEvents.length > 0) {
+      const match = allEvents.find((e) => e.id === initialEventId);
+      if (match) {
+        setSelectedMapEvent(match);
+        onClearInitialEvent?.();
+      }
+    }
+  }, [initialEventId, allEvents, onClearInitialEvent]);
+
+  // Manejar apertura de compra rápida sin mapa
+  const handleOpenQuickBuy = (ev: VenueEvent) => {
+    setQuickBuyEvent(ev);
+    const tiers = getOfficialPriceTiersForEvent(ev, ev.venueName);
+    if (tiers && tiers.length > 0) {
+      setQuickBuyTier(tiers[0]);
+    } else {
+      setQuickBuyTier({ section: 'General', price: 200 });
+    }
+    setQuickBuyQuantity(1);
+    setQuickBuyPayment('Efectivo / Taquilla');
+    setQuickBuySuccessMsg(null);
+  };
+
+  // Confirmar compra rápida
+  const handleConfirmQuickBuy = async () => {
+    if (!quickBuyEvent || !quickBuyTier) return;
+    if (!user || !user.uid) {
+      onOpenAuth('boletos');
+      return;
+    }
+
+    try {
+      setQuickBuyLoading(true);
+      const stadiumName = quickBuyEvent.venueName || venues.find((v) => v.id === quickBuyEvent.venueId)?.name || 'Estadio Deportivo';
+      const venueId = quickBuyEvent.venueId || DEFAULT_VENUE_ID;
+
+      // Crear los boletos solicitados con asientos asignados automáticamente
+      for (let i = 0; i < quickBuyQuantity; i++) {
+        const rowChar = String.fromCharCode(65 + Math.floor(Math.random() * 4));
+        const seatNum = Math.floor(Math.random() * 25) + 1;
+        await purchaseTicketWithSaleRecord(
+          {
+            userId: user.uid,
+            eventId: quickBuyEvent.id,
+            venueId,
+            matchTitle: quickBuyEvent.name,
+            opponent: quickBuyEvent.opponent || quickBuyEvent.name,
+            matchDate: quickBuyEvent.date,
+            matchTime: quickBuyEvent.time || '20:00 hrs',
+            stadium: stadiumName,
+            section: quickBuyTier.section,
+            row: `Fila ${rowChar}`,
+            seat: `Asiento ${seatNum}`,
+            price: quickBuyTier.price,
+            gate: quickBuyEvent.gate || 'Puertas 1, 2 y 4',
+          },
+          quickBuyPayment,
+          user.displayName || user.email || 'Aficionado'
+        );
+      }
+
+      setQuickBuySuccessMsg(`¡Compra rápida de ${quickBuyQuantity} boleto(s) realizada con éxito!`);
+      setTimeout(() => {
+        setQuickBuyEvent(null);
+        setQuickBuySuccessMsg(null);
+        if (onSelectTab) {
+          onSelectTab('boletos');
+        } else if (onTicketPurchased) {
+          onTicketPurchased();
+        }
+      }, 1100);
+    } catch (err) {
+      console.error('Error al realizar compra rápida:', err);
+      alert('Ocurrió un error al procesar la compra rápida. Intenta de nuevo.');
+    } finally {
+      setQuickBuyLoading(false);
+    }
+  };
+
   return (
     <div className={`min-h-screen px-3 sm:px-6 lg:px-8 py-4 sm:py-6 pb-28 transition-colors ${
       theme === 'light' ? 'bg-[#F4F6F9] text-slate-900' : 'bg-[#0A0E17] text-slate-100'
     }`}>
-      {/* 1. SELECTOR COMBINADO DE CIUDAD Y SEDE EN UNA SOLA FILA */}
-      <div className="max-w-6xl mx-auto mb-3">
+      {/* 0. VISTA DIRECTA DE MAPA INTERACTIVO DENTRO DE CARTELERA */}
+      {selectedMapEvent ? (
+        <div className="max-w-6xl mx-auto space-y-4">
+          <div className={`p-4 rounded-3xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xl ${
+            theme === 'light' ? 'bg-white border-slate-200' : 'bg-[#0F1626] border-slate-700/80'
+          }`}>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setSelectedMapEvent(null)}
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl font-sports font-bold text-xs uppercase tracking-wider border transition-all cursor-pointer ${
+                  theme === 'light'
+                    ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300'
+                    : 'bg-[#182032] hover:bg-[#202B42] text-slate-200 border-slate-700'
+                }`}
+              >
+                <ArrowLeft className="w-4 h-4 text-red-500" />
+                <span>Volver a Cartelera</span>
+              </button>
+              <div>
+                <h2 className={`text-base sm:text-lg font-black font-sports uppercase tracking-wide ${
+                  theme === 'light' ? 'text-slate-900' : 'text-white'
+                }`}>
+                  {selectedMapEvent.name}
+                </h2>
+                <p className={`text-xs ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
+                  {selectedMapEvent.date} • {selectedMapEvent.time || '20:00 hrs'} • {selectedMapEvent.venueName || 'Estadio'}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                const ev = selectedMapEvent;
+                setSelectedMapEvent(null);
+                handleOpenQuickBuy(ev);
+              }}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-sports font-black text-xs uppercase tracking-wider cursor-pointer shadow-md shadow-amber-950/30 transition-all active:scale-98"
+            >
+              <Zap className="w-4 h-4" />
+              <span>Comprar Rápido sin Mapa</span>
+            </button>
+          </div>
+
+          <SeatMapSelector
+            event={selectedMapEvent}
+            user={user || { uid: '', email: '', displayName: 'Aficionado', role: 'aficionado' }}
+            stadiumName={selectedMapEvent.venueName || venues.find((v) => v.id === selectedMapEvent.venueId)?.name || 'Estadio Deportivo'}
+            onRequireAuth={() => onOpenAuth('boletos')}
+            onPurchaseSuccess={(purchaseId, count) => {
+              setSelectedMapEvent(null);
+              if (onSelectTab) {
+                onSelectTab('boletos');
+              } else if (onTicketPurchased) {
+                onTicketPurchased();
+              }
+            }}
+            onCancel={() => setSelectedMapEvent(null)}
+          />
+        </div>
+      ) : (
+        <>
+          {/* 1. SELECTOR COMBINADO DE CIUDAD Y SEDE EN UNA SOLA FILA */}
+          <div className="max-w-6xl mx-auto mb-3">
         <div
           id="barra-seleccion-ciudad"
           className={`flex items-center justify-between gap-2 sm:gap-4 px-3 py-2 sm:px-4 sm:py-2.5 rounded-2xl border transition-colors ${
@@ -551,7 +724,7 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
 
                   {/* Contenedor de Imagen Promocional Completa (100% íntegra, sin recortes) */}
                   <div
-                    onClick={() => onSelectEvent(ev.id)}
+                    onClick={() => setSelectedMapEvent(ev)}
                     className="relative aspect-[16/10] sm:aspect-[16/10] w-full bg-[#060911] overflow-hidden cursor-pointer flex items-center justify-center group/poster"
                   >
                     {/* Fondo difuminado adaptativo con los colores del flyer */}
@@ -592,7 +765,7 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
                     <div>
                       {/* Título del Encuentro */}
                       <h3
-                        onClick={() => onSelectEvent(ev.id)}
+                        onClick={() => setSelectedMapEvent(ev)}
                         className={`text-xs sm:text-sm font-black line-clamp-2 leading-tight transition-colors cursor-pointer ${
                           theme === 'light'
                             ? 'text-slate-900 hover:text-red-600'
@@ -640,15 +813,32 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
                       </div>
                     </div>
 
-                    {/* Botón de Selección directa */}
-                    <button
-                      type="button"
-                      onClick={() => onSelectEvent(ev.id)}
-                      className="w-full py-2 sm:py-2.5 px-3 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white rounded-xl sm:rounded-2xl font-black text-xs flex items-center justify-center gap-1.5 shadow-md shadow-red-950/40 transition-all cursor-pointer active:scale-98 mt-1"
-                    >
-                      <Ticket className="w-3.5 h-3.5" />
-                      <span>Elegir Asientos</span>
-                    </button>
+                    {/* Botones de Selección: Mapa interactivo y Compra Rápida sin mapa */}
+                    <div className="grid grid-cols-2 gap-1.5 mt-2 pt-1 border-t border-slate-700/40">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedMapEvent(ev)}
+                        className="py-2 sm:py-2.5 px-2 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white rounded-xl sm:rounded-2xl font-black text-[11px] sm:text-xs flex items-center justify-center gap-1 shadow-md shadow-red-950/40 transition-all cursor-pointer active:scale-98"
+                        title="Seleccionar butacas específicas en el mapa interactivo del estadio"
+                      >
+                        <Ticket className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">Elegir en Mapa</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleOpenQuickBuy(ev)}
+                        className={`py-2 sm:py-2.5 px-2 rounded-xl sm:rounded-2xl font-black text-[11px] sm:text-xs flex items-center justify-center gap-1 border transition-all cursor-pointer active:scale-98 ${
+                          theme === 'light'
+                            ? 'bg-amber-500 hover:bg-amber-600 text-slate-950 border-amber-400 shadow-sm'
+                            : 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black border-amber-400/50 shadow-md shadow-amber-950/30'
+                        }`}
+                        title="Compra rápida sin abrir el mapa seleccionando zona y cantidad"
+                      >
+                        <Zap className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">Compra Rápida</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -661,22 +851,23 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
           {/* Promoción de Alimentos en Butaca */}
           <div
             onClick={() => (onSelectStore ? onSelectStore('comida') : onOpenAuth('comida'))}
+            data-theme-surface="dark"
             className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#101625] via-[#151D30] to-[#101625] border border-slate-800 p-5 flex items-center justify-between gap-4 cursor-pointer hover:border-amber-400/60 shadow-xl transition-all"
           >
             <div className="space-y-1.5 z-10">
-              <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 bg-amber-400/10 px-2.5 py-0.5 rounded-full border border-amber-400/20">
+              <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 bg-amber-400/20 px-2.5 py-0.5 rounded-full border border-amber-400/30">
                 🍿 Alimentos & Bebidas
               </span>
-              <h4 className="text-base font-black text-white">Comanda sin filas en Butaca</h4>
-              <p className="text-xs text-slate-300 line-clamp-2">
+              <h4 className="text-base font-black !text-white text-white">Comanda sin filas en Butaca</h4>
+              <p className="text-xs !text-[#E2E8F0] text-slate-200 line-clamp-2 leading-relaxed">
                 Pide hot dogs, nachos, esquites y bebidas frías con entrega directa a tu asiento.
               </p>
-              <div className="text-xs font-bold text-amber-400 flex items-center gap-1 pt-1 group-hover:translate-x-1 transition-transform">
+              <div className="text-xs font-bold text-amber-300 flex items-center gap-1 pt-1 group-hover:translate-x-1 transition-transform">
                 <span>Ver menú de concesiones</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </div>
             </div>
-            <div className="w-16 h-16 rounded-2xl bg-amber-500/15 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30">
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/20 text-amber-300 flex items-center justify-center shrink-0 border border-amber-500/40">
               <Utensils className="w-8 h-8" />
             </div>
           </div>
@@ -684,37 +875,48 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
           {/* Promoción de Tienda Oficial */}
           <div
             onClick={() => (onSelectStore ? onSelectStore('tienda') : onOpenAuth('tienda'))}
+            data-theme-surface="dark"
             className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#1A121E] via-[#141B2D] to-[#101625] border border-slate-800 p-5 flex items-center justify-between gap-4 cursor-pointer hover:border-red-500/80 shadow-xl transition-all"
           >
             <div className="space-y-1.5 z-10">
-              <span className="text-[10px] font-black uppercase tracking-wider text-red-300 bg-red-900/40 px-2.5 py-0.5 rounded-full border border-red-700/40">
+              <span className="text-[10px] font-black uppercase tracking-wider text-red-200 bg-red-800/50 px-2.5 py-0.5 rounded-full border border-red-500/40">
                 🛍️ Tienda Oficial
               </span>
-              <h4 className="text-base font-black text-white">Jerseys y Gorras Oficiales</h4>
-              <p className="text-xs text-slate-300 line-clamp-2">
+              <h4 className="text-base font-black !text-white text-white">Jerseys y Gorras Oficiales</h4>
+              <p className="text-xs !text-[#E2E8F0] text-slate-200 line-clamp-2 leading-relaxed">
                 Uniformes originales, souvenirs y gorras con envíos y recolección rápida.
               </p>
-              <div className="text-xs font-bold text-red-400 flex items-center gap-1 pt-1 group-hover:translate-x-1 transition-transform">
+              <div className="text-xs font-bold text-red-300 flex items-center gap-1 pt-1 group-hover:translate-x-1 transition-transform">
                 <span>Ir a la tienda oficial</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </div>
             </div>
-            <div className="w-16 h-16 rounded-2xl bg-red-600/20 text-red-400 flex items-center justify-center shrink-0 border border-red-500/30">
+            <div className="w-16 h-16 rounded-2xl bg-red-600/25 text-red-300 flex items-center justify-center shrink-0 border border-red-500/40">
               <ShoppingBag className="w-8 h-8" />
             </div>
           </div>
         </div>
       </main>
+        </>
+      )}
 
       {/* 4. MODAL FLOTANTE DE SINOPSIS DEL EVENTO */}
       {synopsisEvent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="relative w-full max-w-lg bg-[#101625] border border-slate-800 rounded-3xl overflow-hidden shadow-2xl space-y-4 p-5 sm:p-6 text-slate-100 max-h-[90vh] overflow-y-auto">
+          <div className={`relative w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl space-y-4 p-5 sm:p-6 max-h-[90vh] overflow-y-auto border transition-colors ${
+            theme === 'light'
+              ? 'bg-white border-slate-200 text-slate-900'
+              : 'bg-[#101625] border-slate-800 text-slate-100'
+          }`}>
             {/* Botón cerrar */}
             <button
               type="button"
               onClick={() => setSynopsisEvent(null)}
-              className="absolute top-4 right-4 p-2 rounded-full bg-[#182032] hover:bg-[#202B42] text-slate-400 hover:text-white transition-colors cursor-pointer"
+              className={`absolute top-4 right-4 p-2 rounded-full transition-colors cursor-pointer ${
+                theme === 'light'
+                  ? 'bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900'
+                  : 'bg-[#182032] hover:bg-[#202B42] text-slate-400 hover:text-white'
+              }`}
               title="Cerrar ficha técnica"
             >
               <X className="w-5 h-5" />
@@ -759,7 +961,11 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
             </div>
 
             <div className="space-y-1.5">
-              <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-md border border-amber-400/20">
+              <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border ${
+                theme === 'light'
+                  ? 'text-red-700 bg-red-50 border-red-200'
+                  : 'text-amber-400 bg-amber-400/10 border-amber-400/20'
+              }`}>
                 {synopsisEvent.type === 'baseball'
                   ? 'Béisbol LMP'
                   : synopsisEvent.type === 'football'
@@ -768,28 +974,42 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
                   ? 'Concierto'
                   : 'Espectáculo'}
               </span>
-              <h3 className="text-base sm:text-lg font-black text-white leading-tight">
+              <h3 className={`text-base sm:text-lg font-black leading-tight ${
+                theme === 'light' ? 'text-slate-900' : 'text-white'
+              }`}>
                 {synopsisEvent.name}
               </h3>
-              <p className="text-xs text-slate-400 font-medium flex items-center gap-1">
+              <p className={`text-xs font-medium flex items-center gap-1 ${
+                theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+              }`}>
                 <MapPin className="w-3.5 h-3.5 text-red-500" />
                 {synopsisEvent.venueName || 'Recinto Oficial'}
               </p>
             </div>
 
             {/* Ficha técnica y datos */}
-            <div className="grid grid-cols-2 gap-2.5 bg-[#151D30] p-3 rounded-2xl border border-slate-800 text-xs">
+            <div className={`grid grid-cols-2 gap-2.5 p-3 rounded-2xl border text-xs ${
+              theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-[#151D30] border-slate-800'
+            }`}>
               <div className="space-y-0.5">
-                <span className="text-[10px] text-slate-400 font-bold block uppercase">Fecha</span>
-                <span className="font-extrabold text-white flex items-center gap-1">
+                <span className={`text-[10px] font-bold block uppercase ${
+                  theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                }`}>Fecha</span>
+                <span className={`font-extrabold flex items-center gap-1 ${
+                  theme === 'light' ? 'text-slate-900' : 'text-white'
+                }`}>
                   <Calendar className="w-3.5 h-3.5 text-red-500" />
                   {synopsisEvent.date}
                 </span>
               </div>
               <div className="space-y-0.5">
-                <span className="text-[10px] text-slate-400 font-bold block uppercase">Horario</span>
-                <span className="font-extrabold text-white flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 text-amber-400" />
+                <span className={`text-[10px] font-bold block uppercase ${
+                  theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                }`}>Horario</span>
+                <span className={`font-extrabold flex items-center gap-1 ${
+                  theme === 'light' ? 'text-slate-900' : 'text-white'
+                }`}>
+                  <Clock className={`w-3.5 h-3.5 ${theme === 'light' ? 'text-amber-600' : 'text-amber-400'}`} />
                   {synopsisEvent.time || '20:00 hrs'}
                 </span>
               </div>
@@ -797,10 +1017,14 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
 
             {/* Sinopsis */}
             <div className="space-y-1.5">
-              <h4 className="text-xs font-black text-white uppercase tracking-wider text-slate-400">
+              <h4 className={`text-xs font-black uppercase tracking-wider ${
+                theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+              }`}>
                 Sinopsis del Encuentro
               </h4>
-              <p className="text-xs text-slate-300 leading-relaxed">
+              <p className={`text-xs leading-relaxed ${
+                theme === 'light' ? 'text-slate-700' : 'text-slate-300'
+              }`}>
                 {getEventSynopsis(synopsisEvent)}
               </p>
             </div>
@@ -808,36 +1032,57 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
             {/* Precios por sección */}
             {synopsisEvent.priceTiers && synopsisEvent.priceTiers.length > 0 && (
               <div className="space-y-1.5 pt-1">
-                <h4 className="text-xs font-black text-white uppercase tracking-wider text-slate-400">
+                <h4 className={`text-xs font-black uppercase tracking-wider ${
+                  theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                }`}>
                   Zonas y Precios Disponibles
                 </h4>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   {synopsisEvent.priceTiers.map((tier, idx) => (
                     <div
                       key={idx}
-                      className="p-2 rounded-xl bg-[#151D30] border border-slate-800 flex justify-between items-center"
+                      className={`p-2 rounded-xl border flex justify-between items-center ${
+                        theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-[#151D30] border-slate-800'
+                      }`}
                     >
-                      <span className="text-slate-300 font-medium truncate pr-1">{tier.section}</span>
-                      <span className="font-extrabold text-amber-400 shrink-0">${tier.price}</span>
+                      <span className={`font-medium truncate pr-1 ${
+                        theme === 'light' ? 'text-slate-700' : 'text-slate-300'
+                      }`}>{tier.section}</span>
+                      <span className={`font-extrabold shrink-0 ${
+                        theme === 'light' ? 'text-red-600 font-black' : 'text-amber-400'
+                      }`}>${tier.price}</span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Botón de acción: Seleccionar este evento */}
-            <div className="pt-3">
+            {/* Botones de acción: Elegir en Mapa y Compra Rápida */}
+            <div className="grid grid-cols-2 gap-2 pt-3">
               <button
                 type="button"
                 onClick={() => {
-                  const id = synopsisEvent.id;
+                  const ev = synopsisEvent;
                   setSynopsisEvent(null);
-                  onSelectEvent(id);
+                  setSelectedMapEvent(ev);
                 }}
-                className="w-full py-3 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-red-950/50 cursor-pointer transition-all active:scale-98"
+                className="py-3 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-lg shadow-red-950/50 cursor-pointer transition-all active:scale-98"
               >
                 <Ticket className="w-4 h-4" />
-                <span>Comprar Boletos / Elegir Asientos</span>
+                <span>Elegir en Mapa</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const ev = synopsisEvent;
+                  setSynopsisEvent(null);
+                  handleOpenQuickBuy(ev);
+                }}
+                className="py-3 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-lg shadow-amber-950/30 cursor-pointer transition-all active:scale-98"
+              >
+                <Zap className="w-4 h-4" />
+                <span>Compra Rápida</span>
               </button>
             </div>
           </div>
@@ -878,20 +1123,196 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
         </div>
       )}
 
+      {/* 5.5 MODAL DE COMPRA RÁPIDA SIN MAPA */}
+      {quickBuyEvent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className={`relative w-full max-w-md rounded-3xl overflow-hidden shadow-2xl space-y-4 p-5 sm:p-6 border transition-colors ${
+            theme === 'light'
+              ? 'bg-white border-slate-200 text-slate-900'
+              : 'bg-[#101625] border-slate-800 text-slate-100'
+          }`}>
+            {/* Cabecera */}
+            <div className="flex items-start justify-between gap-3 border-b pb-3 border-slate-700/50">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1 w-fit">
+                  <Zap className="w-3 h-3 text-amber-400" />
+                  Compra Express Directa
+                </span>
+                <h3 className="text-base font-black mt-1 line-clamp-1">{quickBuyEvent.name}</h3>
+                <p className="text-xs text-slate-400">
+                  {quickBuyEvent.date} • {quickBuyEvent.time || '20:00 hrs'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setQuickBuyEvent(null)}
+                disabled={quickBuyLoading}
+                className="p-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Mensaje de éxito */}
+            {quickBuySuccessMsg ? (
+              <div className="py-8 text-center space-y-3">
+                <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto border border-emerald-500/40">
+                  <Check className="w-6 h-6" />
+                </div>
+                <p className="text-sm font-black text-emerald-400">{quickBuySuccessMsg}</p>
+                <p className="text-xs text-slate-400">Redirigiendo a tu cartera de boletos...</p>
+              </div>
+            ) : (
+              <>
+                {/* Selección de Zona / Sección */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-black uppercase tracking-wider text-slate-400 block">
+                    Selecciona Zona / Categoría:
+                  </label>
+                  <div className="grid grid-cols-1 gap-1.5 max-h-40 overflow-y-auto pr-1">
+                    {getOfficialPriceTiersForEvent(quickBuyEvent, quickBuyEvent.venueName).map((tier, idx) => {
+                      const isSelected = quickBuyTier?.section === tier.section;
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setQuickBuyTier(tier)}
+                          className={`p-2.5 rounded-xl border flex items-center justify-between transition-all cursor-pointer text-left ${
+                            isSelected
+                              ? 'bg-amber-500/20 border-amber-400 text-amber-300 font-bold shadow-xs'
+                              : theme === 'light'
+                              ? 'bg-slate-50 border-slate-200 text-slate-800 hover:bg-slate-100'
+                              : 'bg-[#151D30] border-slate-800 text-slate-200 hover:bg-[#1C2740]'
+                          }`}
+                        >
+                          <span className="text-xs truncate font-medium">{tier.section}</span>
+                          <span className="text-xs font-black shrink-0 text-amber-400">
+                            ${tier.price} MXN
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Cantidad de Boletos */}
+                <div className="flex items-center justify-between gap-4 p-3 rounded-2xl bg-[#0B101B] border border-slate-800">
+                  <div>
+                    <span className="text-xs font-bold block text-slate-200">Cantidad de Boletos</span>
+                    <span className="text-[11px] text-slate-400">Asientos juntos automáticos</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setQuickBuyQuantity((q) => Math.max(1, q - 1))}
+                      disabled={quickBuyQuantity <= 1 || quickBuyLoading}
+                      className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white font-bold flex items-center justify-center cursor-pointer transition-colors"
+                    >
+                      -
+                    </button>
+                    <span className="w-6 text-center font-black text-sm text-white">
+                      {quickBuyQuantity}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setQuickBuyQuantity((q) => Math.min(8, q + 1))}
+                      disabled={quickBuyQuantity >= 8 || quickBuyLoading}
+                      className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white font-bold flex items-center justify-center cursor-pointer transition-colors"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                {/* Método de Pago */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-black uppercase tracking-wider text-slate-400 block">
+                    Método de Pago:
+                  </label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {['Efectivo / Taquilla', 'Tarjeta Débito/Crédito', 'Transferencia SPEI'].map((met) => (
+                      <button
+                        key={met}
+                        type="button"
+                        onClick={() => setQuickBuyPayment(met)}
+                        className={`p-2 rounded-xl text-[10px] font-bold border transition-all cursor-pointer text-center leading-tight ${
+                          quickBuyPayment === met
+                            ? 'bg-red-600 text-white border-red-500'
+                            : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:bg-slate-800'
+                        }`}
+                      >
+                        {met}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Total a pagar */}
+                <div className="flex items-center justify-between pt-2 border-t border-slate-700/50">
+                  <span className="text-xs font-bold text-slate-300">Total a pagar:</span>
+                  <span className="text-lg font-black text-amber-400">
+                    ${(quickBuyTier?.price || 0) * quickBuyQuantity} MXN
+                  </span>
+                </div>
+
+                {/* Botón de Confirmación */}
+                <button
+                  type="button"
+                  onClick={handleConfirmQuickBuy}
+                  disabled={quickBuyLoading}
+                  className="w-full py-3 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-black text-sm rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-amber-950/40 cursor-pointer transition-all active:scale-98 disabled:opacity-50"
+                >
+                  {quickBuyLoading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                      <span>Generando {quickBuyQuantity} boleto(s)...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="w-4 h-4" />
+                      <span>Confirmar y Obtener Boletos</span>
+                    </>
+                  )}
+                </button>
+
+                {/* Opción alternativa: Ir al mapa interactivo */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const ev = quickBuyEvent;
+                    setQuickBuyEvent(null);
+                    setSelectedMapEvent(ev);
+                  }}
+                  className="w-full text-center text-xs font-bold text-slate-400 hover:text-white transition-colors cursor-pointer pt-1"
+                >
+                  ¿Prefieres elegir asientos específicos? <span className="text-red-400 underline">Abrir mapa interactivo</span>
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* 6. BARRA DE NAVEGACIÓN INFERIOR FIJA */}
       {showBottomNav && (
         <nav
           id="cartelera-bottom-nav"
           aria-label="Navegación de la Cartelera"
-          className="fixed bottom-0 left-0 right-0 z-40 bg-[#0F172A]/98 backdrop-blur-xl border-t-2 border-red-600/80 shadow-[0_-10px_35px_rgba(0,0,0,0.85)]"
+          className={`fixed bottom-0 left-0 right-0 z-40 backdrop-blur-xl border-t-2 transition-colors ${
+            theme === 'light'
+              ? 'bg-white/95 border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]'
+              : 'bg-[#0F172A]/98 border-red-600/80 shadow-[0_-10px_35px_rgba(0,0,0,0.85)]'
+          }`}
         >
           <div className="max-w-md mx-auto grid grid-cols-4 px-2 py-1.5 sm:py-2 text-center">
             {/* 1. Cartelera (Activo) */}
             <button
               type="button"
-              className="flex flex-col items-center justify-center py-1 px-1 rounded-xl text-red-400 font-bold font-sports tracking-wider cursor-pointer"
+              className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl font-sports tracking-wider cursor-pointer ${
+                theme === 'light' ? 'text-red-600 font-black' : 'text-red-400 font-bold'
+              }`}
             >
-              <div className="p-1.5 rounded-xl bg-red-600 text-white shadow-md shadow-red-950/50 ring-1 ring-red-500/50">
+              <div className="p-1.5 rounded-xl bg-red-600 text-white shadow-md shadow-red-950/20 ring-1 ring-red-500/50">
                 <Film className="w-5 h-5" />
               </div>
               <span className="text-[10px] leading-tight mt-1 uppercase">
@@ -907,9 +1328,15 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
                 else if (onSelectTab) onSelectTab('comida');
                 else onOpenAuth('comida');
               }}
-              className="flex flex-col items-center justify-center py-1 px-1 rounded-xl text-slate-400 hover:text-white font-sports tracking-wider transition-colors cursor-pointer"
+              className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl font-sports tracking-wider transition-colors cursor-pointer ${
+                theme === 'light'
+                  ? 'text-slate-500 hover:text-slate-900 font-semibold'
+                  : 'text-slate-400 hover:text-white font-medium'
+              }`}
             >
-              <div className="p-1.5 rounded-xl text-slate-400 hover:text-slate-200">
+              <div className={`p-1.5 rounded-xl ${
+                theme === 'light' ? 'text-slate-500 hover:text-slate-800' : 'text-slate-400 hover:text-slate-200'
+              }`}>
                 <Utensils className="w-5 h-5" />
               </div>
               <span className="text-[10px] leading-tight mt-1 uppercase">
@@ -925,9 +1352,15 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
                 else if (onSelectTab) onSelectTab('tienda');
                 else onOpenAuth('tienda');
               }}
-              className="flex flex-col items-center justify-center py-1 px-1 rounded-xl text-slate-400 hover:text-white font-sports tracking-wider transition-colors cursor-pointer"
+              className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl font-sports tracking-wider transition-colors cursor-pointer ${
+                theme === 'light'
+                  ? 'text-slate-500 hover:text-slate-900 font-semibold'
+                  : 'text-slate-400 hover:text-white font-medium'
+              }`}
             >
-              <div className="p-1.5 rounded-xl text-slate-400 hover:text-slate-200">
+              <div className={`p-1.5 rounded-xl ${
+                theme === 'light' ? 'text-slate-500 hover:text-slate-800' : 'text-slate-400 hover:text-slate-200'
+              }`}>
                 <ShoppingBag className="w-5 h-5" />
               </div>
               <span className="text-[10px] leading-tight mt-1 uppercase">
@@ -942,9 +1375,15 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
                 if (onSelectTab) onSelectTab('boletos');
                 else onOpenAuth('boletos');
               }}
-              className="flex flex-col items-center justify-center py-1 px-1 rounded-xl text-slate-400 hover:text-white font-sports tracking-wider transition-colors cursor-pointer"
+              className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl font-sports tracking-wider transition-colors cursor-pointer ${
+                theme === 'light'
+                  ? 'text-slate-500 hover:text-slate-900 font-semibold'
+                  : 'text-slate-400 hover:text-white font-medium'
+              }`}
             >
-              <div className="p-1.5 rounded-xl text-slate-400 hover:text-slate-200">
+              <div className={`p-1.5 rounded-xl ${
+                theme === 'light' ? 'text-slate-500 hover:text-slate-800' : 'text-slate-400 hover:text-slate-200'
+              }`}>
                 <Ticket className="w-5 h-5" />
               </div>
               <span className="text-[10px] leading-tight mt-1 uppercase">

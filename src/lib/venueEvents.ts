@@ -16,12 +16,40 @@ import { VenueEvent, EventPriceTier, EventType, HeroSlide, Venue } from '../type
 import { DEFAULT_VENUE_ID } from './constants';
 import { DEFAULT_VENUES } from './defaultVenue';
 import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
-import { generateEventSeats } from './seatMap';
+import { generateEventSeats, getOfficialPriceTiersForEvent, getOfficialPriceTiersForVenue, isLegacySection } from './seatMap';
 import { normalizeGoogleDriveImageUrl, DEFAULT_STORE_PROMO_BANNER, getEventPosterPlaceholder } from './imageUtils';
 
 export { getEventPosterPlaceholder };
 
 const COLLECTION_NAME = 'venueEvents';
+
+export const MARISCAL_PRICE_TIERS: EventPriceTier[] = [
+  { section: 'Deluxe Supreme', price: 950 },
+  { section: 'Platino', price: 750 },
+  { section: 'Diamante', price: 600 },
+  { section: 'Oro', price: 480 },
+  { section: 'Sky Plus', price: 400 },
+  { section: 'Plus', price: 350 },
+  { section: 'Fan', price: 220 },
+  { section: 'Fan Plus', price: 280 },
+  { section: 'Sky', price: 160 },
+];
+
+export const ENCANTO_PRICE_TIERS: EventPriceTier[] = [
+  { section: 'Poniente Central', price: 650 },
+  { section: 'Oriente Central', price: 600 },
+  { section: 'Poniente Lateral', price: 480 },
+  { section: 'Oriente Lateral', price: 450 },
+  { section: 'Poniente Superior', price: 360 },
+  { section: 'Oriente Superior', price: 320 },
+  { section: 'General Sur', price: 220 },
+  { section: 'General Norte', price: 200 },
+  { section: 'Cabecera Superior', price: 250 },
+  { section: 'Tiro de Esquina', price: 290 },
+  { section: 'Palcos', price: 1200 },
+  { section: 'Sky Boxes', price: 1400 },
+  { section: 'Zona Lounge', price: 1100 },
+];
 
 export function isDeletedMazatlanFCEvent(e: { id?: string; name?: string }): boolean {
   if (e.id === 'event-futbol-mazatlan-2026') return true;
@@ -31,16 +59,26 @@ export function isDeletedMazatlanFCEvent(e: { id?: string; name?: string }): boo
 
 /**
  * Parsea y normaliza un documento de evento asegurando que su posterUrl
- * esté normalizado (Google Drive a directo CDN) y tenga respaldo garantizado.
+ * esté normalizado y que sus priceTiers correspondan exactamente
+ * a las secciones del mapa del estadio, purgando las anteriores (preferente lateral, bleachers, platea baja, etc.)
  */
 export function parseVenueEventDoc(id: string, data: any): VenueEvent {
   const rawPoster = typeof data.posterUrl === 'string' ? data.posterUrl.trim() : '';
   const resolvedPoster = normalizeGoogleDriveImageUrl(rawPoster) || getEventPosterPlaceholder(data.type || 'baseball');
-  return {
+
+  const baseEvent = {
     id,
     ...data,
     posterUrl: resolvedPoster,
   } as VenueEvent;
+
+  // Resolver tiers oficiales del mapa eliminando cualquier sección anterior
+  const officialPriceTiers = getOfficialPriceTiersForEvent(baseEvent, data.venueName);
+
+  return {
+    ...baseEvent,
+    priceTiers: officialPriceTiers,
+  };
 }
 
 /**
@@ -91,12 +129,7 @@ export const DEFAULT_FALLBACK_EVENTS: VenueEvent[] = [
     ticketsAvailable: true,
     posterUrl: getEventPosterPlaceholder('baseball'),
     ...computeDefaultOrderingWindow('2026-10-15', '20:00 hrs'),
-    priceTiers: [
-      { section: 'Platea Baja Central', price: 450 },
-      { section: 'Preferente Lateral', price: 320 },
-      { section: 'Palco VIP Premier', price: 850 },
-      { section: 'Bleachers / Grada General', price: 150 },
-    ],
+    priceTiers: MARISCAL_PRICE_TIERS,
     createdAt: '2026-01-01T00:00:00.000Z',
   },
   {
@@ -112,12 +145,7 @@ export const DEFAULT_FALLBACK_EVENTS: VenueEvent[] = [
     ticketsAvailable: true,
     posterUrl: getEventPosterPlaceholder('baseball'),
     ...computeDefaultOrderingWindow('2026-10-22', '19:30 hrs'),
-    priceTiers: [
-      { section: 'Platea Baja Central', price: 450 },
-      { section: 'Preferente Lateral', price: 320 },
-      { section: 'Palco VIP Premier', price: 850 },
-      { section: 'Bleachers / Grada General', price: 150 },
-    ],
+    priceTiers: MARISCAL_PRICE_TIERS,
     createdAt: '2026-01-02T00:00:00.000Z',
   },
   {
@@ -133,12 +161,7 @@ export const DEFAULT_FALLBACK_EVENTS: VenueEvent[] = [
     ticketsAvailable: true,
     posterUrl: getEventPosterPlaceholder('baseball'),
     ...computeDefaultOrderingWindow('2026-10-29', '20:00 hrs'),
-    priceTiers: [
-      { section: 'Platea Baja Central', price: 450 },
-      { section: 'Preferente Lateral', price: 320 },
-      { section: 'Palco VIP Premier', price: 850 },
-      { section: 'Bleachers / Grada General', price: 150 },
-    ],
+    priceTiers: MARISCAL_PRICE_TIERS,
     createdAt: '2026-01-03T00:00:00.000Z',
   },
   {
@@ -154,12 +177,7 @@ export const DEFAULT_FALLBACK_EVENTS: VenueEvent[] = [
     ticketsAvailable: true,
     posterUrl: getEventPosterPlaceholder('basketball'),
     ...computeDefaultOrderingWindow('2026-11-12', '20:15 hrs'),
-    priceTiers: [
-      { section: 'Platea Baja Central', price: 350 },
-      { section: 'Preferente Lateral', price: 250 },
-      { section: 'Palco VIP Premier', price: 700 },
-      { section: 'Bleachers / Grada General', price: 120 },
-    ],
+    priceTiers: MARISCAL_PRICE_TIERS,
     createdAt: '2026-01-08T00:00:00.000Z',
   },
   {
@@ -174,12 +192,7 @@ export const DEFAULT_FALLBACK_EVENTS: VenueEvent[] = [
     ticketsAvailable: true,
     posterUrl: getEventPosterPlaceholder('concert'),
     ...computeDefaultOrderingWindow('2026-11-20', '21:30 hrs'),
-    priceTiers: [
-      { section: 'Platea Baja Central', price: 1500 },
-      { section: 'Preferente Lateral', price: 950 },
-      { section: 'Palco VIP Premier', price: 2500 },
-      { section: 'Bleachers / Grada General', price: 500 },
-    ],
+    priceTiers: MARISCAL_PRICE_TIERS,
     createdAt: '2026-01-09T00:00:00.000Z',
   },
   {
@@ -194,79 +207,42 @@ export const DEFAULT_FALLBACK_EVENTS: VenueEvent[] = [
     ticketsAvailable: true,
     posterUrl: getEventPosterPlaceholder('other'),
     ...computeDefaultOrderingWindow('2026-11-28', '18:30 hrs'),
-    priceTiers: [
-      { section: 'Platea Baja Central', price: 400 },
-      { section: 'Preferente Lateral', price: 280 },
-      { section: 'Palco VIP Premier', price: 800 },
-      { section: 'Bleachers / Grada General', price: 180 },
-    ],
+    priceTiers: MARISCAL_PRICE_TIERS,
     createdAt: '2026-01-10T00:00:00.000Z',
   },
   {
-    id: 'event-tomateros-venados-2026',
-    venueId: 'venue-tomateros',
-    type: 'baseball',
-    name: 'Tomateros de Culiacán vs Venados de Mazatlán',
-    opponent: 'Venados de Mazatlán',
-    date: '2026-10-18',
-    time: '19:05 hrs',
-    gate: 'Puertas Principal, Norte y Sur',
+    id: 'event-dorados-encanto-2026',
+    venueId: 'venue-encanto',
+    type: 'soccer',
+    name: 'Dorados de Sinaloa vs Atlante',
+    opponent: 'Atlante F.C.',
+    date: '2026-10-24',
+    time: '20:00 hrs',
+    gate: 'Puertas 1, 2, 3 y 4',
     active: true,
     ticketsAvailable: true,
-    venueName: 'Estadio Tomateros',
-    posterUrl: getEventPosterPlaceholder('baseball'),
-    ...computeDefaultOrderingWindow('2026-10-18', '19:05 hrs'),
-    priceTiers: [
-      { section: 'Platea Central', price: 480 },
-      { section: 'Preferente Lateral', price: 350 },
-      { section: 'Palco VIP Premier', price: 920 },
-      { section: 'Gradas Generales', price: 160 },
-    ],
-    createdAt: '2026-01-04T00:00:00.000Z',
+    venueName: 'Estadio El Encanto',
+    posterUrl: getEventPosterPlaceholder('soccer'),
+    ...computeDefaultOrderingWindow('2026-10-24', '20:00 hrs'),
+    priceTiers: ENCANTO_PRICE_TIERS,
+    createdAt: '2026-01-12T00:00:00.000Z',
   },
   {
-    id: 'event-tomateros-aguilas-2026',
-    venueId: 'venue-tomateros',
-    type: 'baseball',
-    name: 'Tomateros de Culiacán vs Águilas de Mexicali',
-    opponent: 'Águilas de Mexicali',
-    date: '2026-10-25',
-    time: '18:00 hrs',
-    gate: 'Puertas Principal, Norte y Sur',
+    id: 'event-dorados-morelia-2026',
+    venueId: 'venue-encanto',
+    type: 'soccer',
+    name: 'Dorados de Sinaloa vs Atlético Morelia',
+    opponent: 'Atlético Morelia',
+    date: '2026-11-06',
+    time: '21:00 hrs',
+    gate: 'Puertas 1, 2, 3 y 4',
     active: true,
     ticketsAvailable: true,
-    venueName: 'Estadio Tomateros',
-    posterUrl: getEventPosterPlaceholder('baseball'),
-    ...computeDefaultOrderingWindow('2026-10-25', '18:00 hrs'),
-    priceTiers: [
-      { section: 'Platea Central', price: 480 },
-      { section: 'Preferente Lateral', price: 350 },
-      { section: 'Palco VIP Premier', price: 920 },
-      { section: 'Gradas Generales', price: 160 },
-    ],
-    createdAt: '2026-01-05T00:00:00.000Z',
-  },
-  {
-    id: 'event-toros-sultanes-2026',
-    venueId: 'venue-chevron',
-    type: 'baseball',
-    name: 'Toros de Tijuana vs Sultanes de Monterrey',
-    opponent: 'Sultanes de Monterrey',
-    date: '2026-10-20',
-    time: '19:35 hrs',
-    gate: 'Acceso Central y Preferente',
-    active: true,
-    ticketsAvailable: true,
-    venueName: 'Estadio Chevron',
-    posterUrl: getEventPosterPlaceholder('baseball'),
-    ...computeDefaultOrderingWindow('2026-10-20', '19:35 hrs'),
-    priceTiers: [
-      { section: 'Central VIP Toros', price: 550 },
-      { section: 'Lateral Preferente', price: 380 },
-      { section: 'Palco Corporativo', price: 1100 },
-      { section: 'General', price: 180 },
-    ],
-    createdAt: '2026-01-06T00:00:00.000Z',
+    venueName: 'Estadio El Encanto',
+    posterUrl: getEventPosterPlaceholder('soccer'),
+    ...computeDefaultOrderingWindow('2026-11-06', '21:00 hrs'),
+    priceTiers: ENCANTO_PRICE_TIERS,
+    createdAt: '2026-01-13T00:00:00.000Z',
   },
 ];
 
@@ -332,13 +308,8 @@ export async function createVenueEvent(
       orderingOpensAt: eventData.orderingOpensAt || defaultWindow.orderingOpensAt,
       orderingClosesAt: eventData.orderingClosesAt || defaultWindow.orderingClosesAt,
       priceTiers: eventData.priceTiers && eventData.priceTiers.length > 0
-        ? eventData.priceTiers
-        : [
-            { section: 'Platea Baja Central', price: 450 },
-            { section: 'Preferente Lateral', price: 320 },
-            { section: 'Palco VIP Premier', price: 850 },
-            { section: 'Bleachers / Grada General', price: 150 },
-          ],
+        ? getOfficialPriceTiersForEvent({ ...eventData, venueId: adminVenueId, id: docRef.id, createdAt: now } as VenueEvent)
+        : getOfficialPriceTiersForVenue(adminVenueId, undefined, eventData.type),
       createdAt: now,
     };
 
@@ -393,6 +364,12 @@ export async function updateVenueEvent(
     }
     if (safeUpdates.totalCapacity !== undefined && safeUpdates.totalCapacity !== null) {
       safeUpdates.totalCapacity = Number(safeUpdates.totalCapacity);
+    }
+    if (safeUpdates.priceTiers !== undefined && Array.isArray(safeUpdates.priceTiers)) {
+      safeUpdates.priceTiers = getOfficialPriceTiersForEvent(
+        { ...existingData, ...safeUpdates, venueId: adminVenueId },
+        existingData.venueName
+      );
     }
 
     await updateDoc(docRef, sanitizeFirestoreData(safeUpdates));
@@ -495,7 +472,20 @@ export function subscribeVenueEvents(
       }
 
       const events: VenueEvent[] = snapshot.docs
-        .map((docSnap) => parseVenueEventDoc(docSnap.id, docSnap.data()))
+        .map((docSnap) => {
+          const rawData = docSnap.data();
+          const parsed = parseVenueEventDoc(docSnap.id, rawData);
+          // Si el documento en base de datos aún tiene nombres viejos (preferente lateral, bleachers, etc.), sanear en background
+          const hasLegacy =
+            Array.isArray(rawData.priceTiers) &&
+            rawData.priceTiers.some((t: any) => isLegacySection(t?.section));
+          if (hasLegacy) {
+            updateDoc(doc(db, COLLECTION_NAME, docSnap.id), {
+              priceTiers: parsed.priceTiers,
+            }).catch(() => {});
+          }
+          return parsed;
+        })
         .filter((e) => !isDeletedMazatlanFCEvent(e))
         .sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : 0));
 

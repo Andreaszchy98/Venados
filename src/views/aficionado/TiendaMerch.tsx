@@ -4,6 +4,7 @@ import { getInventoryProducts, adjustProductStock } from '../../lib/inventory';
 import { createMerchOrder } from '../../lib/logistics';
 import { normalizeGoogleDriveImageUrl, getDefaultProductPlaceholder } from '../../lib/imageUtils';
 import { getStadiumStoreProfile } from '../../lib/stadiumStoreProfiles';
+import { useTheme } from '../../context/ThemeContext';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { ErrorMessage } from '../../components/shared/ErrorMessage';
 import {
@@ -30,6 +31,7 @@ interface TiendaMerchProps {
 }
 
 export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted, onRequireAuth }) => {
+  const { theme } = useTheme();
   const [products, setProducts] = useState<InventoryProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
@@ -226,18 +228,31 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
   return (
     <div className="space-y-6">
       {/* Banner de la Tienda Oficial */}
-      <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-r ${storeProfile.headerGradient} text-white p-6 sm:p-8 border shadow-lg`}>
+      <div
+        data-theme-surface="dark"
+        className={`relative overflow-hidden rounded-2xl bg-gradient-to-r ${storeProfile.headerGradient} text-white p-6 sm:p-8 border shadow-lg`}
+      >
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-2">
-            <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border ${storeProfile.accentBadgeClass}`}>
+            <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border backdrop-blur-xs ${storeProfile.accentBadgeClass}`}>
               <ShoppingBag className="w-3.5 h-3.5" /> {storeProfile.badgeLabel}
             </div>
-            <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
+            <h2 className="text-2xl sm:text-3xl font-black tracking-tight !text-white text-white">
               {storeProfile.headline}
             </h2>
-            <p className="text-xs sm:text-sm text-slate-300 max-w-xl">
+            <p className="text-xs sm:text-sm !text-[#E2E8F0] text-slate-200 max-w-xl leading-relaxed">
               {storeProfile.tagline}
             </p>
+            <div className="pt-1 flex flex-wrap items-center gap-4 text-xs !text-[#E2E8F0] text-slate-200 font-sports">
+              <span className="flex items-center gap-1.5">
+                <Building className="w-4 h-4 text-amber-300" />
+                <span>Retiro en: <strong className="!text-white text-white font-bold">{storeProfile.pickupLocation}</strong></span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Truck className="w-4 h-4 text-emerald-300" />
+                <span>Envíos a todo México por paquetería</span>
+              </span>
+            </div>
           </div>
 
           <button
@@ -279,6 +294,8 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
             className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all shrink-0 cursor-pointer ${
               selectedCategory === cat
                 ? 'bg-red-600 text-white shadow-md'
+                : theme === 'light'
+                ? 'bg-white text-slate-800 hover:text-slate-950 hover:bg-slate-100 border border-slate-300 shadow-xs'
                 : 'bg-[#0F1626] text-slate-300 hover:text-white border border-slate-700/80'
             }`}
           >
@@ -291,17 +308,25 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
       {loading ? (
         <LoadingSpinner message={`Cargando catálogo oficial de ${storeProfile.storeName}...`} />
       ) : filteredProducts.length === 0 ? (
-        <div className="bg-[#0F1626] border border-slate-700/80 rounded-2xl p-12 text-center text-slate-400 space-y-2">
+        <div className={`border rounded-2xl p-12 text-center space-y-2 ${
+          theme === 'light' ? 'bg-white border-slate-200 text-slate-600' : 'bg-[#0F1626] border-slate-700/80 text-slate-400'
+        }`}>
           <Package className="w-10 h-10 text-slate-500 mx-auto" />
-          <p className="text-sm font-bold text-white font-sports uppercase tracking-wide">No hay productos en esta categoría</p>
-          <p className="text-xs text-slate-400">Prueba seleccionando otra categoría o regresa más tarde.</p>
+          <p className={`text-sm font-bold font-sports uppercase tracking-wide ${
+            theme === 'light' ? 'text-slate-900' : 'text-white'
+          }`}>No hay productos en esta categoría</p>
+          <p className="text-xs text-slate-500">Prueba seleccionando otra categoría o regresa más tarde.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredProducts.map((prod) => (
             <div
               key={prod.id}
-              className="bg-[#0F1626] rounded-2xl border border-slate-700/80 shadow-xl hover:border-red-600/50 hover:shadow-red-950/20 transition-all overflow-hidden flex flex-col justify-between group"
+              className={`rounded-2xl border transition-all overflow-hidden flex flex-col justify-between group ${
+                theme === 'light'
+                  ? 'bg-white border-slate-200 shadow-sm hover:border-red-600/50 hover:shadow-md'
+                  : 'bg-[#0F1626] border-slate-700/80 shadow-xl hover:border-red-600/50 hover:shadow-red-950/20'
+              }`}
             >
               <div>
                 {(() => {
@@ -358,21 +383,31 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                 })()}
 
                 <div className="p-5 space-y-2">
-                  <div className="text-[11px] text-slate-400 font-mono">SKU: {prod.sku}</div>
-                  <h3 className="font-extrabold text-white text-sm leading-snug line-clamp-2 font-sports tracking-wide">
+                  <div className={`text-[11px] font-mono ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>SKU: {prod.sku}</div>
+                  <h3 className={`font-extrabold text-sm leading-snug line-clamp-2 font-sports tracking-wide ${
+                    theme === 'light' ? 'text-slate-900' : 'text-white'
+                  }`}>
                     {prod.name}
                   </h3>
-                  <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
+                  <p className={`text-xs line-clamp-2 leading-relaxed ${
+                    theme === 'light' ? 'text-slate-600' : 'text-slate-300'
+                  }`}>
                     {prod.description}
                   </p>
 
                   {prod.sizes && prod.sizes.length > 0 && (
                     <div className="pt-2 flex flex-wrap items-center gap-1.5 font-sports">
-                      <span className="text-[11px] text-slate-400 mr-1 uppercase">Tallas:</span>
+                      <span className={`text-[11px] mr-1 uppercase ${
+                        theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                      }`}>Tallas:</span>
                       {prod.sizes.map((s) => (
                         <span
                           key={s}
-                          className="px-2 py-0.5 bg-[#141C2E] text-slate-200 text-[10px] font-bold rounded border border-slate-700"
+                          className={`px-2 py-0.5 text-[10px] font-bold rounded border ${
+                            theme === 'light'
+                              ? 'bg-slate-100 text-slate-800 border-slate-300'
+                              : 'bg-[#141C2E] text-slate-200 border-slate-700'
+                          }`}
                         >
                           {s}
                         </span>
@@ -382,11 +417,19 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                 </div>
               </div>
 
-              <div className="p-5 pt-0 border-t border-slate-700/70 flex items-center justify-between gap-3 mt-3">
+              <div className={`p-5 pt-0 border-t flex items-center justify-between gap-3 mt-3 ${
+                theme === 'light' ? 'border-slate-200' : 'border-slate-700/70'
+              }`}>
                 <div>
-                  <span className="text-[11px] text-slate-400 block font-sports uppercase tracking-wider">Precio</span>
-                  <span className="text-lg font-black text-emerald-400 font-scoreboard">
-                    ${prod.price.toLocaleString('es-MX')} <span className="text-xs font-semibold text-slate-400 font-sans">MXN</span>
+                  <span className={`text-[11px] block font-sports uppercase tracking-wider ${
+                    theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                  }`}>Precio</span>
+                  <span className={`text-lg font-black font-scoreboard ${
+                    theme === 'light' ? 'text-emerald-700' : 'text-emerald-400'
+                  }`}>
+                    ${prod.price.toLocaleString('es-MX')} <span className={`text-xs font-semibold font-sans ${
+                      theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                    }`}>MXN</span>
                   </span>
                 </div>
 
@@ -407,11 +450,15 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
       {/* Carrito Lateral / Modal */}
       {isCartOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-md h-full bg-[#0F1626] border-l border-slate-700/80 shadow-2xl flex flex-col justify-between overflow-hidden text-white">
+          <div className={`w-full max-w-md h-full border-l shadow-2xl flex flex-col justify-between overflow-hidden ${
+            theme === 'light' ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#0F1626] border-slate-700/80 text-white'
+          }`}>
             {/* Header del Carrito */}
-            <div className="p-5 bg-[#0A0E17] border-b border-slate-700/80 text-white flex items-center justify-between">
+            <div className={`p-5 border-b flex items-center justify-between ${
+              theme === 'light' ? 'bg-slate-50 border-slate-200 text-slate-900' : 'bg-[#0A0E17] border-slate-700/80 text-white'
+            }`}>
               <div className="flex items-center gap-2">
-                <ShoppingCart className="w-5 h-5 text-red-400" />
+                <ShoppingCart className="w-5 h-5 text-red-500" />
                 <h3 className="font-bold text-sm font-sports tracking-wide uppercase">Tu Carrito ({totalItemsCount} artículos)</h3>
               </div>
               <button
@@ -419,7 +466,9 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                   setIsCartOpen(false);
                   setIsCheckingOut(false);
                 }}
-                className="p-1 rounded-lg text-slate-400 hover:text-white cursor-pointer"
+                className={`p-1 rounded-lg cursor-pointer ${
+                  theme === 'light' ? 'text-slate-500 hover:text-slate-900' : 'text-slate-400 hover:text-white'
+                }`}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -428,16 +477,20 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
             {/* Contenido del Carrito o Checkout */}
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
               {cart.length === 0 ? (
-                <div className="text-center py-16 text-slate-400 space-y-3 font-sports">
-                  <ShoppingCart className="w-12 h-12 mx-auto text-slate-600" />
-                  <p className="text-sm font-bold uppercase tracking-wider text-slate-300">Tu carrito está vacío</p>
-                  <p className="text-xs text-slate-500 font-sans">Agrega jerseys, gorras o souvenirs para continuar.</p>
+                <div className="text-center py-16 space-y-3 font-sports">
+                  <ShoppingCart className={`w-12 h-12 mx-auto ${theme === 'light' ? 'text-slate-400' : 'text-slate-600'}`} />
+                  <p className={`text-sm font-bold uppercase tracking-wider ${theme === 'light' ? 'text-slate-800' : 'text-slate-300'}`}>Tu carrito está vacío</p>
+                  <p className={`text-xs font-sans ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>Agrega jerseys, gorras o souvenirs para continuar.</p>
                 </div>
               ) : isCheckingOut ? (
                 /* Formulario de Checkout */
                 <form id="checkout-form" onSubmit={handlePlaceOrder} className="space-y-4 text-xs font-sports">
-                  <div className="bg-[#0A0E17] p-3 rounded-xl border border-slate-700/80 text-white">
-                    <p className="font-bold uppercase tracking-wider flex items-center gap-1.5 text-slate-300">
+                  <div className={`p-3 rounded-xl border ${
+                    theme === 'light' ? 'bg-slate-50 border-slate-200 text-slate-900' : 'bg-[#0A0E17] border-slate-700/80 text-white'
+                  }`}>
+                    <p className={`font-bold uppercase tracking-wider flex items-center gap-1.5 ${
+                      theme === 'light' ? 'text-slate-800' : 'text-slate-300'
+                    }`}>
                       <Truck className="w-4 h-4 text-red-500" /> Método de Entrega
                     </p>
                     <div className="grid grid-cols-2 gap-2 mt-2">
@@ -446,96 +499,130 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                         onClick={() => setShippingType('domicilio')}
                         className={`p-2.5 rounded-lg border text-left font-semibold cursor-pointer transition-all ${
                           shippingType === 'domicilio'
-                            ? 'bg-red-950/40 border-red-500 text-white shadow-xs'
+                            ? theme === 'light'
+                              ? 'bg-red-50 border-red-500 text-red-950 shadow-xs'
+                              : 'bg-red-950/40 border-red-500 text-white shadow-xs'
+                            : theme === 'light'
+                            ? 'bg-white border-slate-300 text-slate-700 hover:text-slate-900'
                             : 'bg-[#141C2E] border-slate-700 text-slate-400 hover:text-white'
                         }`}
                       >
                         <p className="font-bold uppercase">Envío a Domicilio</p>
-                        <span className="text-[10px] text-slate-400 block font-sans">DHL / Paquetexpress</span>
+                        <span className={`text-[10px] block font-sans ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>DHL / Paquetexpress</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => setShippingType('tienda')}
                         className={`p-2.5 rounded-lg border text-left font-semibold cursor-pointer transition-all ${
                           shippingType === 'tienda'
-                            ? 'bg-red-950/40 border-red-500 text-white shadow-xs'
+                            ? theme === 'light'
+                              ? 'bg-red-50 border-red-500 text-red-950 shadow-xs'
+                              : 'bg-red-950/40 border-red-500 text-white shadow-xs'
+                            : theme === 'light'
+                            ? 'bg-white border-slate-300 text-slate-700 hover:text-slate-900'
                             : 'bg-[#141C2E] border-slate-700 text-slate-400 hover:text-white'
                         }`}
                       >
                         <p className="font-bold uppercase">Recoger en Tienda</p>
-                        <span className="text-[10px] text-slate-400 block truncate font-sans">{storeProfile.stadiumName}</span>
+                        <span className={`text-[10px] block truncate font-sans ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>{storeProfile.stadiumName}</span>
                       </button>
                     </div>
                   </div>
 
                   {shippingType === 'domicilio' && (
-                    <div className="space-y-2.5 bg-[#0A0E17] p-3 rounded-xl border border-slate-700/80 text-slate-300 font-sans">
-                      <p className="font-bold text-white font-sports uppercase tracking-wider">Dirección de Envío</p>
+                    <div className={`space-y-2.5 p-3 rounded-xl border font-sans ${
+                      theme === 'light' ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-[#0A0E17] border-slate-700/80 text-slate-300'
+                    }`}>
+                      <p className={`font-bold font-sports uppercase tracking-wider ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>Dirección de Envío</p>
                       <div>
-                        <label className="block text-slate-400 mb-0.5 text-[11px]">Nombre de quien recibe</label>
+                        <label className={`block mb-0.5 text-[11px] ${theme === 'light' ? 'text-slate-700 font-semibold' : 'text-slate-400'}`}>Nombre de quien recibe</label>
                         <input
                           type="text"
                           required
                           value={address.recipientName}
                           onChange={(e) => setAddress({ ...address, recipientName: e.target.value })}
-                          className="w-full p-2 border border-slate-700 rounded-lg bg-[#141C2E] text-white placeholder-slate-500 focus:outline-hidden focus:border-red-500"
+                          className={`w-full p-2 border rounded-lg focus:outline-hidden focus:border-red-500 ${
+                            theme === 'light'
+                              ? 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                              : 'bg-[#141C2E] border-slate-700 text-white placeholder-slate-500'
+                          }`}
                           placeholder="Ej. Juan Pérez"
                         />
                       </div>
                       <div>
-                        <label className="block text-slate-400 mb-0.5 text-[11px]">Calle y Número</label>
+                        <label className={`block mb-0.5 text-[11px] ${theme === 'light' ? 'text-slate-700 font-semibold' : 'text-slate-400'}`}>Calle y Número</label>
                         <input
                           type="text"
                           required
                           value={address.street}
                           onChange={(e) => setAddress({ ...address, street: e.target.value })}
-                          className="w-full p-2 border border-slate-700 rounded-lg bg-[#141C2E] text-white placeholder-slate-500 focus:outline-hidden focus:border-red-500"
+                          className={`w-full p-2 border rounded-lg focus:outline-hidden focus:border-red-500 ${
+                            theme === 'light'
+                              ? 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                              : 'bg-[#141C2E] border-slate-700 text-white placeholder-slate-500'
+                          }`}
                           placeholder="Av. Ejército Mexicano 405"
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="block text-slate-400 mb-0.5 text-[11px]">Colonia</label>
+                          <label className={`block mb-0.5 text-[11px] ${theme === 'light' ? 'text-slate-700 font-semibold' : 'text-slate-400'}`}>Colonia</label>
                           <input
                             type="text"
                             required
                             value={address.neighborhood}
                             onChange={(e) => setAddress({ ...address, neighborhood: e.target.value })}
-                            className="w-full p-2 border border-slate-700 rounded-lg bg-[#141C2E] text-white placeholder-slate-500 focus:outline-hidden focus:border-red-500"
+                            className={`w-full p-2 border rounded-lg focus:outline-hidden focus:border-red-500 ${
+                              theme === 'light'
+                                ? 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                                : 'bg-[#141C2E] border-slate-700 text-white placeholder-slate-500'
+                            }`}
                             placeholder="Palos Prietos"
                           />
                         </div>
                         <div>
-                          <label className="block text-slate-400 mb-0.5 text-[11px]">Código Postal</label>
+                          <label className={`block mb-0.5 text-[11px] ${theme === 'light' ? 'text-slate-700 font-semibold' : 'text-slate-400'}`}>Código Postal</label>
                           <input
                             type="text"
                             required
                             value={address.zipCode}
                             onChange={(e) => setAddress({ ...address, zipCode: e.target.value })}
-                            className="w-full p-2 border border-slate-700 rounded-lg bg-[#141C2E] text-white placeholder-slate-500 focus:outline-hidden focus:border-red-500"
+                            className={`w-full p-2 border rounded-lg focus:outline-hidden focus:border-red-500 ${
+                              theme === 'light'
+                                ? 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                                : 'bg-[#141C2E] border-slate-700 text-white placeholder-slate-500'
+                            }`}
                             placeholder="82000"
                           />
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="block text-slate-400 mb-0.5 text-[11px]">Ciudad</label>
+                          <label className={`block mb-0.5 text-[11px] ${theme === 'light' ? 'text-slate-700 font-semibold' : 'text-slate-400'}`}>Ciudad</label>
                           <input
                             type="text"
                             required
                             value={address.city}
                             onChange={(e) => setAddress({ ...address, city: e.target.value })}
-                            className="w-full p-2 border border-slate-700 rounded-lg bg-[#141C2E] text-white placeholder-slate-500 focus:outline-hidden focus:border-red-500"
+                            className={`w-full p-2 border rounded-lg focus:outline-hidden focus:border-red-500 ${
+                              theme === 'light'
+                                ? 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                                : 'bg-[#141C2E] border-slate-700 text-white placeholder-slate-500'
+                            }`}
                           />
                         </div>
                         <div>
-                          <label className="block text-slate-400 mb-0.5 text-[11px]">Teléfono</label>
+                          <label className={`block mb-0.5 text-[11px] ${theme === 'light' ? 'text-slate-700 font-semibold' : 'text-slate-400'}`}>Teléfono</label>
                           <input
                             type="tel"
                             required
                             value={address.phone}
                             onChange={(e) => setAddress({ ...address, phone: e.target.value })}
-                            className="w-full p-2 border border-slate-700 rounded-lg bg-[#141C2E] text-white placeholder-slate-500 focus:outline-hidden focus:border-red-500"
+                            className={`w-full p-2 border rounded-lg focus:outline-hidden focus:border-red-500 ${
+                              theme === 'light'
+                                ? 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                                : 'bg-[#141C2E] border-slate-700 text-white placeholder-slate-500'
+                            }`}
                             placeholder="669 123 4567"
                           />
                         </div>
@@ -544,7 +631,9 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                   )}
 
                   <div className="space-y-2 font-sports">
-                    <label className="block font-bold text-slate-300 uppercase tracking-wider text-xs">
+                    <label className={`block font-bold uppercase tracking-wider text-xs ${
+                      theme === 'light' ? 'text-slate-800' : 'text-slate-300'
+                    }`}>
                       Selecciona tu Método de Pago
                     </label>
 
@@ -554,21 +643,29 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                         onClick={() => setPaymentMethod('Efectivo / Terminal física')}
                         className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between cursor-pointer ${
                           paymentMethod === 'Efectivo / Terminal física'
-                            ? 'border-emerald-500 bg-emerald-950/40 shadow-xs'
-                            : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17]'
+                            ? theme === 'light'
+                              ? 'border-emerald-600 bg-emerald-50 text-emerald-950 shadow-xs'
+                              : 'border-emerald-500 bg-emerald-950/40 text-white shadow-xs'
+                            : theme === 'light'
+                            ? 'border-slate-300 hover:border-slate-400 bg-white text-slate-800'
+                            : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17] text-white'
                         }`}
                       >
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-base">💵</span>
                           {paymentMethod === 'Efectivo / Terminal física' && (
-                            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                           )}
                         </div>
                         <div>
-                          <p className="font-extrabold text-[11px] text-white leading-tight uppercase">
+                          <p className={`font-extrabold text-[11px] leading-tight uppercase ${
+                            theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
+                          }`}>
                             Efectivo / Terminal física
                           </p>
-                          <p className="text-[10px] text-slate-400 mt-0.5 font-sans">
+                          <p className={`text-[10px] mt-0.5 font-sans ${
+                            theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                          }`}>
                             Paga en efectivo o con tarjeta física al recibir o recoger
                           </p>
                         </div>
@@ -579,8 +676,12 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                         onClick={() => setPaymentMethod('Tarjeta')}
                         className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between cursor-pointer ${
                           paymentMethod === 'Tarjeta'
-                            ? 'border-red-500 bg-red-950/40 shadow-xs'
-                            : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17]'
+                            ? theme === 'light'
+                              ? 'border-red-600 bg-red-50 text-red-950 shadow-xs'
+                              : 'border-red-500 bg-red-950/40 text-white shadow-xs'
+                            : theme === 'light'
+                            ? 'border-slate-300 hover:border-slate-400 bg-white text-slate-800'
+                            : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17] text-white'
                         }`}
                       >
                         <div className="flex items-center justify-between mb-1">
@@ -590,10 +691,14 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                           )}
                         </div>
                         <div>
-                          <p className="font-extrabold text-[11px] text-white leading-tight uppercase">
+                          <p className={`font-extrabold text-[11px] leading-tight uppercase ${
+                            theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
+                          }`}>
                             Tarjeta en Línea
                           </p>
-                          <p className="text-[10px] text-slate-400 mt-0.5 font-sans">
+                          <p className={`text-[10px] mt-0.5 font-sans ${
+                            theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                          }`}>
                             Visa, Mastercard, American Express
                           </p>
                         </div>
@@ -604,21 +709,29 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                         onClick={() => setPaymentMethod('MercadoPago')}
                         className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between cursor-pointer ${
                           paymentMethod === 'MercadoPago'
-                            ? 'border-sky-500 bg-sky-950/40 shadow-xs'
-                            : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17]'
+                            ? theme === 'light'
+                              ? 'border-sky-600 bg-sky-50 text-sky-950 shadow-xs'
+                              : 'border-sky-500 bg-sky-950/40 text-white shadow-xs'
+                            : theme === 'light'
+                            ? 'border-slate-300 hover:border-slate-400 bg-white text-slate-800'
+                            : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17] text-white'
                         }`}
                       >
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-base">📱</span>
                           {paymentMethod === 'MercadoPago' && (
-                            <span className="w-2 h-2 rounded-full bg-sky-400"></span>
+                            <span className="w-2 h-2 rounded-full bg-sky-500"></span>
                           )}
                         </div>
                         <div>
-                          <p className="font-extrabold text-[11px] text-white leading-tight uppercase">
+                          <p className={`font-extrabold text-[11px] leading-tight uppercase ${
+                            theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
+                          }`}>
                             Mercado Pago
                           </p>
-                          <p className="text-[10px] text-slate-400 mt-0.5 font-sans">
+                          <p className={`text-[10px] mt-0.5 font-sans ${
+                            theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                          }`}>
                             Saldo en cuenta, débito o crédito
                           </p>
                         </div>
@@ -629,21 +742,29 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                         onClick={() => setPaymentMethod('Transferencia SPEI')}
                         className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between cursor-pointer ${
                           paymentMethod === 'Transferencia SPEI'
-                            ? 'border-purple-500 bg-purple-950/40 shadow-xs'
-                            : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17]'
+                            ? theme === 'light'
+                              ? 'border-purple-600 bg-purple-50 text-purple-950 shadow-xs'
+                              : 'border-purple-500 bg-purple-950/40 text-white shadow-xs'
+                            : theme === 'light'
+                            ? 'border-slate-300 hover:border-slate-400 bg-white text-slate-800'
+                            : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17] text-white'
                         }`}
                       >
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-base">🏦</span>
                           {paymentMethod === 'Transferencia SPEI' && (
-                            <span className="w-2 h-2 rounded-full bg-purple-400"></span>
+                            <span className="w-2 h-2 rounded-full bg-purple-500"></span>
                           )}
                         </div>
                         <div>
-                          <p className="font-extrabold text-[11px] text-white leading-tight uppercase">
+                          <p className={`font-extrabold text-[11px] leading-tight uppercase ${
+                            theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
+                          }`}>
                             Transferencia SPEI
                           </p>
-                          <p className="text-[10px] text-slate-400 mt-0.5 font-sans">
+                          <p className={`text-[10px] mt-0.5 font-sans ${
+                            theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                          }`}>
                             CLABE interbancaria directa
                           </p>
                         </div>
@@ -651,8 +772,12 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                     </div>
 
                     {paymentMethod === 'Efectivo / Terminal física' && (
-                      <div className="p-2.5 bg-[#0A0E17] border border-emerald-500/50 rounded-xl text-[11px] text-emerald-300 font-medium flex items-center gap-2 font-sans">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 animate-pulse"></span>
+                      <div className={`p-2.5 rounded-xl text-[11px] font-medium flex items-center gap-2 font-sans border ${
+                        theme === 'light'
+                          ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                          : 'bg-[#0A0E17] border-emerald-500/50 text-emerald-300'
+                      }`}>
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 animate-pulse"></span>
                         <span>
                           {shippingType === 'tienda'
                             ? 'Pagas directamente en caja de la Tienda Oficial del Estadio al recoger tus artículos.'
@@ -666,28 +791,57 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                 /* Lista de Items en Carrito */
                 <div className="space-y-3 font-sports">
                   {cart.map((item, idx) => (
-                    <div key={`${item.product.id}-${item.size}`} className="flex gap-3 p-3 bg-[#0A0E17] rounded-xl border border-slate-700/80">
+                    <div
+                      key={`${item.product.id}-${item.size}`}
+                      className={`flex gap-3 p-3 rounded-xl border ${
+                        theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-[#0A0E17] border-slate-700/80'
+                      }`}
+                    >
                       <img
                         src={normalizeGoogleDriveImageUrl(item.product.image) || getDefaultProductPlaceholder(item.product.category)}
                         alt={item.product.name}
-                        className="w-16 h-16 object-contain p-1 rounded-lg bg-[#060911] border border-slate-700/80 shrink-0"
+                        className={`w-16 h-16 object-contain p-1 rounded-lg border shrink-0 ${
+                          theme === 'light' ? 'bg-white border-slate-200' : 'bg-[#060911] border-slate-700/80'
+                        }`}
                         referrerPolicy="no-referrer"
                         onError={(e) => {
                           (e.currentTarget as HTMLImageElement).src = getDefaultProductPlaceholder(item.product.category);
                         }}
                       />
                       <div className="flex-1 space-y-1">
-                        <p className="text-xs font-bold text-white leading-snug line-clamp-1">{item.product.name}</p>
-                        <p className="text-[11px] text-slate-400 font-sans">Talla: <strong className="text-amber-400">{item.size}</strong></p>
-                        <p className="text-xs font-black text-emerald-400 font-scoreboard">${(item.product.price * item.quantity).toLocaleString('es-MX')} MXN</p>
+                        <p className={`text-xs font-bold leading-snug line-clamp-1 ${
+                          theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
+                        }`}>{item.product.name}</p>
+                        <p className={`text-[11px] font-sans ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
+                          Talla: <strong className={theme === 'light' ? 'text-amber-800' : 'text-amber-400'}>{item.size}</strong>
+                        </p>
+                        <p className={`text-xs font-black font-scoreboard ${
+                          theme === 'light' ? 'text-emerald-700' : 'text-emerald-400'
+                        }`}>
+                          ${(item.product.price * item.quantity).toLocaleString('es-MX')} MXN
+                        </p>
                       </div>
                       <div className="flex flex-col items-center justify-between">
-                        <div className="flex items-center gap-1.5 bg-[#141C2E] border border-slate-700 rounded-lg p-0.5">
-                          <button onClick={() => updateCartQty(idx, -1)} className="p-1 text-slate-400 hover:text-red-400 cursor-pointer">
+                        <div className={`flex items-center gap-1.5 border rounded-lg p-0.5 ${
+                          theme === 'light' ? 'bg-white border-slate-300 text-slate-900' : 'bg-[#141C2E] border-slate-700 text-white'
+                        }`}>
+                          <button
+                            onClick={() => updateCartQty(idx, -1)}
+                            className={`p-1 cursor-pointer ${
+                              theme === 'light' ? 'text-slate-500 hover:text-red-600' : 'text-slate-400 hover:text-red-400'
+                            }`}
+                          >
                             <Minus className="w-3 h-3" />
                           </button>
-                          <span className="text-xs font-bold text-white px-1.5 font-mono">{item.quantity}</span>
-                          <button onClick={() => updateCartQty(idx, 1)} className="p-1 text-slate-400 hover:text-emerald-400 cursor-pointer">
+                          <span className={`text-xs font-bold px-1.5 font-mono ${
+                            theme === 'light' ? 'text-slate-900' : 'text-white'
+                          }`}>{item.quantity}</span>
+                          <button
+                            onClick={() => updateCartQty(idx, 1)}
+                            className={`p-1 cursor-pointer ${
+                              theme === 'light' ? 'text-slate-500 hover:text-emerald-600' : 'text-slate-400 hover:text-emerald-400'
+                            }`}
+                          >
                             <Plus className="w-3 h-3" />
                           </button>
                         </div>
@@ -700,19 +854,35 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
 
             {/* Footer con Totales y Botón de Pago */}
             {cart.length > 0 && (
-              <div className="p-5 border-t border-slate-700/80 bg-[#0A0E17] space-y-3 font-sports">
-                <div className="space-y-1.5 text-xs text-slate-300">
+              <div className={`p-5 border-t space-y-3 font-sports ${
+                theme === 'light' ? 'bg-slate-50 border-slate-200 text-slate-900' : 'bg-[#0A0E17] border-slate-700/80 text-white'
+              }`}>
+                <div className={`space-y-1.5 text-xs ${theme === 'light' ? 'text-slate-600' : 'text-slate-300'}`}>
                   <div className="flex justify-between">
                     <span>Subtotal:</span>
-                    <span className="font-semibold text-white font-mono">${subtotal.toLocaleString('es-MX')} MXN</span>
+                    <span className={`font-semibold font-mono ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>
+                      ${subtotal.toLocaleString('es-MX')} MXN
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span>Envío:</span>
-                    <span>{shippingCost === 0 ? <strong className="text-emerald-400">GRATIS</strong> : `$${shippingCost} MXN`}</span>
+                    <span>
+                      {shippingCost === 0 ? (
+                        <strong className={theme === 'light' ? 'text-emerald-700' : 'text-emerald-400'}>GRATIS</strong>
+                      ) : (
+                        `$${shippingCost} MXN`
+                      )}
+                    </span>
                   </div>
-                  <div className="flex justify-between text-sm font-black text-white pt-1 border-t border-slate-700/80">
+                  <div className={`flex justify-between text-sm font-black pt-1 border-t ${
+                    theme === 'light' ? 'border-slate-200 text-slate-900' : 'border-slate-700/80 text-white'
+                  }`}>
                     <span className="uppercase tracking-wider">Total a Pagar:</span>
-                    <span className="text-emerald-400 font-scoreboard text-lg">${total.toLocaleString('es-MX')} MXN</span>
+                    <span className={`font-scoreboard text-lg ${
+                      theme === 'light' ? 'text-emerald-700' : 'text-emerald-400'
+                    }`}>
+                      ${total.toLocaleString('es-MX')} MXN
+                    </span>
                   </div>
                 </div>
 
@@ -721,7 +891,11 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                     <button
                       type="button"
                       onClick={() => setIsCheckingOut(false)}
-                      className="px-4 py-2.5 bg-[#141C2E] border border-slate-700 text-slate-300 hover:text-white text-xs font-bold rounded-xl uppercase tracking-wider cursor-pointer"
+                      className={`px-4 py-2.5 border text-xs font-bold rounded-xl uppercase tracking-wider cursor-pointer ${
+                        theme === 'light'
+                          ? 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                          : 'bg-[#141C2E] border-slate-700 text-slate-300 hover:text-white'
+                      }`}
                     >
                       Volver
                     </button>

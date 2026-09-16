@@ -2,6 +2,7 @@ import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, query }
 import { db, auth } from './firebase';
 import { Venue, VenueEvent } from '../types';
 import { getEventPosterPlaceholder } from './imageUtils';
+import { getOfficialPriceTiersForVenue, isLegacySection } from './seatMap';
 
 import { DEFAULT_VENUE_ID, DEFAULT_EVENT_ID } from './constants';
 export { DEFAULT_VENUE_ID, DEFAULT_EVENT_ID } from './constants';
@@ -23,14 +24,14 @@ export const DEFAULT_VENUES: Venue[] = [
   {
     id: 'venue-encanto',
     name: 'Estadio El Encanto',
-    teamName: 'Mazatlán F.C.',
-    storeName: 'Tienda Oficial Mazatlán F.C.',
+    teamName: 'Dorados de Sinaloa',
+    storeName: 'Tienda Oficial Dorados de Sinaloa',
     city: 'Mazatlán',
     state: 'Sinaloa',
     address: 'Av. Múnich s/n, Fracc. El Conchi, 82136 Mazatlán, Sin.',
     active: true,
-    storePromoTitle: 'Tienda Oficial Mazatlán F.C.',
-    storePromoSubtitle: 'Jerseys originales Cañoneros, gorras y souvenirs oficiales de la Liga MX',
+    storePromoTitle: 'Tienda Oficial Dorados de Sinaloa',
+    storePromoSubtitle: 'Jerseys oficiales Dorado y Negro del Gran Pez, gorras y souvenirs de Dorados',
     createdAt: '2026-01-01T00:00:00.000Z',
   },
 ];
@@ -50,10 +51,15 @@ export const DEFAULT_FALLBACK_EVENT: VenueEvent = {
   orderingOpensAt: '2026-10-15T18:00:00.000Z',
   orderingClosesAt: '2026-10-16T00:00:00.000Z',
   priceTiers: [
-    { section: 'Platea Baja Central', price: 450 },
-    { section: 'Preferente Lateral', price: 320 },
-    { section: 'Palco VIP Premier', price: 850 },
-    { section: 'Bleachers / Grada General', price: 150 },
+    { section: 'Deluxe Supreme', price: 950 },
+    { section: 'Platino', price: 750 },
+    { section: 'Diamante', price: 600 },
+    { section: 'Oro', price: 480 },
+    { section: 'Sky Plus', price: 400 },
+    { section: 'Plus', price: 350 },
+    { section: 'Fan', price: 220 },
+    { section: 'Fan Plus', price: 280 },
+    { section: 'Sky', price: 160 },
   ],
   createdAt: '2026-09-01T00:00:00.000Z',
 };
@@ -73,6 +79,21 @@ export async function ensureDefaultVenueExists(): Promise<void> {
       const venueSnap = await getDoc(venueRef);
       if (!venueSnap.exists()) {
         await setDoc(venueRef, v);
+      } else if (v.id === 'venue-encanto') {
+        const curData = venueSnap.data();
+        if (
+          curData.teamName !== 'Dorados de Sinaloa' ||
+          curData.storeName?.includes('Mazatlán') ||
+          curData.storePromoSubtitle?.includes('Cañoneros') ||
+          curData.storePromoSubtitle?.includes('Liga MX')
+        ) {
+          await updateDoc(venueRef, {
+            teamName: 'Dorados de Sinaloa',
+            storeName: 'Tienda Oficial Dorados de Sinaloa',
+            storePromoTitle: 'Tienda Oficial Dorados de Sinaloa',
+            storePromoSubtitle: 'Jerseys oficiales Dorado y Negro del Gran Pez, gorras y souvenirs de Dorados',
+          });
+        }
       }
     }
 
@@ -94,22 +115,22 @@ export async function ensureDefaultVenueExists(): Promise<void> {
         posterUrl: getEventPosterPlaceholder('baseball'),
         orderingOpensAt: '2026-10-15T18:00:00.000Z',
         orderingClosesAt: '2026-10-16T00:00:00.000Z',
-        priceTiers: [
-          { section: 'Platea Baja Central', price: 450 },
-          { section: 'Preferente Lateral', price: 320 },
-          { section: 'Palco VIP Premier', price: 850 },
-          { section: 'Bleachers / Grada General', price: 150 },
-        ],
+        priceTiers: getOfficialPriceTiersForVenue(DEFAULT_VENUE_ID),
         createdAt: new Date().toISOString(),
       };
       await setDoc(eventRef, defaultEvent);
     } else {
       const data = eventSnap.data() as Partial<VenueEvent>;
-      if (!data.posterUrl || !data.orderingOpensAt) {
+      const hasLegacyTiers =
+        Array.isArray(data.priceTiers) &&
+        data.priceTiers.some((t: any) => isLegacySection(t?.section));
+
+      if (!data.posterUrl || !data.orderingOpensAt || hasLegacyTiers) {
         await updateDoc(eventRef, {
           posterUrl: data.posterUrl || getEventPosterPlaceholder(data.type || 'baseball'),
           orderingOpensAt: data.orderingOpensAt || '2026-10-15T18:00:00.000Z',
           orderingClosesAt: data.orderingClosesAt || '2026-10-16T00:00:00.000Z',
+          ...(hasLegacyTiers ? { priceTiers: getOfficialPriceTiersForVenue(DEFAULT_VENUE_ID) } : {}),
         });
       }
     }

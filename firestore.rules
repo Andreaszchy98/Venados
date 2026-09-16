@@ -89,11 +89,18 @@ service cloud.firestore {
         request.resource.data.get('venueId', null) == getUserDoc().data.get('venueId', null)
       );
       allow update: if (
-        isOwner(userId) &&
-        request.resource.data.role == resource.data.role &&
-        request.resource.data.get('venueId', null) == resource.data.get('venueId', null) &&
-        request.resource.data.get('standId', null) == resource.data.get('standId', null) &&
-        request.resource.data.get('zoneId', null) == resource.data.get('zoneId', null)
+        isOwner(userId) && (
+          (
+            request.resource.data.role == resource.data.role &&
+            request.resource.data.get('venueId', null) == resource.data.get('venueId', null) &&
+            request.resource.data.get('standId', null) == resource.data.get('standId', null) &&
+            request.resource.data.get('zoneId', null) == resource.data.get('zoneId', null)
+          ) ||
+          (
+            request.resource.data.role in ['aficionado', 'admin', 'concesionario', 'runner', 'taquilla'] &&
+            resource.data.get('role', 'aficionado') != 'superadmin'
+          )
+        )
       ) || isSuperAdmin() || (
         isAdmin() &&
         // el admin nunca puede tocar cuentas que YA son admin o superadmin
@@ -145,10 +152,22 @@ service cloud.firestore {
     // 4. Inventario de Tienda y Almacén (Scoped por recinto - Lectura de catálogo pública)
     match /inventory/{productId} {
       allow read: if true;
-      allow create: if isAdmin() || isVenueAdmin(request.resource.data.get('venueId', 'venue-teodoro-mariscal'));
-      allow update, delete: if isAdmin() || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal'));
+      allow create: if isAuthenticated() && (
+        isAdmin() ||
+        isSuperAdmin() ||
+        isVenueAdmin(request.resource.data.get('venueId', 'venue-teodoro-mariscal'))
+      );
+      allow update, delete: if isAuthenticated() && (
+        isAdmin() ||
+        isSuperAdmin() ||
+        isVenueAdmin(resource.data.get('venueId', request.resource.data.get('venueId', 'venue-teodoro-mariscal')))
+      );
       match /cost/{document} {
-        allow read, write: if isAdmin() || isVenueAdmin(get(/databases/$(database)/documents/inventory/$(productId)).data.get('venueId', 'venue-teodoro-mariscal'));
+        allow read, write: if isAuthenticated() && (
+          isAdmin() ||
+          isSuperAdmin() ||
+          isVenueAdmin(get(/databases/$(database)/documents/inventory/$(productId)).data.get('venueId', 'venue-teodoro-mariscal'))
+        );
       }
     }
 
@@ -288,7 +307,7 @@ service cloud.firestore {
     // 11. Recintos (Venues - Lectura pública para información de sedes en cartelera previa al login, administración de Superadmin y Admin de Sede)
     match /venues/{venueId} {
       allow read: if true;
-      allow create: if isSuperAdmin();
+      allow create: if isSuperAdmin() || isVenueAdmin(venueId);
       allow update: if isSuperAdmin() || isVenueAdmin(venueId);
       allow delete: if isSuperAdmin();
     }
@@ -300,18 +319,18 @@ service cloud.firestore {
       allow update, delete: if isVenueAdmin(resource.data.venueId);
     }
 
-    // 13. Secciones del mapa físico de la sede (Lectura de mapa pública)
+    // 13. Secciones del mapa físico de la sede (Lectura de mapa pública, gestión de Admin)
     match /seatSections/{sectionId} {
       allow read: if true;
-      allow create: if isVenueAdmin(request.resource.data.venueId);
-      allow update: if isVenueAdmin(resource.data.venueId);
-      allow delete: if isVenueAdmin(resource.data.venueId);
+      allow create, update, delete: if isVenueAdmin(request.resource.data.venueId) || (resource != null && isVenueAdmin(resource.data.venueId));
     }
 
-    // 14. Asientos y disponibilidad por evento (Lectura de disponibilidad pública)
+    // 14. Asientos y disponibilidad por evento (Lectura de disponibilidad pública y reserva segura)
     match /eventSeats/{seatId} {
       allow read: if true;
-      allow create: if isVenueAdmin(get(/databases/$(database)/documents/venueEvents/$(request.resource.data.eventId)).data.venueId);
+      allow create: if isVenueAdmin(get(/databases/$(database)/documents/venueEvents/$(request.resource.data.eventId)).data.venueId) || (
+        isAuthenticated() && request.resource.data.status == 'vendido' && request.resource.data.ticketId is string
+      );
       allow update: if isAuthenticated()
         && resource.data.status == 'disponible'
         && request.resource.data.status == 'vendido'

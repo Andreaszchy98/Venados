@@ -12,6 +12,7 @@ import {
 } from '../../lib/venueEvents';
 import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
 import { normalizeGoogleDriveImageUrl, isGoogleDriveUrl } from '../../lib/imageUtils';
+import { getOfficialPriceTiersForEvent, getOfficialPriceTiersForVenue, isLegacySection } from '../../lib/seatMap';
 import { ConfirmationModal } from '../../components/shared/ConfirmationModal';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import {
@@ -74,10 +75,15 @@ function formatWindowDateTime(isoString?: string): string {
 }
 
 const DEFAULT_TIERS: EventPriceTier[] = [
-  { section: 'Platea Baja Central', price: 450 },
-  { section: 'Preferente Lateral', price: 320 },
-  { section: 'Palco VIP Premier', price: 850 },
-  { section: 'Bleachers / Grada General', price: 150 },
+  { section: 'Deluxe Supreme', price: 950 },
+  { section: 'Platino', price: 750 },
+  { section: 'Diamante', price: 600 },
+  { section: 'Oro', price: 480 },
+  { section: 'Sky Plus', price: 400 },
+  { section: 'Plus', price: 350 },
+  { section: 'Fan', price: 220 },
+  { section: 'Fan Plus', price: 280 },
+  { section: 'Sky', price: 160 },
 ];
 
 export const EventsManager: React.FC<EventsManagerProps> = ({ user }) => {
@@ -166,11 +172,17 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user }) => {
     setFormTicketsAvailable(true);
     setFormAvailableSeats(2820);
     setFormTotalCapacity(16000);
-    setFormPriceTiers([...DEFAULT_TIERS]);
+    setFormPriceTiers(getOfficialPriceTiersForVenue(currentVenueId, currentVenueName, 'baseball'));
     setFormPosterUrl('');
     setFormOrderingOpensAt(toDateTimeLocal(defWindow.orderingOpensAt));
     setFormOrderingClosesAt(toDateTimeLocal(defWindow.orderingClosesAt));
     setIsModalOpen(true);
+  };
+
+  const handleResetToMapZones = () => {
+    const mapTiers = getOfficialPriceTiersForVenue(currentVenueId, currentVenueName, formType);
+    setFormPriceTiers(mapTiers);
+    showNotice('success', 'Se han cargado las secciones y precios oficiales del mapa del estadio.');
   };
 
   const handleOpenEditModal = (event: VenueEvent) => {
@@ -185,11 +197,7 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user }) => {
     setFormTicketsAvailable(event.ticketsAvailable);
     setFormAvailableSeats(event.availableSeats !== undefined ? event.availableSeats : 2820);
     setFormTotalCapacity(event.totalCapacity !== undefined ? event.totalCapacity : 16000);
-    setFormPriceTiers(
-      event.priceTiers && event.priceTiers.length > 0
-        ? event.priceTiers.map((t) => ({ ...t }))
-        : [...DEFAULT_TIERS]
-    );
+    setFormPriceTiers(getOfficialPriceTiersForEvent(event, currentVenueName));
 
     let opensAt = event.orderingOpensAt;
     let closesAt = event.orderingClosesAt;
@@ -1214,13 +1222,23 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user }) => {
                       Define los precios que verá el aficionado al comprar
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleAddTier}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold font-sports uppercase tracking-wider transition-colors cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Agregar Sección
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleResetToMapZones}
+                      title="Sincronizar exactamente con las zonas del mapa del estadio y eliminar secciones obsoletas"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg text-xs font-bold font-sports uppercase tracking-wider transition-colors cursor-pointer"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" /> Secciones del Mapa
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAddTier}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold font-sports uppercase tracking-wider transition-colors cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Agregar Sección
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -1233,7 +1251,7 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user }) => {
                         <input
                           type="text"
                           required
-                          placeholder="Nombre de sección (ej. Platea Baja)"
+                          placeholder="Nombre de sección (ej. Platino, Oriente Central)"
                           value={tier.section}
                           onChange={(e) => handleTierChange(idx, 'section', e.target.value)}
                           className="w-full px-2.5 py-1.5 bg-[#131A28] border border-slate-700 rounded-lg text-xs font-bold text-white focus:outline-hidden focus:border-red-500"

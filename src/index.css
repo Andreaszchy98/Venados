@@ -146,6 +146,13 @@ body.theme-light {
   background-color: #FFFFFF !important;
 }
 
+/* Sub-paneles y áreas anidadas dentro de tarjetas */
+.theme-light [class*="bg-[#0F1626]"] [class*="bg-[#0A0E17]"],
+.theme-light [class*="bg-[#101625]"] [class*="bg-[#0A0E17]"],
+.theme-light [class*="bg-[#151D30]"] [class*="bg-[#0A0E17]"] {
+  background-color: #F8FAFC !important;
+}
+
 /* Botones secundarios, píldoras, selectores y cintillos superiores */
 .theme-light [class*="bg-[#182032]"],
 .theme-light [class*="bg-[#0C121E]"],
@@ -169,7 +176,7 @@ body.theme-light {
   background-color: #F1F5F9 !important;
 }
 
-/* Fondos oscuros de pósters con arte completo */
+/* Fondos de posters o visores */
 .theme-light [class*="bg-[#060911]"] {
   background-color: #E2E8F0 !important;
 }
@@ -182,12 +189,21 @@ body.theme-light {
   border-color: #E2E8F0 !important;
 }
 
-/* Tipografía de títulos en modo claro (excluyendo banners oscuros y botones) */
-.theme-light h1:not([class*="text-white"]):not([class*="text-red"]):not([class*="text-amber"]):not([class*="text-emerald"]),
-.theme-light h2:not([class*="text-white"]):not([class*="text-red"]):not([class*="text-amber"]):not([class*="text-emerald"]),
-.theme-light h3:not([class*="text-white"]):not([class*="text-red"]):not([class*="text-amber"]):not([class*="text-emerald"]),
-.theme-light h4:not([class*="text-white"]):not([class*="text-red"]):not([class*="text-amber"]):not([class*="text-emerald"]),
-.theme-light h5:not([class*="text-white"]):not([class*="text-red"]):not([class*="text-amber"]):not([class*="text-emerald"]) {
+/* Tipografía de títulos en modo claro */
+.theme-light h1:not([class*="text-red"]):not([class*="text-amber"]):not([class*="text-emerald"]):not([class*="bg-red-"] *):not([class*="from-red"] *):not(button[class*="bg-red"] *),
+.theme-light h2:not([class*="text-red"]):not([class*="text-amber"]):not([class*="text-emerald"]):not([class*="bg-red-"] *):not([class*="from-red"] *):not(button[class*="bg-red"] *),
+.theme-light h3:not([class*="text-red"]):not([class*="text-amber"]):not([class*="text-emerald"]):not([class*="bg-red-"] *):not([class*="from-red"] *):not(button[class*="bg-red"] *),
+.theme-light h4:not([class*="text-red"]):not([class*="text-amber"]):not([class*="text-emerald"]):not([class*="bg-red-"] *):not([class*="from-red"] *):not(button[class*="bg-red"] *),
+.theme-light h5:not([class*="text-red"]):not([class*="text-amber"]):not([class*="text-emerald"]):not([class*="bg-red-"] *):not([class*="from-red"] *):not(button[class*="bg-red"] *) {
+  color: #0F172A !important;
+}
+
+/* Textos blancos que se convierten a oscuro en fondos convertidos a claro */
+.theme-light span.text-white:not([class*="bg-red"]):not([class*="from-red"]):not([class*="bg-black"]):not([class*="bg-emerald"]):not(button[class*="bg-red"] *):not([class*="from-red"] *):not([class*="bg-red-"] *):not([class*="bg-emerald-"] *):not([class*="bg-amber-900"] *):not([class*="bg-slate-900"] *):not([class*="bg-black"] *):not(.keep-white),
+.theme-light p.text-white:not([class*="bg-red"]):not([class*="from-red"]):not([class*="bg-black"]):not([class*="bg-emerald"]):not(button[class*="bg-red"] *):not([class*="from-red"] *):not([class*="bg-red-"] *):not([class*="bg-emerald-"] *):not([class*="bg-amber-900"] *):not([class*="bg-slate-900"] *):not([class*="bg-black"] *):not(.keep-white),
+.theme-light td.text-white,
+.theme-light div.text-white:not([class*="bg-red"]):not([class*="from-red"]):not([class*="bg-black"]):not([class*="bg-emerald"]):not(button[class*="bg-red"] *):not([class*="from-red"] *):not([class*="bg-red-"] *):not([class*="bg-emerald-"] *):not(.keep-white),
+.theme-light strong.text-white {
   color: #0F172A !important;
 }
 
@@ -206,6 +222,7 @@ body.theme-light {
 .theme-light [class*="bg-red-"] span,
 .theme-light button[class*="bg-red"] span,
 .theme-light button[class*="bg-red"] p,
+.theme-light button[class*="bg-red"] svg,
 .theme-light [class*="from-red"] h1,
 .theme-light [class*="from-red"] h2,
 .theme-light [class*="from-red"] h3,
@@ -237,7 +254,78 @@ body.theme-light {
   color: #475569 !important;
 }
 
-/* Cajas de Alerta Ámbar en Modo Claro (Legibilidad Óptima con Alto Contraste) */
+/* Tipografía de números y scoreboard en modo claro */
+.theme-light .font-scoreboard.text-white,
+.theme-light .font-scoreboard:not([class*="text-red"]):not([class*="text-amber"]):not([class*="text-emerald"]) {
+  color: #0F172A !important;
+}
+
+/* Tablas en modo claro con alto contraste */
+.theme-light table thead {
+  background-color: #F8FAFC !important;
+  border-bottom: 1px solid #E2E8F0 !important;
+}
+
+.theme-light table thead th {
+  color: #475569 !important;
+}
+
+.theme-light table tbody tr {
+  border-bottom: 1px solid #E2E8F0 !important;
+}
+
+.theme-light table tbody tr:hover {
+  background-color: #F8FAFC !important;
+}
+
+.theme-light table tbody td {
+  color: #1E293B !important;
+}
+
+/* Badges con fondos oscuros convertidos a pasteles nítidos en modo claro */
+.theme-light [class*="bg-emerald-950"] {
+  background-color: #ECFDF5 !important;
+  color: #065F46 !important;
+  border-color: #A7F3D0 !important;
+}
+
+.theme-light [class*="bg-amber-950"] {
+  background-color: #FFFBEB !important;
+  color: #92400E !important;
+  border-color: #FDE68A !important;
+}
+
+.theme-light [class*="bg-purple-950"] {
+  background-color: #FAF5FF !important;
+  color: #6B21A8 !important;
+  border-color: #E9D5FF !important;
+}
+
+.theme-light [class*="bg-blue-950"] {
+  background-color: #EFF6FF !important;
+  color: #1E40AF !important;
+  border-color: #BFDBFE !important;
+}
+
+.theme-light [class*="bg-sky-950"] {
+  background-color: #F0F9FF !important;
+  color: #0369A1 !important;
+  border-color: #BAE6FD !important;
+}
+
+.theme-light [class*="bg-rose-950"] {
+  background-color: #FFF1F2 !important;
+  color: #9F1239 !important;
+  border-color: #FECDD3 !important;
+}
+
+.theme-light [class*="bg-red-950"] {
+  background-color: #FEF2F2 !important;
+  color: #991B1B !important;
+  border-color: #FECACA !important;
+}
+
+/* Cajas de Alerta Ámbar en Modo Claro */
 .theme-light [class*="bg-amber-500/10"],
 .theme-light [class*="bg-amber-500/5"] {
   background-color: #FEF3C7 !important;
@@ -287,7 +375,8 @@ body.theme-light {
 
 /* Botones y hover de modo claro */
 .theme-light [class*="hover:bg-slate-800"]:hover,
-.theme-light [class*="hover:bg-[#202B42]"]:hover {
+.theme-light [class*="hover:bg-[#202B42]"]:hover,
+.theme-light [class*="hover:bg-[#182032]"]:hover {
   background-color: #E2E8F0 !important;
   color: #0F172A !important;
 }

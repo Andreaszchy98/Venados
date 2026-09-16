@@ -359,23 +359,61 @@ export function getCuratedProductsForVenue(venueId: string): InventoryProduct[] 
 }
 
 export async function getInventoryProducts(venueId?: string): Promise<InventoryProduct[]> {
+  const targetVenueId = venueId || DEFAULT_VENUE_ID;
   try {
-    const q = venueId
-      ? query(collection(db, COLLECTION_NAME), where('venueId', '==', venueId), limit(150))
-      : query(collection(db, COLLECTION_NAME), limit(150));
-    const snap = await getDocs(q);
+    const q = query(collection(db, COLLECTION_NAME), where('venueId', '==', targetVenueId), limit(150));
+    let snap = await getDocs(q);
+
+    // Si la consulta por venueId está vacía y es la sede por defecto,
+    // buscar documentos legados que se hayan creado sin venueId
+    if (snap.empty && targetVenueId === DEFAULT_VENUE_ID) {
+      const allSnap = await getDocs(query(collection(db, COLLECTION_NAME), limit(150)));
+      const unassignedDocs = allSnap.docs.filter((d) => !d.data().venueId);
+      if (unassignedDocs.length > 0) {
+        // Encontramos documentos legados sin venueId:
+        // Consolidamos por SKU para evitar duplicados y les asignamos DEFAULT_VENUE_ID
+        const seenSkus = new Set<string>();
+        const consolidated: InventoryProduct[] = [];
+
+        for (const d of unassignedDocs) {
+          const data = d.data();
+          const sku = data.sku || d.id;
+          if (!seenSkus.has(sku)) {
+            seenSkus.add(sku);
+            const item: InventoryProduct = {
+              id: d.id,
+              ...data,
+              venueId: DEFAULT_VENUE_ID,
+              image: normalizeGoogleDriveImageUrl(data.image) || getDefaultProductPlaceholder(data.category),
+            } as InventoryProduct;
+            try {
+              await setDoc(doc(db, COLLECTION_NAME, d.id), { venueId: DEFAULT_VENUE_ID }, { merge: true });
+            } catch (err) {
+              console.warn('No se pudo migrar venueId en doc legado:', d.id, err);
+            }
+            consolidated.push(item);
+          } else {
+            // Documento duplicado legado: eliminar para mantener la base de datos limpia
+            try {
+              await deleteDoc(doc(db, COLLECTION_NAME, d.id));
+            } catch {
+              // Ignorar
+            }
+          }
+        }
+        if (consolidated.length > 0) {
+          return consolidated;
+        }
+      }
+    }
 
     if (snap.empty) {
       try {
-        const seeded = await seedInitialProducts();
-        if (venueId) {
-          const seededFiltered = seeded.filter((p) => (p.venueId || DEFAULT_VENUE_ID) === venueId);
-          return seededFiltered.length > 0 ? seededFiltered : getCuratedProductsForVenue(venueId);
-        }
+        const seeded = await seedInitialProducts(targetVenueId);
         return seeded;
       } catch (seedErr) {
-        console.warn('No se pudo sembrar el inventario en Firestore. Usando catálogo específico de la sede:', seedErr);
-        return getCuratedProductsForVenue(venueId || DEFAULT_VENUE_ID);
+        console.warn('No se pudo sembrar el inventario en Firestore. Usando catálogo curado de la sede:', seedErr);
+        return getCuratedProductsForVenue(targetVenueId);
       }
     }
 
@@ -391,7 +429,7 @@ export async function getInventoryProducts(venueId?: string): Promise<InventoryP
     return products;
   } catch (err) {
     console.warn('Error al cargar inventario desde Firestore, usando catálogo curado de la sede:', err);
-    return getCuratedProductsForVenue(venueId || DEFAULT_VENUE_ID);
+    return getCuratedProductsForVenue(targetVenueId);
   }
 }
 
@@ -430,38 +468,22 @@ export async function setProductCost(productId: string, costPrice: number): Prom
   }
 }
 
-// ⚠️ DATOS DE PRUEBA - eliminar antes de producción
-export async function seedInitialProducts(): Promise<InventoryProduct[]> {
+// Sembrado inicial de catálogo determinista con vinculación estricta de sede
+export async function seedInitialProducts(venueId: string = DEFAULT_VENUE_ID): Promise<InventoryProduct[]> {
   const seeded: InventoryProduct[] = [];
   const now = new Date().toISOString();
+  const curated = getCuratedProductsForVenue(venueId);
 
-  for (const item of INITIAL_VENADOS_PRODUCTS) {
-    const { initialCost, ...productData } = item;
-    const docRef = doc(collection(db, COLLECTION_NAME));
+  for (const item of curated) {
+    const docRef = doc(db, COLLECTION_NAME, item.id);
     const product: InventoryProduct = {
-      ...productData,
-      image: normalizeGoogleDriveImageUrl(productData.image) || getDefaultProductPlaceholder(productData.category),
-      id: docRef.id,
+      ...item,
+      venueId,
+      image: normalizeGoogleDriveImageUrl(item.image) || getDefaultProductPlaceholder(item.category),
       createdAt: now,
       updatedAt: now,
     };
-    await setDoc(docRef, sanitizeFirestoreData(product));
-
-    // Sembrar costo confidencial en la subcolección cost/data
-    if (initialCost !== undefined) {
-      try {
-        const costDocRef = doc(db, COLLECTION_NAME, docRef.id, 'cost', 'data');
-        const costData: ProductCost = {
-          productId: docRef.id,
-          costPrice: initialCost,
-          updatedAt: now,
-        };
-        await setDoc(costDocRef, sanitizeFirestoreData(costData));
-      } catch (costErr) {
-        console.warn(`No se pudo sembrar el costo de ${docRef.id}:`, costErr);
-      }
-    }
-
+    await setDoc(docRef, sanitizeFirestoreData(product), { merge: true });
     seeded.push(product);
   }
 
@@ -479,6 +501,7 @@ export async function saveInventoryProduct(
 ): Promise<InventoryProduct> {
   const now = new Date().toISOString();
   const { costPrice, ...rootData } = productData;
+  const targetVenueId = rootData.venueId || DEFAULT_VENUE_ID;
 
   try {
     let savedProduct: InventoryProduct;
@@ -491,20 +514,23 @@ export async function saveInventoryProduct(
       const docRef = doc(db, COLLECTION_NAME, rootData.id);
       const updatePayload = {
         ...rootData,
+        venueId: targetVenueId,
+        price: Number(rootData.price) || 0,
+        stock: Number(rootData.stock) || 0,
+        minStockAlert: Number(rootData.minStockAlert) || 5,
         ...(normalizedImage !== undefined ? { image: normalizedImage } : {}),
         updatedAt: now,
       };
-      await updateDoc(docRef, sanitizeFirestoreData(updatePayload));
+      await setDoc(docRef, sanitizeFirestoreData(updatePayload), { merge: true });
       savedProduct = {
-        ...rootData,
-        ...(normalizedImage !== undefined ? { image: normalizedImage } : {}),
-        updatedAt: now,
+        ...updatePayload,
+        id: rootData.id,
       } as InventoryProduct;
     } else {
       const docRef = doc(collection(db, COLLECTION_NAME));
       const newProduct: InventoryProduct = {
         id: docRef.id,
-        venueId: rootData.venueId || DEFAULT_VENUE_ID,
+        venueId: targetVenueId,
         sku: rootData.sku,
         name: rootData.name,
         category: (rootData.category as any) || 'Jerseys',
@@ -538,19 +564,39 @@ export async function saveInventoryProduct(
   }
 }
 
-export async function adjustProductStock(productId: string, quantityChange: number, reason?: string): Promise<number> {
+export async function adjustProductStock(
+  productId: string,
+  quantityChange: number,
+  reason?: string,
+  fallbackProduct?: Partial<InventoryProduct>
+): Promise<number> {
   try {
     const docRef = doc(db, COLLECTION_NAME, productId);
     const snap = await getDoc(docRef);
-    if (!snap.exists()) throw new Error('Producto no encontrado');
 
-    const currentStock = snap.data().stock || 0;
+    let currentStock = 0;
+    let venueId = fallbackProduct?.venueId || DEFAULT_VENUE_ID;
+    let existingData: any = {};
+
+    if (snap.exists()) {
+      existingData = snap.data();
+      currentStock = typeof existingData.stock === 'number' ? existingData.stock : 0;
+      venueId = existingData.venueId || venueId;
+    } else if (fallbackProduct) {
+      currentStock = typeof fallbackProduct.stock === 'number' ? fallbackProduct.stock : 0;
+    }
+
     const newStock = Math.max(0, currentStock + quantityChange);
 
-    await updateDoc(docRef, {
+    const payload = {
+      ...(fallbackProduct || {}),
+      ...existingData,
       stock: newStock,
+      venueId,
       updatedAt: new Date().toISOString(),
-    });
+    };
+
+    await setDoc(docRef, sanitizeFirestoreData(payload), { merge: true });
 
     return newStock;
   } catch (err) {

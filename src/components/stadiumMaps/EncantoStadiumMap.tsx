@@ -92,10 +92,10 @@ export const EncantoStadiumMap: React.FC<EncantoStadiumMapProps> = ({
       {/* Indicador de estadio y hover flotante */}
       <div className="flex flex-wrap items-center justify-between gap-2 pb-2 text-xs border-b border-slate-800/80 mb-2">
         <div className="flex items-center gap-2">
-          <span className="inline-block w-2.5 h-2.5 rounded-full bg-purple-500 animate-pulse" />
+          <span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
           <span className="font-bold text-slate-200">Plano Arquitectónico Oficial: Estadio El Encanto</span>
-          <span className="text-[10px] px-2 py-0.5 rounded bg-purple-950/80 text-purple-300 border border-purple-800/40">
-            Mazatlán F.C. • Liga MX
+          <span className="text-[10px] px-2 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-800/40 font-bold">
+            Dorados de Sinaloa • El Gran Pez
           </span>
         </div>
         {hoveredSection && (
@@ -144,47 +144,47 @@ export const EncantoStadiumMap: React.FC<EncantoStadiumMapProps> = ({
         />
 
         {/* ========================================================= */}
-        {/* PUERTAS DE ACCESO OFICIALES (Círculos morados con número)  */}
+        {/* PUERTAS DE ACCESO OFICIALES (Círculos Dorado y Negro Dorados) */}
         {/* ========================================================= */}
         {/* Puerta 5: Superior Izquierda (Cabecera Superior) */}
         <g className="cursor-pointer">
-          <circle cx="120" cy="55" r="18" fill="#581C87" stroke="#A855F7" strokeWidth="2.5" />
-          <text x="120" y="61" textAnchor="middle" fill="#FFFFFF" fontSize="13" fontWeight="900">5</text>
-          <text x="120" y="85" textAnchor="middle" fill="#D8B4FE" fontSize="9" fontWeight="700">Puerta 5</text>
+          <circle cx="120" cy="55" r="18" fill="#09090B" stroke="#F59E0B" strokeWidth="2.5" />
+          <text x="120" y="61" textAnchor="middle" fill="#FBBF24" fontSize="13" fontWeight="900">5</text>
+          <text x="120" y="85" textAnchor="middle" fill="#FDE68A" fontSize="9" fontWeight="700">Puerta 5</text>
           <title>Puerta 5: Acceso a Cabecera Superior</title>
         </g>
 
         {/* Puertas 3 y 4: Superior Centro (Palcos, Sky Boxes, Lounge, Norte) */}
         <g className="cursor-pointer">
-          <circle cx="440" cy="40" r="18" fill="#581C87" stroke="#A855F7" strokeWidth="2.5" />
-          <text x="440" y="46" textAnchor="middle" fill="#FFFFFF" fontSize="13" fontWeight="900">4</text>
-          <circle cx="490" cy="40" r="18" fill="#581C87" stroke="#A855F7" strokeWidth="2.5" />
-          <text x="490" y="46" textAnchor="middle" fill="#FFFFFF" fontSize="13" fontWeight="900">3</text>
-          <text x="465" y="66" textAnchor="middle" fill="#D8B4FE" fontSize="9" fontWeight="700">Puertas 3 y 4</text>
+          <circle cx="440" cy="40" r="18" fill="#09090B" stroke="#F59E0B" strokeWidth="2.5" />
+          <text x="440" y="46" textAnchor="middle" fill="#FBBF24" fontSize="13" fontWeight="900">4</text>
+          <circle cx="490" cy="40" r="18" fill="#09090B" stroke="#F59E0B" strokeWidth="2.5" />
+          <text x="490" y="46" textAnchor="middle" fill="#FBBF24" fontSize="13" fontWeight="900">3</text>
+          <text x="465" y="66" textAnchor="middle" fill="#FDE68A" fontSize="9" fontWeight="700">Puertas 3 y 4</text>
           <title>Puertas 3 y 4: Acceso a General Norte, Palcos, Sky Boxes y Zona Lounge</title>
         </g>
 
         {/* Puerta 2: Superior Derecha (Oriente Superior) */}
         <g className="cursor-pointer">
-          <circle cx="810" cy="55" r="18" fill="#581C87" stroke="#A855F7" strokeWidth="2.5" />
-          <text x="810" y="61" textAnchor="middle" fill="#FFFFFF" fontSize="13" fontWeight="900">2</text>
-          <text x="810" y="85" textAnchor="middle" fill="#D8B4FE" fontSize="9" fontWeight="700">Puerta 2</text>
+          <circle cx="810" cy="55" r="18" fill="#09090B" stroke="#F59E0B" strokeWidth="2.5" />
+          <text x="810" y="61" textAnchor="middle" fill="#FBBF24" fontSize="13" fontWeight="900">2</text>
+          <text x="810" y="85" textAnchor="middle" fill="#FDE68A" fontSize="9" fontWeight="700">Puerta 2</text>
           <title>Puerta 2: Acceso a Oriente Superior</title>
         </g>
 
         {/* Puerta 1: Extremo Derecho Centro (General Sur, Tiro de Esquina, Centrales y Laterales) */}
         <g className="cursor-pointer">
-          <circle cx="865" cy="320" r="20" fill="#581C87" stroke="#A855F7" strokeWidth="2.5" />
-          <text x="865" y="326" textAnchor="middle" fill="#FFFFFF" fontSize="14" fontWeight="900">1</text>
-          <text x="865" y="352" textAnchor="middle" fill="#D8B4FE" fontSize="9" fontWeight="700">Puerta 1</text>
+          <circle cx="865" cy="320" r="20" fill="#09090B" stroke="#F59E0B" strokeWidth="2.5" />
+          <text x="865" y="326" textAnchor="middle" fill="#FBBF24" fontSize="14" fontWeight="900">1</text>
+          <text x="865" y="352" textAnchor="middle" fill="#FDE68A" fontSize="9" fontWeight="700">Puerta 1</text>
           <title>Puerta 1: Acceso a General Sur, Tiro de Esquina, Poniente Central/Lateral y Oriente Central/Lateral</title>
         </g>
 
         {/* Puerta 6: Inferior Izquierda (Poniente Superior) */}
         <g className="cursor-pointer">
-          <circle cx="120" cy="580" r="18" fill="#581C87" stroke="#A855F7" strokeWidth="2.5" />
-          <text x="120" y="586" textAnchor="middle" fill="#FFFFFF" fontSize="13" fontWeight="900">6</text>
-          <text x="120" y="608" textAnchor="middle" fill="#D8B4FE" fontSize="9" fontWeight="700">Puerta 6</text>
+          <circle cx="120" cy="580" r="18" fill="#09090B" stroke="#F59E0B" strokeWidth="2.5" />
+          <text x="120" y="586" textAnchor="middle" fill="#FBBF24" fontSize="13" fontWeight="900">6</text>
+          <text x="120" y="608" textAnchor="middle" fill="#FDE68A" fontSize="9" fontWeight="700">Puerta 6</text>
           <title>Puerta 6: Acceso a Poniente Superior</title>
         </g>
 
@@ -239,30 +239,39 @@ export const EncantoStadiumMap: React.FC<EncantoStadiumMapProps> = ({
           />
           <circle cx="460" cy="315" r="3" fill="#FFFFFF" />
 
-          {/* ESCUDO MAZATLÁN F.C. EN MEDIO CAMPO */}
-          <g transform="translate(436, 291)" opacity="0.85">
-            <circle cx="24" cy="24" r="22" fill="#2E1065" stroke="#9333EA" strokeWidth="1.5" />
-            {/* Ancla estilizada */}
+          {/* ESCUDO OFICIAL DORADOS DE SINALOA EN MEDIO CAMPO (EL GRAN PEZ) */}
+          <g transform="translate(436, 291)" opacity="0.95">
+            <circle cx="24" cy="24" r="22" fill="#09090B" stroke="#F59E0B" strokeWidth="2" />
+            {/* Pez Dorado Estilizado */}
             <path
-              d="M24 10 L24 34 M17 28 Q24 38 31 28 M19 14 L29 14"
-              stroke="#FACC15"
-              strokeWidth="2"
-              fill="none"
-              strokeLinecap="round"
+              d="M13 24 Q20 15 32 19 Q35 24 32 29 Q20 33 13 24 Z"
+              fill="#F59E0B"
+              stroke="#D97706"
+              strokeWidth="1"
             />
-            <circle cx="24" cy="11" r="2.5" fill="#FACC15" />
+            {/* Cola del pez */}
+            <path
+              d="M32 24 L37 18 L35 24 L37 30 Z"
+              fill="#F59E0B"
+            />
+            {/* Ojo y aleta dorada */}
+            <circle cx="17" cy="23" r="1.5" fill="#09090B" />
+            <path
+              d="M22 24 Q26 22 25 26 Z"
+              fill="#FEF08A"
+            />
           </g>
           <text
             x="460"
             y="375"
             textAnchor="middle"
-            fill="#FFFFFF"
+            fill="#FDE68A"
             fontSize="8"
-            fontWeight="800"
+            fontWeight="900"
             letterSpacing="1.5"
-            opacity="0.75"
+            opacity="0.9"
           >
-            MAZATLÁN F.C.
+            DORADOS DE SINALOA
           </text>
 
           {/* Área grande izquierda (Norte) */}

@@ -66,10 +66,10 @@ export interface HeroSlide {
   eventId?: string;
 }
 
-export type EventType = 'baseball' | 'football' | 'basketball' | 'concert' | 'other';
+export type EventType = 'baseball' | 'football' | 'soccer' | 'basketball' | 'concert' | 'other';
 
 export interface EventPriceTier {
-  section: string; // ej. "Platea Baja Central"
+  section: string; // ej. "Platino", "Deluxe Supreme", "Oriente Central"
   price: number;
 }
 

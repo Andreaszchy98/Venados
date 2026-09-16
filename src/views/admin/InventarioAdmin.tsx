@@ -146,19 +146,22 @@ export const InventarioAdmin: React.FC<InventarioAdminProps> = ({ user }) => {
   };
 
   const handleStockDelta = async (productId: string, delta: number) => {
+    const prod = products.find((p) => p.id === productId);
     try {
-      const newStock = await adjustProductStock(productId, delta);
+      const newStock = await adjustProductStock(productId, delta, undefined, prod);
       setProducts((prev) =>
         prev.map((p) => (p.id === productId ? { ...p, stock: newStock } : p))
       );
-    } catch (err) {
+      setFeedbackMessage(`Stock actualizado a ${newStock} unidades.`);
+    } catch (err: any) {
       console.error('Error adjusting stock:', err);
+      setFeedbackMessage(`Error al actualizar stock: ${err?.message || 'Verifica permisos de administrador'}`);
     }
   };
 
   const handleOpenCreateModal = () => {
     setEditingProduct({
-      sku: `VEN-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
+      sku: `SKU-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
       name: '',
       category: 'Jerseys',
       price: 999,
@@ -167,8 +170,9 @@ export const InventarioAdmin: React.FC<InventarioAdminProps> = ({ user }) => {
       sizes: ['S', 'M', 'L', 'XL'],
       image: getDefaultProductPlaceholder('Jerseys'),
       description: '',
-      supplier: 'Venados Store Oficial',
+      supplier: 'Tienda Oficial',
       active: true,
+      venueId,
     });
     setEditingCostPrice(450);
     setIsModalOpen(true);
@@ -178,6 +182,7 @@ export const InventarioAdmin: React.FC<InventarioAdminProps> = ({ user }) => {
     const normalizedImg = normalizeGoogleDriveImageUrl(product.image) || getDefaultProductPlaceholder(product.category);
     setEditingProduct({
       ...product,
+      venueId: product.venueId || venueId,
       image: normalizedImg,
     });
     const currentCost = costsMap[product.id] ?? (await getProductCost(product.id)) ?? 0;
@@ -215,9 +220,10 @@ export const InventarioAdmin: React.FC<InventarioAdminProps> = ({ user }) => {
 
       setIsModalOpen(false);
       setFeedbackMessage('Producto guardado correctamente en inventario.');
-      fetchInventory();
-    } catch (err) {
+      await fetchInventory();
+    } catch (err: any) {
       console.error('Error saving product:', err);
+      setFeedbackMessage(`Error al guardar producto: ${err?.message || 'Verifica permisos o conexión'}`);
     } finally {
       setSaving(false);
     }
@@ -580,7 +586,9 @@ export const InventarioAdmin: React.FC<InventarioAdminProps> = ({ user }) => {
                   />
                 </div>
                 <div>
-                  <label className="block font-sports uppercase tracking-wider font-bold text-slate-300 mb-1">Stock Inicial *</label>
+                  <label className="block font-sports uppercase tracking-wider font-bold text-slate-300 mb-1">
+                    {editingProduct.id ? 'Stock Disponible *' : 'Stock Inicial *'}
+                  </label>
                   <input
                     type="number"
                     required

@@ -18,6 +18,12 @@ import { DEFAULT_VENUE_ID } from './constants';
 const STANDS_COLLECTION = 'stands';
 const MENU_COLLECTION = 'menuItems';
 
+// =========================================================================================
+// ⚠️ DATOS DE MUESTRA CANÓNICOS - EXCLUSIVOS DEL ESTADIO TEODORO MARISCAL (DEFAULT_VENUE_ID)
+// Estos negocios son propios y representativos exclusivamente del Estadio Teodoro Mariscal
+// en Mazatlán. NO son un fallback genérico ni deben sembrarse o devolverse para ninguna
+// otra sede deportiva o estadio (ej. venue-encanto).
+// =========================================================================================
 export const INITIAL_STANDS: StadiumStand[] = [
   {
     id: 'stand-mariscos-muchacho-alegre',
@@ -174,6 +180,8 @@ const INITIAL_MENU_ITEMS: Record<string, Omit<MenuItem, 'id' | 'standId' | 'crea
 };
 
 export async function getStadiumStands(venueId?: string): Promise<StadiumStand[]> {
+  const isMariscal = !venueId || venueId === DEFAULT_VENUE_ID;
+
   try {
     const q = venueId
       ? query(collection(db, STANDS_COLLECTION), where('venueId', '==', venueId), limit(50))
@@ -181,46 +189,68 @@ export async function getStadiumStands(venueId?: string): Promise<StadiumStand[]
     const snap = await getDocs(q);
 
     if (snap.empty) {
+      // Si la sede solicitada es distinta al Mariscal (ej. venue-encanto) y no tiene negocios
+      // registrados en Firestore, DEBE devolverse un arreglo VACÍO. NUNCA sembrar ni retornar
+      // los negocios del Mariscal como fallback.
+      if (!isMariscal) {
+        return [];
+      }
+
+      // Únicamente para el Estadio Teodoro Mariscal sembramos sus datos de muestra iniciales
       try {
         const seeded = await seedInitialStandsAndMenu();
-        if (venueId) {
-          const match = seeded.filter((s) => (s.venueId || DEFAULT_VENUE_ID) === venueId);
-          return (match.length > 0 ? match : seeded).slice(0, 3);
-        }
-        return seeded.slice(0, 3);
+        const match = seeded.filter((s) => (s.venueId || DEFAULT_VENUE_ID) === DEFAULT_VENUE_ID);
+        return match.slice(0, 3);
       } catch (seedErr) {
-        console.warn('No se pudieron sembrar los puestos en Firestore. Usando 3 datos iniciales:', seedErr);
+        console.warn('No se pudieron sembrar los puestos en Firestore para Mariscal. Usando datos iniciales:', seedErr);
         return INITIAL_STANDS.slice(0, 3);
       }
     }
 
     const allDocs = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StadiumStand[];
 
-    // Deduplicar estrictamente por nombre o ID para garantizar exactamente un puesto por concepto (máx 3)
+    // Si se especificó una sede, asegurar en memoria que no haya puestos de otra sede
+    const venueFilteredDocs = venueId
+      ? allDocs.filter((s) => (s.venueId || DEFAULT_VENUE_ID) === venueId)
+      : allDocs;
+
+    if (venueFilteredDocs.length === 0) {
+      return [];
+    }
+
+    // Deduplicar estrictamente por nombre o ID para garantizar exactamente un puesto por concepto
     const uniqueMap = new Map<string, StadiumStand>();
-    for (const s of allDocs) {
+    for (const s of venueFilteredDocs) {
       const key = (s.name || '').trim().toLowerCase();
       if (!uniqueMap.has(key)) {
         uniqueMap.set(key, s);
       }
     }
-    const deduplicated = Array.from(uniqueMap.values()).slice(0, 3);
+    const deduplicated = Array.from(uniqueMap.values());
 
-    // Si Firestore acumuló más de 3 puestos o duplicados de sesiones anteriores, ejecutar limpieza en segundo plano
-    if (allDocs.length > 3) {
-      cleanupDuplicateStands().catch(() => {});
+    // Solo para el Mariscal limitamos canónicamente a 3 y realizamos mantenimiento si acumuló duplicados
+    if (isMariscal) {
+      if (allDocs.length > 3) {
+        cleanupDuplicateStands().catch(() => {});
+      }
+      return deduplicated.slice(0, 3);
     }
 
     return deduplicated;
   } catch (err) {
     handleFirestoreError(err, OperationType.LIST, STANDS_COLLECTION);
-    return INITIAL_STANDS.slice(0, 3);
+    // En caso de fallo de red: solo devolver datos de muestra si es la sede del Mariscal.
+    // Para cualquier otra sede solicitada explícitamente, siempre retornar arreglo vacío.
+    if (isMariscal) {
+      return INITIAL_STANDS.slice(0, 3);
+    }
+    return [];
   }
 }
 
 /**
- * Limpia y consolida puestos en Firestore dejando únicamente los 3 concesionarios canónicos.
- * Elimina duplicados generados aleatoriamente y sus respectivos platillos de menú huérfanos.
+ * Limpia y consolida puestos en Firestore dejando únicamente los 3 concesionarios canónicos del Teodoro Mariscal.
+ * Respeta escrupulosamente los negocios de otras sedes (ej. venue-encanto) sin tocarlos ni eliminarlos.
  */
 export async function cleanupDuplicateStands(): Promise<void> {
   try {
@@ -230,9 +260,16 @@ export async function cleanupDuplicateStands(): Promise<void> {
 
     for (const d of standsSnap.docs) {
       const data = d.data() as StadiumStand;
+      const standVenue = data.venueId || DEFAULT_VENUE_ID;
+
+      // NUNCA tocar o eliminar puestos creados para otras sedes
+      if (standVenue !== DEFAULT_VENUE_ID) {
+        continue;
+      }
+
       const normalizedName = (data.name || '').trim().toLowerCase();
 
-      // Si no es un ID canónico o ya procesamos un puesto con este nombre, borrar duplicado
+      // Si no es un ID canónico o ya procesamos un puesto con este nombre en Mariscal, borrar duplicado
       const isExtraOrDuplicate = !canonicalIds.has(d.id) || seenNames.has(normalizedName);
       if (isExtraOrDuplicate) {
         await deleteDoc(d.ref).catch(() => {});
@@ -250,14 +287,17 @@ export async function cleanupDuplicateStands(): Promise<void> {
       }
     }
 
-    // Asegurar que los 3 concesionarios canónicos existen con sus IDs deterministas
+    // Asegurar que los 3 concesionarios canónicos de Mariscal existen con sus IDs deterministas
     await seedInitialStandsAndMenu();
   } catch (err) {
-    console.warn('cleanupDuplicateStands: Nota durante la consolidación de puestos:', err);
+    console.warn('cleanupDuplicateStands: Nota durante la consolidación de puestos del Mariscal:', err);
   }
 }
 
-// ⚠️ DATOS POR DEFECTO - Deterministas (máximo 3 puestos)
+// =========================================================================================
+// ⚠️ DATOS POR DEFECTO - DETERMINISTAS EXCLUSIVOS DEL ESTADIO TEODORO MARISCAL (DEFAULT_VENUE_ID)
+// Sembrado determinista únicamente para el Estadio Teodoro Mariscal.
+// =========================================================================================
 export async function seedInitialStandsAndMenu(): Promise<StadiumStand[]> {
   const createdStands: StadiumStand[] = [];
   const now = new Date().toISOString();
@@ -266,7 +306,7 @@ export async function seedInitialStandsAndMenu(): Promise<StadiumStand[]> {
     const standDocRef = doc(db, STANDS_COLLECTION, standData.id);
     const fullStand: StadiumStand = {
       ...standData,
-      venueId: standData.venueId || DEFAULT_VENUE_ID,
+      venueId: DEFAULT_VENUE_ID,
       createdAt: standData.createdAt || now,
       updatedAt: now,
     };
@@ -282,7 +322,7 @@ export async function seedInitialStandsAndMenu(): Promise<StadiumStand[]> {
         ...item,
         id: `menu-${standData.id}-${idx + 1}`,
         standId: standData.id,
-        venueId: standData.venueId || DEFAULT_VENUE_ID,
+        venueId: DEFAULT_VENUE_ID,
         createdAt: now,
       };
       await setDoc(itemDocRef, fullItem, { merge: true });
@@ -302,6 +342,7 @@ export async function getMenuItemsByStand(standId: string): Promise<MenuItem[]> 
     return snap.docs.map((d) => ({ id: d.id, ...d.data() })) as MenuItem[];
   } catch (err) {
     handleFirestoreError(err, OperationType.LIST, MENU_COLLECTION);
+    return [];
   }
 }
 
@@ -314,13 +355,15 @@ export async function getAllMenuItems(venueId?: string): Promise<MenuItem[]> {
     let items = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as MenuItem[];
 
     // Si no hay items con venueId explícito guardados en Firestore,
-    // filtrar según los stands asignados a esta sede para compatibilidad
+    // filtrar según los stands registrados para esta sede
     if (items.length === 0 && venueId) {
       const stands = await getStadiumStands(venueId);
       const standIds = new Set(stands.map((s) => s.id));
       if (standIds.size > 0) {
         const allSnap = await getDocs(query(collection(db, MENU_COLLECTION), limit(150)));
         items = (allSnap.docs.map((d) => ({ id: d.id, ...d.data() })) as MenuItem[]).filter((i) => standIds.has(i.standId));
+      } else {
+        items = [];
       }
     }
     return items;

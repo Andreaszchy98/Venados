@@ -131,7 +131,7 @@ export const MARISCAL_ZONES: Record<string, ZoneMeta> = {
 };
 
 /**
- * Zonas oficiales de Estadio El Encanto (Mazatlán F.C.)
+ * Zonas oficiales de Estadio El Encanto (Dorados de Sinaloa)
  * Conforme a la distribución física oficial y puertas de acceso
  */
 export const ENCANTO_ZONES: Record<string, ZoneMeta> = {
@@ -171,11 +171,11 @@ export const ENCANTO_ZONES: Record<string, ZoneMeta> = {
   'Oriente Lateral': {
     name: 'Oriente Lateral',
     defaultPrice: 450,
-    colorHex: '#7C3AED',
-    badgeBg: 'bg-purple-500/15 text-purple-600 border-purple-500/30',
-    badgeText: 'text-purple-500',
-    fillColor: '#7C3AED',
-    strokeColor: '#6D28D9',
+    colorHex: '#D97706',
+    badgeBg: 'bg-amber-500/15 text-amber-600 border-amber-500/30',
+    badgeText: 'text-amber-500',
+    fillColor: '#D97706',
+    strokeColor: '#B45309',
     gate: 'Puerta 1',
     description: 'Grada lateral oriente con cercanía a las bandas de juego',
   },
@@ -210,7 +210,7 @@ export const ENCANTO_ZONES: Record<string, ZoneMeta> = {
     fillColor: '#EAB308',
     strokeColor: '#CA8A04',
     gate: 'Puerta 1',
-    description: 'Cabecera sur detrás de portería, zona de la porra y afición Cañonera',
+    description: 'Cabecera sur detrás de portería, zona de la porra y afición local',
   },
   'General Norte': {
     name: 'General Norte',
@@ -298,19 +298,48 @@ export const ENCANTO_GATES_GUIDE: StadiumAccessGateInfo[] = [
  * Detecta si la sede o evento corresponde a Estadio El Encanto
  */
 export function isEncantoVenue(venueId?: string, venueName?: string, eventType?: string): boolean {
-  if (venueId === 'venue-encanto' || venueId === 'estadio-encanto' || venueId === 'venue-kraken') {
+  if (venueId === 'venue-encanto' || venueId === 'estadio-encanto') {
     return true;
   }
   const name = (venueName || '').toLowerCase();
   if (
     name.includes('encanto') ||
-    name.includes('kraken') ||
-    name.includes('mazatlán f.c.') ||
-    name.includes('mazatlan fc')
+    name.includes('dorados') ||
+    name.includes('el gran pez')
   ) {
     return true;
   }
   return false;
+}
+
+/**
+ * Patrones y nombres de secciones obsoletas / anteriores que deben ser eliminadas.
+ * (preferente lateral, norte, este, platea baja, bleachers, etc.)
+ */
+export const LEGACY_SECTION_PATTERNS = [
+  /preferente\s*lateral/i,
+  /platea\s*baja/i,
+  /platea\s*central/i,
+  /bleachers/i,
+  /palco\s*vip\s*premier/i,
+  /gradas?\s*generales?/i,
+  /lateral\s*preferente/i,
+  /central\s*vip/i,
+  /palco\s*corporativo/i,
+  /^norte$/i,
+  /^este$/i,
+  /^sur$/i,
+  /^poniente$/i,
+  /^oriente$/i,
+];
+
+/**
+ * Comprueba si un nombre de sección es de las anteriores / obsoletas
+ */
+export function isLegacySection(sectionName: string): boolean {
+  if (!sectionName) return true;
+  const clean = sectionName.trim();
+  return LEGACY_SECTION_PATTERNS.some((pattern) => pattern.test(clean));
 }
 
 /**
@@ -328,21 +357,70 @@ export function getStadiumZones(
 }
 
 /**
+ * Obtiene la lista predeterminada de secciones y precios oficiales para un recinto
+ * basada 100% en las zonas que aparecen en el mapa físico.
+ */
+export function getOfficialPriceTiersForVenue(
+  venueId?: string,
+  venueName?: string,
+  eventType?: string
+): { section: string; price: number }[] {
+  const zones = getStadiumZones(venueId, venueName, eventType);
+  return Object.values(zones).map((z) => ({
+    section: z.name,
+    price: z.defaultPrice,
+  }));
+}
+
+/**
+ * Resuelve y sanitiza la lista de secciones y precios para un evento específico.
+ * - Elimina por completo las secciones anteriores (preferente lateral, norte, este, platea baja, bleachers, etc.)
+ * - Devuelve exactamente las secciones que aparecen en el mapa del estadio.
+ * - Si el evento tiene un precio personalizado para una sección oficial del mapa, lo conserva.
+ */
+export function getOfficialPriceTiersForEvent(
+  event?: VenueEvent | null,
+  venueName?: string
+): { section: string; price: number }[] {
+  const targetVenueId = event?.venueId;
+  const targetVenueName = venueName || event?.venueName;
+  const targetType = event?.type;
+  const officialZones = getStadiumZones(targetVenueId, targetVenueName, targetType);
+
+  // Mapear cada zona oficial del mapa con el precio del evento (si existe y no es legacy) o su precio predeterminado del mapa
+  return Object.values(officialZones).map((zone) => {
+    let finalPrice = zone.defaultPrice;
+
+    if (event && event.priceTiers && event.priceTiers.length > 0) {
+      // Buscar coincidencia exacta con nombre de la zona oficial
+      const match = event.priceTiers.find(
+        (t) =>
+          !isLegacySection(t.section) &&
+          t.section.toLowerCase().trim() === zone.name.toLowerCase().trim()
+      );
+      if (match && typeof match.price === 'number' && match.price > 0) {
+        finalPrice = match.price;
+      }
+    }
+
+    return {
+      section: zone.name,
+      price: finalPrice,
+    };
+  });
+}
+
+/**
  * Resuelve el precio por zona para un evento específico
  */
 export function getZonePrice(zoneName: string, event?: VenueEvent | null): number {
   if (event && event.priceTiers && event.priceTiers.length > 0) {
     const match = event.priceTiers.find(
-      (t) => t.section.toLowerCase().trim() === zoneName.toLowerCase().trim()
+      (t) =>
+        !isLegacySection(t.section) &&
+        t.section.toLowerCase().trim() === zoneName.toLowerCase().trim()
     );
     if (match) return match.price;
-
-    const partial = event.priceTiers.find(
-      (t) =>
-        t.section.toLowerCase().includes(zoneName.toLowerCase()) ||
-        zoneName.toLowerCase().includes(t.section.toLowerCase())
-    );
-    if (partial) return partial.price;
   }
   const zones = getStadiumZones(event?.venueId, event?.venueName, event?.type);
   return zones[zoneName]?.defaultPrice || MARISCAL_ZONES[zoneName]?.defaultPrice || 350;
@@ -427,7 +505,7 @@ export function buildMariscalSectionsData(venueId: string): Omit<SeatSection, 'i
 }
 
 /**
- * Generador de las definiciones oficiales de secciones de Estadio El Encanto (Mazatlán F.C.)
+ * Generador de las definiciones oficiales de secciones de Estadio El Encanto (Dorados de Sinaloa)
  * Conforme a la distribución física oficial:
  *
  * Zona               | Secciones
@@ -440,7 +518,7 @@ export function buildMariscalSectionsData(venueId: string): Omit<SeatSection, 'i
  * Oriente Superior   | OS-1 a OS-8 (Nivel alto oriente, Puerta 2)
  * Cabecera Superior  | CS-1 a CS-8 (Grada alta norte detrás de portería, Puerta 5)
  * General Norte      | GN-1 a GN-6 (Cabecera norte baja, Puerta 3)
- * General Sur        | GS-1 a GS-8 (Cabecera sur porra cañonera, Puerta 1)
+ * General Sur        | GS-1 a GS-8 (Cabecera sur porra de Dorados y afición local, Puerta 1)
  * Tiro de Esquina    | TE-1 a TE-4 (Vértices de córner, Puerta 1)
  * Sky Boxes          | SB-1 a SB-4 (Palcos corporativos superiores, Puertas 3 y 4)
  * Zona Lounge        | ZL-1, ZL-2  (Área lounge VIP cabecera norte, Puertas 3 y 4)
@@ -577,6 +655,52 @@ export async function seedSeatMapForVenue(venueId: string = DEFAULT_VENUE_ID): P
 export const seedMariscalSeatMap = seedSeatMapForVenue;
 
 /**
+ * Filtra y sanitiza las secciones asegurando coherencia total con el estadio correspondiente.
+ */
+export function sanitizeVenueSections(venueId: string, rawSections: SeatSection[], eventType?: string): SeatSection[] {
+  const isEncanto = isEncantoVenue(venueId, undefined, eventType);
+  if (isEncanto) {
+    const valid = rawSections.filter((s) => {
+      const num = (s.sectionNumber || '').trim().toUpperCase();
+      const zone = (s.zoneName || '').trim().toLowerCase();
+      if (zone === 'norte' || zone === 'este') return false;
+      return (
+        num.startsWith('PC-') ||
+        num.startsWith('PL-') ||
+        num.startsWith('PS-') ||
+        num.startsWith('OC-') ||
+        num.startsWith('OL-') ||
+        num.startsWith('OS-') ||
+        num.startsWith('CS-') ||
+        num.startsWith('GN-') ||
+        num.startsWith('GS-') ||
+        num.startsWith('TE-') ||
+        num.startsWith('SB-') ||
+        num.startsWith('ZL-') ||
+        num.startsWith('PALCO')
+      );
+    });
+    if (valid.length > 0) return valid;
+    const master = buildEncantoSectionsData(venueId);
+    return master.map((d) => ({ id: `${venueId}_sec_${d.sectionNumber.replace(/\s+/g, '_')}`, ...d }));
+  } else {
+    const valid = rawSections.filter((s) => {
+      const num = (s.sectionNumber || '').trim().toUpperCase();
+      return (
+        !num.startsWith('PC-') &&
+        !num.startsWith('PL-') &&
+        !num.startsWith('TE-') &&
+        !num.startsWith('GN-') &&
+        !num.startsWith('GS-')
+      );
+    });
+    if (valid.length > 0) return valid;
+    const master = buildMariscalSectionsData(venueId);
+    return master.map((d) => ({ id: `${venueId}_sec_${d.sectionNumber.replace(/\s+/g, '_')}`, ...d }));
+  }
+}
+
+/**
  * Obtener las secciones del estadio para una sede
  */
 export async function getSeatSectionsForVenue(venueId: string = DEFAULT_VENUE_ID): Promise<SeatSection[]> {
@@ -588,7 +712,8 @@ export async function getSeatSectionsForVenue(venueId: string = DEFAULT_VENUE_ID
       return await seedSeatMapForVenue(venueId);
     }
 
-    return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<SeatSection, 'id'>) }));
+    const raw = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<SeatSection, 'id'>) }));
+    return sanitizeVenueSections(venueId, raw);
   } catch (err) {
     console.warn('Error fetching seat sections:', err);
     const localData = buildSectionsForVenue(venueId);
@@ -612,8 +737,8 @@ export function subscribeSeatSections(
         const localData = buildSectionsForVenue(venueId);
         callback(localData.map((d) => ({ id: `${venueId}_sec_${d.sectionNumber.replace(/\s+/g, '_')}`, ...d })));
       } else {
-        const sections = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<SeatSection, 'id'>) }));
-        callback(sections);
+        const raw = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<SeatSection, 'id'>) }));
+        callback(sanitizeVenueSections(venueId, raw));
       }
     },
     (err) => {
@@ -777,7 +902,7 @@ export async function purchaseSeatsTransaction(params: PurchaseSeatsParams): Pro
   // Ejecución atómica
   const result = await runTransaction(db, async (transaction) => {
     // 1. TODAS LAS LECTURAS PRIMERO (Regla estricta de Firestore Transaction)
-    const seatSnapshots: { ref: any; seat: SeatPurchaseItem }[] = [];
+    const seatSnapshots: { ref: any; seat: SeatPurchaseItem; isNew: boolean }[] = [];
     const unavailableSeats: string[] = [];
 
     for (const seat of selectedSeats) {
@@ -785,9 +910,7 @@ export async function purchaseSeatsTransaction(params: PurchaseSeatsParams): Pro
       const snap = await transaction.get(seatRef);
 
       if (!snap.exists()) {
-        unavailableSeats.push(
-          `Sec ${seat.sectionNumber} - Fila ${seat.rowLabel} Asiento ${seat.seatNumber} (No registrado en sistema)`
-        );
+        seatSnapshots.push({ ref: seatRef, seat, isNew: true });
         continue;
       }
 
@@ -799,7 +922,7 @@ export async function purchaseSeatsTransaction(params: PurchaseSeatsParams): Pro
         continue;
       }
 
-      seatSnapshots.push({ ref: seatRef, seat });
+      seatSnapshots.push({ ref: seatRef, seat, isNew: false });
     }
 
     if (unavailableSeats.length > 0) {
@@ -813,9 +936,9 @@ export async function purchaseSeatsTransaction(params: PurchaseSeatsParams): Pro
     const createdTicketIds: string[] = [];
     const stadiumZones = getStadiumZones(event.venueId, stadiumName, event.type);
     const isEncanto = isEncantoVenue(event.venueId, stadiumName, event.type);
-    const qrPrefix = isEncanto ? 'MZT-2026-TKT-' : 'VND-2026-TKT-';
+    const qrPrefix = isEncanto ? 'DOR-2026-TKT-' : 'VND-2026-TKT-';
 
-    for (const { ref: seatRef, seat } of seatSnapshots) {
+    for (const { ref: seatRef, seat, isNew } of seatSnapshots) {
       const ticketDocRef = doc(collection(db, 'tickets'));
       const qrId = `${qrPrefix}${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
       const zoneMeta = stadiumZones[seat.zoneName];
@@ -844,13 +967,31 @@ export async function purchaseSeatsTransaction(params: PurchaseSeatsParams): Pro
       };
 
       transaction.set(ticketDocRef, ticketData);
-      transaction.update(seatRef, {
-        status: 'vendido',
-        ticketId: ticketDocRef.id,
-        purchaseId,
-        updatedAt: now,
-        userId,
-      });
+
+      if (isNew) {
+        transaction.set(seatRef, {
+          id: seat.seatId,
+          eventId: event.id,
+          sectionId: seat.sectionId || `${event.venueId}_sec_${seat.sectionNumber.replace(/\s+/g, '_')}`,
+          sectionNumber: seat.sectionNumber,
+          zoneName: seat.zoneName,
+          rowLabel: seat.rowLabel,
+          seatNumber: seat.seatNumber,
+          status: 'vendido',
+          ticketId: ticketDocRef.id,
+          purchaseId,
+          updatedAt: now,
+          userId,
+        });
+      } else {
+        transaction.update(seatRef, {
+          status: 'vendido',
+          ticketId: ticketDocRef.id,
+          purchaseId,
+          updatedAt: now,
+          userId,
+        });
+      }
 
       createdTicketIds.push(ticketDocRef.id);
     }

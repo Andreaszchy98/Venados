@@ -56,7 +56,7 @@ export async function createSampleMembershipForUser(
     status: 'activa',
     startDate: '2026-01-15',
     renewalDate: '2027-01-15',
-    seatAssigned: 'Platea Baja - Fila D, Asiento 12',
+    seatAssigned: 'Platino - Fila D, Asiento 12',
     benefits: [
       'Acceso exclusivo por Puerta VIP',
       'Descuento del 15% en tienda oficial',
