@@ -379,24 +379,30 @@ const translations: Record<Language, Record<string, string>> = {
   },
 };
 
-interface LanguageContextType {
+export interface LanguageContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
   toggleLanguage: () => void;
   t: (key: string, fallback?: string) => string;
+  autoTranslate: (text: string) => string;
+  translateBatch: (texts: string[], targetLang?: Language) => Promise<string[]>;
+  isTranslating: boolean;
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 const STORAGE_KEY = 'vxp_language_pref';
+const CACHE_KEY = 'vxp_translations_cache_v2';
 
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>(() => {
     // 1. Verificar preferencia guardada en localStorage
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved === 'es' || saved === 'en') {
-      return saved;
-    }
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved === 'es' || saved === 'en') {
+        return saved;
+      }
+    } catch {}
     // 2. O detectar el idioma del navegador
     if (typeof navigator !== 'undefined' && navigator.language) {
       if (navigator.language.toLowerCase().startsWith('en')) {
@@ -405,6 +411,36 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
     return 'es';
   });
+
+  // Caché en memoria y localStorage para traducciones dinámicas con IA
+  const [dynamicCache, setDynamicCache] = useState<Record<Language, Record<string, string>>>(() => {
+    try {
+      const saved = localStorage.getItem(CACHE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          es: parsed.es || {},
+          en: parsed.en || {},
+        };
+      }
+    } catch {}
+    return { es: {}, en: {} };
+  });
+
+  const [isTranslating, setIsTranslating] = useState(false);
+
+  // Cola de textos pendientes por traducir en lote
+  const pendingBatchRef = React.useRef<Set<string>>(new Set());
+  const debounceTimerRef = React.useRef<any>(null);
+
+  // Guardar caché en localStorage cuando cambie
+  useEffect(() => {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify(dynamicCache));
+    } catch (e) {
+      console.warn('No se pudo guardar la caché de traducción en localStorage:', e);
+    }
+  }, [dynamicCache]);
 
   // Guardar en localStorage y actualizar estado
   const setLanguage = (lang: Language) => {
@@ -430,21 +466,191 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setLanguage(language === 'es' ? 'en' : 'es');
   };
 
-  // Función de traducción
+  // Función interna para solicitar traducción en lote al backend de Gemini (/api/translate)
+  const executeBatchTranslation = async (targetLang: Language) => {
+    const queue: string[] = Array.from(pendingBatchRef.current);
+    pendingBatchRef.current.clear();
+
+    if (queue.length === 0) return;
+
+    // Filtrar los que ya están en caché para el idioma objetivo
+    const needed: string[] = queue.filter((txt: string) => !dynamicCache[targetLang]?.[txt]);
+    if (needed.length === 0) return;
+
+    setIsTranslating(true);
+    try {
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          texts: needed,
+          targetLang,
+          sourceLang: targetLang === 'en' ? 'es' : 'en',
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Error en el servicio de traducción: ${res.statusText}`);
+      }
+
+      const data = await res.json();
+      if (Array.isArray(data.translations)) {
+        setDynamicCache((prev) => {
+          const updated = { ...prev[targetLang] };
+          needed.forEach((origText, idx) => {
+            const translated = data.translations[idx];
+            if (translated && typeof translated === 'string') {
+              updated[origText] = translated;
+            }
+          });
+          return {
+            ...prev,
+            [targetLang]: updated,
+          };
+        });
+      }
+    } catch (err) {
+      console.warn('Error al traducir dinámicamente con IA:', err);
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
+  // Función de traducción batch manual para componentes que quieran traducir un arreglo
+  const translateBatch = async (texts: string[], targetLang: Language = language): Promise<string[]> => {
+    if (!texts || texts.length === 0) return [];
+    if (targetLang === 'es') return texts; // Asumiendo base en español
+
+    const results: string[] = [];
+    const missingIndices: number[] = [];
+    const missingTexts: string[] = [];
+
+    texts.forEach((txt, i) => {
+      const cached = dynamicCache[targetLang]?.[txt];
+      if (cached) {
+        results[i] = cached;
+      } else {
+        missingIndices.push(i);
+        missingTexts.push(txt);
+      }
+    });
+
+    if (missingTexts.length === 0) {
+      return results;
+    }
+
+    try {
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          texts: missingTexts,
+          targetLang,
+          sourceLang: 'es',
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.translations)) {
+          setDynamicCache((prev) => {
+            const updated = { ...prev[targetLang] };
+            missingTexts.forEach((orig, idx) => {
+              const trans = data.translations[idx] || orig;
+              results[missingIndices[idx]] = trans;
+              updated[orig] = trans;
+            });
+            return {
+              ...prev,
+              [targetLang]: updated,
+            };
+          });
+          return results;
+        }
+      }
+    } catch (e) {
+      console.warn('Fallo en translateBatch:', e);
+    }
+
+    // Fallback: rellenar los faltantes con su texto original
+    missingIndices.forEach((idx, i) => {
+      results[idx] = missingTexts[i];
+    });
+    return results;
+  };
+
+  // Función para traducir automáticamente cualquier texto suelto o dinámico
+  const autoTranslate = (text: string): string => {
+    if (!text || typeof text !== 'string') return text;
+    const trimmed = text.trim();
+    if (!trimmed || !/[a-zA-ZáéíóúÁÉÍÓÚñÑ]/.test(trimmed)) {
+      return text;
+    }
+
+    // Si el idioma es español (idioma original del contenido), no traducir
+    if (language === 'es') {
+      return text;
+    }
+
+    // Si ya está en la caché dinámica en inglés, devolverlo de inmediato
+    if (dynamicCache.en[trimmed]) {
+      return dynamicCache.en[trimmed];
+    }
+
+    // Si no está, encolarlo para traducción por lote con IA
+    pendingBatchRef.current.add(trimmed);
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      executeBatchTranslation(language);
+    }, 80);
+
+    // Mientras llega la traducción, devolver el original
+    return text;
+  };
+
+  // Función principal de traducción (combina diccionario estático + IA dinámica)
   const t = (key: string, fallback?: string): string => {
+    // 1. Diccionario estático en el idioma actual
     const langDict = translations[language] || translations['es'];
     if (langDict[key]) {
       return langDict[key];
     }
-    // Fallback al español si falta en inglés
-    if (translations['es'][key]) {
-      return translations['es'][key];
+
+    // 2. Si el idioma es español, usar fallback o el diccionario en español
+    if (language === 'es') {
+      if (translations['es'][key]) {
+        return translations['es'][key];
+      }
+      return fallback || key;
     }
-    return fallback || key;
+
+    // 3. Si el idioma es inglés y no existe en el diccionario estático:
+    // Determinar la frase original a traducir
+    const sourceText = fallback || translations['es'][key] || key;
+
+    // Si ya fue traducido por la IA
+    if (dynamicCache.en[sourceText]) {
+      return dynamicCache.en[sourceText];
+    }
+
+    // Si la cadena contiene palabras reales, encolarla para traducción automática
+    if (/[a-zA-ZáéíóúÁÉÍÓÚñÑ]/.test(sourceText)) {
+      pendingBatchRef.current.add(sourceText);
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      debounceTimerRef.current = setTimeout(() => {
+        executeBatchTranslation(language);
+      }, 80);
+    }
+
+    return fallback || translations['es'][key] || key;
   };
 
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, toggleLanguage, t }}>
+    <LanguageContext.Provider value={{ language, setLanguage, toggleLanguage, t, autoTranslate, translateBatch, isTranslating }}>
       {children}
     </LanguageContext.Provider>
   );

@@ -202,8 +202,16 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
       {/* Contenido de la vista según pestaña activa */}
       {activeTab === 'cartelera' && (
         <CarteleraLanding
+          user={effectiveUser}
+          initialEventId={selectedEventId}
+          onClearInitialEvent={() => {
+            setSelectedEventId(null);
+            onClearPendingEvent?.();
+          }}
           onSelectEvent={(eventId) => {
             setSelectedEventId(eventId);
+          }}
+          onTicketPurchased={() => {
             setActiveTab('boletos');
           }}
           onSelectStore={(type) => setActiveTab(type)}
@@ -223,6 +231,7 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
           selectedVenueId={selectedVenueId}
           onSelectVenue={handleSelectVenue}
           onRequireAuth={onRequireAuth}
+          onNavigateToCartelera={() => setActiveTab('cartelera')}
         />
       )}
       {activeTab === 'membresia' && <MiMembresia user={effectiveUser} />}

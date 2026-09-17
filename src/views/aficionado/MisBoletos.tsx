@@ -45,6 +45,7 @@ interface MisBoletosProps {
   selectedVenueId?: string;
   onSelectVenue?: (venueId: string) => void;
   onRequireAuth?: () => void;
+  onNavigateToCartelera?: () => void;
 }
 
 export const MisBoletos: React.FC<MisBoletosProps> = ({
@@ -54,13 +55,11 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
   selectedVenueId: propSelectedVenueId,
   onSelectVenue,
   onRequireAuth,
+  onNavigateToCartelera,
 }) => {
   const { t } = useLanguage();
   const { theme } = useTheme();
-  const [activeTab, setActiveTab] = useState<'mis-boletos' | 'comprar'>(() => {
-    if (!user || !user.uid) return 'comprar';
-    return 'mis-boletos';
-  });
+  const [activeTab, setActiveTab] = useState<'mis-boletos' | 'comprar'>('mis-boletos');
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loadingTickets, setLoadingTickets] = useState(true);
   const [filter, setFilter] = useState<'todos' | 'activo' | 'usado'>('todos');
@@ -397,49 +396,43 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
         </div>
       )}
 
-      {/* Encabezado: Título con contador informativo y Botón de Acción Primario */}
-      <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-3xl border shadow-xl ${
+      {/* Encabezado limpio y sin redundancias */}
+      <div className={`flex items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl border shadow-md transition-colors ${
         theme === 'light' ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#0F1626] border-slate-700/80 text-white'
       }`}>
-        <div>
-          <div className="flex flex-wrap items-center gap-2.5">
-            <h2 className={`text-base sm:text-lg font-black flex items-center gap-2 tracking-wide font-sports uppercase ${
-              theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
-            }`}>
-              <TicketIcon className="w-5 h-5 text-red-500" />
-              <span>{activeTab === 'comprar' ? 'Comprar Boletos para Partidos' : 'Mis Boletos Digitales'}</span>
-            </h2>
+        <div className="flex items-center gap-2.5">
+          <h2 className={`text-sm sm:text-base font-black flex items-center gap-2 tracking-wide font-sports uppercase ${
+            theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
+          }`}>
+            <TicketIcon className="w-5 h-5 text-red-500 shrink-0" />
+            <span>{activeTab === 'comprar' ? 'Partidos Disponibles' : 'Mis Boletos Comprados'}</span>
+          </h2>
 
-            {/* Contador informativo discreto (no compite visualmente con el botón de acción) */}
-            <span
-              id="info-counter-mis-boletos"
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold font-sports border ${
-                theme === 'light' ? 'bg-slate-100 text-slate-800 border-slate-300' : 'bg-[#141C2E] text-slate-300 border-slate-700'
-              }`}
-              title="Cantidad total de boletos registrados en tu cuenta"
-            >
-              <TicketIcon className="w-3.5 h-3.5 text-red-500" />
-              <span>{tickets.length} {tickets.length === 1 ? 'boleto registrado' : 'boletos registrados'}</span>
-            </span>
-          </div>
-
-          <p className={`text-xs mt-1 ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
-            {activeTab === 'comprar'
-              ? 'Selecciona partido, zona y butacas para adquirir nuevas entradas con venta abierta.'
-              : 'Pases de acceso digital con código QR de torniquete para ingresar a los partidos.'}
-          </p>
+          <span
+            id="info-counter-mis-boletos"
+            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold font-sports border ${
+              theme === 'light' ? 'bg-slate-100 text-slate-800 border-slate-300' : 'bg-[#141C2E] text-slate-300 border-slate-700'
+            }`}
+          >
+            {tickets.length} {tickets.length === 1 ? 'boleto' : 'boletos'}
+          </span>
         </div>
 
-        {/* Botón de acción con estilo primario de marca */}
         <div>
           {activeTab === 'mis-boletos' ? (
             <button
               id="btn-action-comprar-boletos"
               type="button"
-              onClick={() => setActiveTab('comprar')}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white font-sports font-bold tracking-wider text-xs sm:text-sm rounded-xl shadow-lg shadow-red-950/50 transition-all cursor-pointer shrink-0 uppercase"
+              onClick={() => {
+                if (onNavigateToCartelera) {
+                  onNavigateToCartelera();
+                } else {
+                  setActiveTab('comprar');
+                }
+              }}
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-red-600 hover:bg-red-500 text-white font-sports font-bold tracking-wider text-xs rounded-xl shadow-md shadow-red-950/40 transition-all cursor-pointer shrink-0 uppercase"
             >
-              <PlusCircle className="w-4 h-4" />
+              <PlusCircle className="w-3.5 h-3.5" />
               <span>{t('tickets.buy_tickets', 'Comprar Boletos')}</span>
             </button>
           ) : (
@@ -447,13 +440,13 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
               id="btn-action-volver-mis-boletos"
               type="button"
               onClick={() => setActiveTab('mis-boletos')}
-              className={`inline-flex items-center justify-center gap-2 px-4 py-2 font-sports font-bold tracking-wider text-xs sm:text-sm rounded-xl border transition-all cursor-pointer shrink-0 uppercase ${
+              className={`inline-flex items-center justify-center gap-1.5 px-3.5 py-2 font-sports font-bold tracking-wider text-xs rounded-xl border transition-all cursor-pointer shrink-0 uppercase ${
                 theme === 'light'
                   ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300'
                   : 'bg-[#141C2E] hover:bg-[#1A253D] text-slate-200 border-slate-700'
               }`}
             >
-              <TicketIcon className="w-4 h-4 text-red-500" />
+              <TicketIcon className="w-3.5 h-3.5 text-red-500" />
               <span>{t('tickets.view_my_tickets', 'Ver Mis Boletos')}</span>
             </button>
           )}
@@ -602,24 +595,39 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
           {loadingTickets ? (
             <LoadingSpinner message="Cargando tus boletos desde Firestore..." />
           ) : filteredTickets.length === 0 ? (
-            <div className={`border border-dashed rounded-3xl p-8 sm:p-12 text-center space-y-3 ${
+            <div className={`border border-dashed rounded-3xl p-8 sm:p-12 text-center space-y-4 ${
               theme === 'light' ? 'bg-white border-slate-300' : 'bg-[#0F1626] border-slate-700'
             }`}>
-              <div className="w-12 h-12 rounded-2xl bg-red-900/20 border border-red-500/40 text-red-500 flex items-center justify-center mx-auto">
-                <TicketIcon className="w-6 h-6" />
+              <div className="w-14 h-14 rounded-2xl bg-red-900/20 border border-red-500/40 text-red-500 flex items-center justify-center mx-auto">
+                <TicketIcon className="w-7 h-7" />
               </div>
               <div>
-                <h3 className={`text-base font-black font-sports tracking-wide uppercase ${
+                <h3 className={`text-base sm:text-lg font-black font-sports tracking-wide uppercase ${
                   theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
                 }`}>
-                  No tienes boletos{' '}
-                  {filter !== 'todos' ? `en estado "${filter}"` : 'disponibles'}
+                  {filter !== 'todos' ? `No tienes boletos en estado "${filter}"` : 'Aún no tienes boletos registrados'}
                 </h3>
-                <p className={`text-xs max-w-md mx-auto mt-1 ${
+                <p className={`text-xs sm:text-sm max-w-md mx-auto mt-1 ${
                   theme === 'light' ? 'text-slate-600' : 'text-slate-400'
                 }`}>
-                  Aquí se mostrarán tus pases de acceso con código QR dinámico para ingresar a los partidos del estadio.
+                  Elige tus partidos en cartelera y adquiere tus accesos digitales con código QR para ingresar a los torniquetes.
                 </p>
+              </div>
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onNavigateToCartelera) {
+                      onNavigateToCartelera();
+                    } else {
+                      setActiveTab('comprar');
+                    }
+                  }}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-sports font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-red-950/50 transition-all cursor-pointer"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  <span>Explorar Cartelera de Partidos</span>
+                </button>
               </div>
             </div>
           ) : (
@@ -871,41 +879,6 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
             />
           ) : (
             <div className="space-y-6">
-              {/* Encabezado de Cartelera */}
-              <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-5 rounded-3xl border shadow-xl ${
-                theme === 'light' ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#0F1626] border-slate-700/80 text-white'
-              }`}>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-red-500" />
-                    <span className="text-xs font-black uppercase tracking-wider text-red-500 font-sports">
-                      Cartelera Oficial
-                    </span>
-                  </div>
-                  <h3 className={`text-base sm:text-lg font-black tracking-wide font-sports uppercase mt-0.5 ${
-                    theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
-                  }`}>
-                    Próximos Partidos & Espectáculos en {stadiumName}
-                  </h3>
-                  <p className={`text-xs mt-0.5 ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
-                    Elige el evento para ingresar a la selección de butacas en el mapa interactivo del estadio.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 self-start sm:self-center">
-                  <span className={`text-xs font-sports font-bold uppercase tracking-wider px-3 py-1.5 rounded-xl border ${
-                    theme === 'light'
-                      ? 'bg-slate-100 text-slate-800 border-slate-300'
-                      : 'bg-[#141C2E] text-slate-300 border-slate-700'
-                  }`}>
-                    {activeEvents.length}{' '}
-                    {activeEvents.length === 1
-                      ? t('events.for_sale_single', 'evento en venta')
-                      : t('events.for_sale_plural', 'eventos en venta')}
-                  </span>
-                </div>
-              </div>
-
               {/* Grid de Cartelera de Eventos */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {activeEvents.map((ev) => {

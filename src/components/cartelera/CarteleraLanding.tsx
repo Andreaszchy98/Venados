@@ -814,29 +814,31 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
                     </div>
 
                     {/* Botones de Selección: Mapa interactivo y Compra Rápida sin mapa */}
-                    <div className="grid grid-cols-2 gap-1.5 mt-2 pt-1 border-t border-slate-700/40">
+                    <div className={`space-y-1.5 mt-2.5 pt-2 border-t transition-colors ${
+                      theme === 'light' ? 'border-slate-200' : 'border-slate-800/80'
+                    }`}>
                       <button
                         type="button"
                         onClick={() => setSelectedMapEvent(ev)}
-                        className="py-2 sm:py-2.5 px-2 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white rounded-xl sm:rounded-2xl font-black text-[11px] sm:text-xs flex items-center justify-center gap-1 shadow-md shadow-red-950/40 transition-all cursor-pointer active:scale-98"
+                        className="w-full py-2 px-2.5 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white rounded-xl font-sports font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm shadow-red-950/20 transition-all cursor-pointer active:scale-98 uppercase tracking-wider"
                         title="Seleccionar butacas específicas en el mapa interactivo del estadio"
                       >
                         <Ticket className="w-3.5 h-3.5 shrink-0" />
-                        <span className="truncate">Elegir en Mapa</span>
+                        <span>Elegir en Mapa</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => handleOpenQuickBuy(ev)}
-                        className={`py-2 sm:py-2.5 px-2 rounded-xl sm:rounded-2xl font-black text-[11px] sm:text-xs flex items-center justify-center gap-1 border transition-all cursor-pointer active:scale-98 ${
+                        className={`w-full py-1.5 px-2.5 rounded-xl font-sports font-bold text-xs flex items-center justify-center gap-1.5 border transition-all cursor-pointer active:scale-98 uppercase tracking-wider ${
                           theme === 'light'
-                            ? 'bg-amber-500 hover:bg-amber-600 text-slate-950 border-amber-400 shadow-sm'
-                            : 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black border-amber-400/50 shadow-md shadow-amber-950/30'
+                            ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300 shadow-xs'
+                            : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-xs'
                         }`}
                         title="Compra rápida sin abrir el mapa seleccionando zona y cantidad"
                       >
-                        <Zap className="w-3.5 h-3.5 shrink-0" />
-                        <span className="truncate">Compra Rápida</span>
+                        <Zap className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+                        <span>Compra Rápida</span>
                       </button>
                     </div>
                   </div>
@@ -851,23 +853,42 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
           {/* Promoción de Alimentos en Butaca */}
           <div
             onClick={() => (onSelectStore ? onSelectStore('comida') : onOpenAuth('comida'))}
-            data-theme-surface="dark"
-            className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#101625] via-[#151D30] to-[#101625] border border-slate-800 p-5 flex items-center justify-between gap-4 cursor-pointer hover:border-amber-400/60 shadow-xl transition-all"
+            className={`group relative overflow-hidden rounded-3xl p-5 flex items-center justify-between gap-4 cursor-pointer transition-all duration-300 border shadow-md hover:shadow-xl ${
+              theme === 'light'
+                ? 'bg-[#FFFBEB] border-amber-300 hover:border-amber-400'
+                : 'bg-[#101625] border-slate-800 hover:border-amber-400/60'
+            }`}
           >
             <div className="space-y-1.5 z-10">
-              <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 bg-amber-400/20 px-2.5 py-0.5 rounded-full border border-amber-400/30">
+              <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border inline-block ${
+                theme === 'light'
+                  ? '!text-amber-950 bg-amber-200/80 border-amber-400 font-black'
+                  : 'text-amber-300 bg-amber-400/20 border-amber-400/30'
+              }`}>
                 🍿 Alimentos & Bebidas
               </span>
-              <h4 className="text-base font-black !text-white text-white">Comanda sin filas en Butaca</h4>
-              <p className="text-xs !text-[#E2E8F0] text-slate-200 line-clamp-2 leading-relaxed">
+              <h4 className={`text-base font-black tracking-tight ${
+                theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
+              }`}>
+                Comanda sin filas en Butaca
+              </h4>
+              <p className={`text-xs line-clamp-2 leading-relaxed ${
+                theme === 'light' ? '!text-[#334155] text-slate-700' : 'text-slate-200'
+              }`}>
                 Pide hot dogs, nachos, esquites y bebidas frías con entrega directa a tu asiento.
               </p>
-              <div className="text-xs font-bold text-amber-300 flex items-center gap-1 pt-1 group-hover:translate-x-1 transition-transform">
+              <div className={`text-xs font-black flex items-center gap-1 pt-1 group-hover:translate-x-1 transition-transform ${
+                theme === 'light' ? '!text-amber-900 text-amber-900' : 'text-amber-300'
+              }`}>
                 <span>Ver menú de concesiones</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </div>
             </div>
-            <div className="w-16 h-16 rounded-2xl bg-amber-500/20 text-amber-300 flex items-center justify-center shrink-0 border border-amber-500/40">
+            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 border transition-transform group-hover:scale-105 ${
+              theme === 'light'
+                ? 'bg-amber-200/90 border-amber-400 text-amber-950 shadow-sm'
+                : 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+            }`}>
               <Utensils className="w-8 h-8" />
             </div>
           </div>
@@ -875,23 +896,42 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
           {/* Promoción de Tienda Oficial */}
           <div
             onClick={() => (onSelectStore ? onSelectStore('tienda') : onOpenAuth('tienda'))}
-            data-theme-surface="dark"
-            className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#1A121E] via-[#141B2D] to-[#101625] border border-slate-800 p-5 flex items-center justify-between gap-4 cursor-pointer hover:border-red-500/80 shadow-xl transition-all"
+            className={`group relative overflow-hidden rounded-3xl p-5 flex items-center justify-between gap-4 cursor-pointer transition-all duration-300 border shadow-md hover:shadow-xl ${
+              theme === 'light'
+                ? 'bg-[#FFF1F2] border-rose-300 hover:border-rose-400'
+                : 'bg-[#151320] border-slate-800 hover:border-red-500/80'
+            }`}
           >
             <div className="space-y-1.5 z-10">
-              <span className="text-[10px] font-black uppercase tracking-wider text-red-200 bg-red-800/50 px-2.5 py-0.5 rounded-full border border-red-500/40">
+              <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border inline-block ${
+                theme === 'light'
+                  ? '!text-rose-950 bg-rose-200/80 border-rose-400 font-black'
+                  : 'text-red-200 bg-red-800/50 border-red-500/40'
+              }`}>
                 🛍️ Tienda Oficial
               </span>
-              <h4 className="text-base font-black !text-white text-white">Jerseys y Gorras Oficiales</h4>
-              <p className="text-xs !text-[#E2E8F0] text-slate-200 line-clamp-2 leading-relaxed">
+              <h4 className={`text-base font-black tracking-tight ${
+                theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
+              }`}>
+                Jerseys y Gorras Oficiales
+              </h4>
+              <p className={`text-xs line-clamp-2 leading-relaxed ${
+                theme === 'light' ? '!text-[#334155] text-slate-700' : 'text-slate-200'
+              }`}>
                 Uniformes originales, souvenirs y gorras con envíos y recolección rápida.
               </p>
-              <div className="text-xs font-bold text-red-300 flex items-center gap-1 pt-1 group-hover:translate-x-1 transition-transform">
+              <div className={`text-xs font-black flex items-center gap-1 pt-1 group-hover:translate-x-1 transition-transform ${
+                theme === 'light' ? '!text-rose-900 text-rose-900' : 'text-red-300'
+              }`}>
                 <span>Ir a la tienda oficial</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </div>
             </div>
-            <div className="w-16 h-16 rounded-2xl bg-red-600/25 text-red-300 flex items-center justify-center shrink-0 border border-red-500/40">
+            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 border transition-transform group-hover:scale-105 ${
+              theme === 'light'
+                ? 'bg-rose-200/90 border-rose-400 text-rose-950 shadow-sm'
+                : 'bg-red-600/25 border-red-500/40 text-red-300'
+            }`}>
               <ShoppingBag className="w-8 h-8" />
             </div>
           </div>
@@ -1132,14 +1172,22 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
               : 'bg-[#101625] border-slate-800 text-slate-100'
           }`}>
             {/* Cabecera */}
-            <div className="flex items-start justify-between gap-3 border-b pb-3 border-slate-700/50">
+            <div className={`flex items-start justify-between gap-3 border-b pb-3 ${
+              theme === 'light' ? 'border-slate-200' : 'border-slate-800'
+            }`}>
               <div>
-                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1 w-fit">
-                  <Zap className="w-3 h-3 text-amber-400" />
+                <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border flex items-center gap-1 w-fit ${
+                  theme === 'light'
+                    ? 'bg-amber-100 text-amber-900 border-amber-300'
+                    : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                }`}>
+                  <Zap className="w-3 h-3 text-amber-500" />
                   Compra Express Directa
                 </span>
-                <h3 className="text-base font-black mt-1 line-clamp-1">{quickBuyEvent.name}</h3>
-                <p className="text-xs text-slate-400">
+                <h3 className={`text-base font-black mt-1 line-clamp-1 ${
+                  theme === 'light' ? 'text-slate-900' : 'text-white'
+                }`}>{quickBuyEvent.name}</h3>
+                <p className={`text-xs ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
                   {quickBuyEvent.date} • {quickBuyEvent.time || '20:00 hrs'}
                 </p>
               </div>
@@ -1147,7 +1195,11 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
                 type="button"
                 onClick={() => setQuickBuyEvent(null)}
                 disabled={quickBuyLoading}
-                className="p-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                className={`p-1.5 rounded-full transition-colors cursor-pointer ${
+                  theme === 'light'
+                    ? 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white'
+                }`}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1156,17 +1208,21 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
             {/* Mensaje de éxito */}
             {quickBuySuccessMsg ? (
               <div className="py-8 text-center space-y-3">
-                <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto border border-emerald-500/40">
+                <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-500 flex items-center justify-center mx-auto border border-emerald-500/40">
                   <Check className="w-6 h-6" />
                 </div>
-                <p className="text-sm font-black text-emerald-400">{quickBuySuccessMsg}</p>
-                <p className="text-xs text-slate-400">Redirigiendo a tu cartera de boletos...</p>
+                <p className="text-sm font-black text-emerald-500">{quickBuySuccessMsg}</p>
+                <p className={`text-xs ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
+                  Redirigiendo a tu cartera de boletos...
+                </p>
               </div>
             ) : (
               <>
                 {/* Selección de Zona / Sección */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-black uppercase tracking-wider text-slate-400 block">
+                  <label className={`text-xs font-black uppercase tracking-wider block ${
+                    theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                  }`}>
                     Selecciona Zona / Categoría:
                   </label>
                   <div className="grid grid-cols-1 gap-1.5 max-h-40 overflow-y-auto pr-1">
@@ -1179,14 +1235,18 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
                           onClick={() => setQuickBuyTier(tier)}
                           className={`p-2.5 rounded-xl border flex items-center justify-between transition-all cursor-pointer text-left ${
                             isSelected
-                              ? 'bg-amber-500/20 border-amber-400 text-amber-300 font-bold shadow-xs'
+                              ? theme === 'light'
+                                ? 'bg-amber-100/80 border-amber-400 text-amber-950 font-bold shadow-xs'
+                                : 'bg-amber-500/20 border-amber-400 text-amber-300 font-bold shadow-xs'
                               : theme === 'light'
                               ? 'bg-slate-50 border-slate-200 text-slate-800 hover:bg-slate-100'
                               : 'bg-[#151D30] border-slate-800 text-slate-200 hover:bg-[#1C2740]'
                           }`}
                         >
                           <span className="text-xs truncate font-medium">{tier.section}</span>
-                          <span className="text-xs font-black shrink-0 text-amber-400">
+                          <span className={`text-xs font-black shrink-0 ${
+                            theme === 'light' ? 'text-amber-700' : 'text-amber-400'
+                          }`}>
                             ${tier.price} MXN
                           </span>
                         </button>
@@ -1196,28 +1256,46 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
                 </div>
 
                 {/* Cantidad de Boletos */}
-                <div className="flex items-center justify-between gap-4 p-3 rounded-2xl bg-[#0B101B] border border-slate-800">
+                <div className={`flex items-center justify-between gap-4 p-3 rounded-2xl border ${
+                  theme === 'light'
+                    ? 'bg-slate-50 border-slate-200 text-slate-900'
+                    : 'bg-[#0B101B] border-slate-800 text-white'
+                }`}>
                   <div>
-                    <span className="text-xs font-bold block text-slate-200">Cantidad de Boletos</span>
-                    <span className="text-[11px] text-slate-400">Asientos juntos automáticos</span>
+                    <span className={`text-xs font-bold block ${
+                      theme === 'light' ? 'text-slate-900' : 'text-slate-200'
+                    }`}>Cantidad de Boletos</span>
+                    <span className={`text-[11px] ${
+                      theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                    }`}>Asientos juntos automáticos</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => setQuickBuyQuantity((q) => Math.max(1, q - 1))}
                       disabled={quickBuyQuantity <= 1 || quickBuyLoading}
-                      className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white font-bold flex items-center justify-center cursor-pointer transition-colors"
+                      className={`w-8 h-8 rounded-lg font-bold flex items-center justify-center cursor-pointer transition-colors disabled:opacity-40 ${
+                        theme === 'light'
+                          ? 'bg-slate-200 hover:bg-slate-300 text-slate-800'
+                          : 'bg-slate-800 hover:bg-slate-700 text-white'
+                      }`}
                     >
                       -
                     </button>
-                    <span className="w-6 text-center font-black text-sm text-white">
+                    <span className={`w-6 text-center font-black text-sm ${
+                      theme === 'light' ? 'text-slate-900' : 'text-white'
+                    }`}>
                       {quickBuyQuantity}
                     </span>
                     <button
                       type="button"
                       onClick={() => setQuickBuyQuantity((q) => Math.min(8, q + 1))}
                       disabled={quickBuyQuantity >= 8 || quickBuyLoading}
-                      className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white font-bold flex items-center justify-center cursor-pointer transition-colors"
+                      className={`w-8 h-8 rounded-lg font-bold flex items-center justify-center cursor-pointer transition-colors disabled:opacity-40 ${
+                        theme === 'light'
+                          ? 'bg-slate-200 hover:bg-slate-300 text-slate-800'
+                          : 'bg-slate-800 hover:bg-slate-700 text-white'
+                      }`}
                     >
                       +
                     </button>
@@ -1226,7 +1304,9 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
 
                 {/* Método de Pago */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-black uppercase tracking-wider text-slate-400 block">
+                  <label className={`text-xs font-black uppercase tracking-wider block ${
+                    theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                  }`}>
                     Método de Pago:
                   </label>
                   <div className="grid grid-cols-3 gap-1.5">
@@ -1238,6 +1318,8 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
                         className={`p-2 rounded-xl text-[10px] font-bold border transition-all cursor-pointer text-center leading-tight ${
                           quickBuyPayment === met
                             ? 'bg-red-600 text-white border-red-500'
+                            : theme === 'light'
+                            ? 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
                             : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:bg-slate-800'
                         }`}
                       >
@@ -1248,9 +1330,15 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
                 </div>
 
                 {/* Total a pagar */}
-                <div className="flex items-center justify-between pt-2 border-t border-slate-700/50">
-                  <span className="text-xs font-bold text-slate-300">Total a pagar:</span>
-                  <span className="text-lg font-black text-amber-400">
+                <div className={`flex items-center justify-between pt-2 border-t ${
+                  theme === 'light' ? 'border-slate-200' : 'border-slate-800'
+                }`}>
+                  <span className={`text-xs font-bold ${
+                    theme === 'light' ? 'text-slate-700' : 'text-slate-300'
+                  }`}>Total a pagar:</span>
+                  <span className={`text-lg font-black ${
+                    theme === 'light' ? 'text-amber-600' : 'text-amber-400'
+                  }`}>
                     ${(quickBuyTier?.price || 0) * quickBuyQuantity} MXN
                   </span>
                 </div>

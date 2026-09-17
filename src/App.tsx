@@ -17,6 +17,7 @@ import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { ensureDefaultVenueExists } from './lib/defaultVenue';
+import { AutoDOMTranslator } from './components/shared/AutoDOMTranslator';
 
 function MainLayout() {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
@@ -163,6 +164,9 @@ function MainLayout() {
     <div className={`min-h-screen flex flex-col font-sans transition-colors duration-200 ${
       theme === 'light' ? 'bg-[#F4F6F9] text-slate-900 theme-light' : 'bg-[#0A0E17] text-slate-100 theme-dark'
     }`}>
+      {/* Traductor universal de DOM para traducir automáticamente cualquier contenido */}
+      <AutoDOMTranslator />
+
       {/* Barra de navegación superior con botón de idioma y selector de estilo */}
       <Header
         user={userProfile}

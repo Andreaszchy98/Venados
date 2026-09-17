@@ -207,50 +207,60 @@ body.theme-light {
   color: #0F172A !important;
 }
 
-/* CRÍTICO: Garantizar que títulos y textos sobre gradientes oscuros o fondos rojos/rojo-oscuro mantengan contraste blanco */
-.theme-light [class*="bg-gradient-"] h1,
-.theme-light [class*="bg-gradient-"] h2,
-.theme-light [class*="bg-gradient-"] h3,
-.theme-light [class*="bg-gradient-"] h4,
-.theme-light [class*="bg-gradient-"] p,
-.theme-light [class*="bg-gradient-"] span:not([class*="bg-white"]):not([class*="text-slate-900"]),
-.theme-light [class*="bg-red-"] h1,
-.theme-light [class*="bg-red-"] h2,
-.theme-light [class*="bg-red-"] h3,
-.theme-light [class*="bg-red-"] h4,
-.theme-light [class*="bg-red-"] p,
-.theme-light [class*="bg-red-"] span,
-.theme-light button[class*="bg-red"] span,
-.theme-light button[class*="bg-red"] p,
-.theme-light button[class*="bg-red"] svg,
-.theme-light [class*="from-red"] h1,
-.theme-light [class*="from-red"] h2,
-.theme-light [class*="from-red"] h3,
-.theme-light [class*="from-red"] h4,
-.theme-light [class*="from-red"] p,
-.theme-light [class*="from-red"] span:not([class*="bg-white"]):not([class*="text-slate-900"]) {
+/* CRÍTICO: Garantizar que títulos y textos sobre superficies expresamente oscuras o botones rojos mantengan contraste blanco */
+.theme-light [data-theme-surface="dark"] h1,
+.theme-light [data-theme-surface="dark"] h2,
+.theme-light [data-theme-surface="dark"] h3,
+.theme-light [data-theme-surface="dark"] h4,
+.theme-light [data-theme-surface="dark"] p,
+.theme-light [data-theme-surface="dark"] span:not([class*="text-slate-900"]),
+.theme-light button[class*="bg-red-600"] span,
+.theme-light button[class*="bg-red-600"] p,
+.theme-light button[class*="bg-red-600"] svg,
+.theme-light button[class*="bg-red-700"] span,
+.theme-light button[class*="bg-red-700"] p,
+.theme-light button[class*="bg-red-700"] svg,
+.theme-light [class*="bg-red-600"] > span,
+.theme-light [class*="bg-red-600"] > p,
+.theme-light [class*="bg-red-700"] > span,
+.theme-light [class*="bg-red-700"] > p,
+.theme-light [class*="from-red-600"] h1,
+.theme-light [class*="from-red-600"] h2,
+.theme-light [class*="from-red-600"] h3,
+.theme-light [class*="from-red-600"] h4,
+.theme-light [class*="from-red-600"] p,
+.theme-light [class*="from-red-600"] span:not([class*="bg-white"]):not([class*="text-slate-900"]),
+.theme-light [class*="from-red-700"] h1,
+.theme-light [class*="from-red-700"] h2,
+.theme-light [class*="from-red-700"] h3,
+.theme-light [class*="from-red-700"] h4,
+.theme-light [class*="from-red-700"] p,
+.theme-light [class*="from-red-700"] span:not([class*="bg-white"]):not([class*="text-slate-900"]) {
   color: #FFFFFF !important;
 }
 
 /* Escalas de texto slate en modo claro sobre fondos estándar */
-.theme-light div:not([class*="bg-gradient-"]):not([class*="from-red"]):not([class*="bg-red-"]) > .text-slate-100,
-.theme-light span:not([class*="bg-gradient-"]):not([class*="from-red"]):not([class*="bg-red-"]) > .text-slate-100 {
+.theme-light .text-slate-100:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *) {
   color: #0F172A !important;
 }
 
-.theme-light .text-slate-100:not([class*="bg-red"]):not([class*="from-red"]):not(button[class*="bg-red"] *) {
-  color: #0F172A !important;
-}
-
-.theme-light .text-slate-200:not([class*="bg-red"]):not([class*="from-red"]):not(button[class*="bg-red"] *) {
+.theme-light .text-slate-200:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *) {
   color: #1E293B !important;
 }
 
-.theme-light .text-slate-300:not([class*="bg-red"]):not([class*="from-red"]):not(button[class*="bg-red"] *) {
+.theme-light .text-slate-300:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *) {
   color: #334155 !important;
 }
 
-.theme-light .text-slate-400:not([class*="bg-red"]):not([class*="from-red"]):not(button[class*="bg-red"] *) {
+.theme-light .text-slate-400:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *) {
+  color: #475569 !important;
+}
+
+.theme-light .text-slate-500:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *) {
+  color: #64748B !important;
+}
+
+.theme-light .text-slate-600:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *) {
   color: #475569 !important;
 }
 
