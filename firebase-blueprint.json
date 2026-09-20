@@ -224,20 +224,70 @@
     },
     "eventSeats": {
       "title": "eventSeats",
-      "description": "Disponibilidad y estado de cada butaca por evento programado",
+      "description": "Disponibilidad, reserva temporal de 8 minutos y estado de cada butaca por evento programado",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
         "eventId": { "type": "string" },
         "sectionId": { "type": "string" },
+        "sectionNumber": { "type": "string" },
+        "zoneName": { "type": "string" },
         "rowLabel": { "type": "string" },
         "seatNumber": { "type": "number" },
-        "status": { "type": "string", "enum": ["disponible", "vendido"] },
+        "status": { "type": "string", "enum": ["disponible", "reservado", "vendido"] },
+        "lockedUntil": { "type": "number" },
+        "lockedBy": { "type": "string" },
+        "lockedAt": { "type": "string" },
         "ticketId": { "type": "string" },
         "purchaseId": { "type": "string" },
         "updatedAt": { "type": "string" }
       },
       "required": ["eventId", "sectionId", "rowLabel", "seatNumber", "status"]
+    },
+    "gameScoreboards": {
+      "title": "gameScoreboards",
+      "description": "Marcador en vivo en tiempo real para partidos de béisbol y fútbol en sedes deportivas",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "eventId": { "type": "string" },
+        "venueId": { "type": "string" },
+        "sport": { "type": "string", "enum": ["baseball", "football"] },
+        "status": { "type": "string", "enum": ["programado", "en_vivo", "finalizado"] },
+        "homeTeamName": { "type": "string" },
+        "awayTeamName": { "type": "string" },
+        "homeScore": { "type": "number" },
+        "awayScore": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["eventId", "venueId", "sport", "status", "homeTeamName", "awayTeamName"]
+    },
+    "lineupPlayers": {
+      "title": "lineupPlayers",
+      "description": "Jugadores y orden al bat / alineaciones por evento",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "eventId": { "type": "string" },
+        "team": { "type": "string", "enum": ["home", "away"] },
+        "playerName": { "type": "string" },
+        "jerseyNumber": { "type": "string" },
+        "position": { "type": "string" },
+        "battingOrder": { "type": "number" }
+      },
+      "required": ["eventId", "team", "playerName", "jerseyNumber", "position"]
+    },
+    "playerGameStats": {
+      "title": "playerGameStats",
+      "description": "Estadísticas acumuladas de jugadores por partido",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "eventId": { "type": "string" },
+        "playerName": { "type": "string" },
+        "team": { "type": "string", "enum": ["home", "away"] }
+      },
+      "required": ["eventId", "playerName", "team"]
     }
   }
 }

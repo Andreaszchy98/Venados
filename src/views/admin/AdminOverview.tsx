@@ -19,11 +19,12 @@ import {
   Store,
   Users,
   Calendar,
+  Radio,
 } from 'lucide-react';
 
 interface AdminOverviewProps {
   user?: UserProfile;
-  onNavigateTab: (tab: 'ventas' | 'inventario' | 'logistica' | 'personal' | 'negocios' | 'eventos') => void;
+  onNavigateTab: (tab: 'ventas' | 'inventario' | 'logistica' | 'personal' | 'negocios' | 'eventos' | 'marcador') => void;
 }
 
 export const AdminOverview: React.FC<AdminOverviewProps> = ({ user, onNavigateTab }) => {
@@ -297,6 +298,39 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ user, onNavigateTa
               className="px-3.5 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold font-sports uppercase tracking-wider rounded-xl flex items-center gap-1.5 shadow-md transition-colors cursor-pointer"
             >
               <span>Gestionar</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Módulo Marcador en Vivo (MVP Béisbol & Fútbol) */}
+        <div className="bg-[#0F1626] rounded-2xl border border-amber-500/30 p-5 shadow-lg flex flex-col justify-between space-y-4 hover:border-amber-500/60 transition-colors">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="p-2.5 rounded-xl bg-amber-950/60 text-amber-400 border border-amber-500/30">
+                <Radio className="w-5 h-5 animate-pulse" />
+              </div>
+              <span className="text-xs font-bold text-amber-300 bg-amber-950/80 border border-amber-500/40 px-2.5 py-0.5 rounded-full font-sports uppercase tracking-wider">
+                En Vivo
+              </span>
+            </div>
+            <h3 className="font-bold text-lg text-white font-sports uppercase tracking-wider">Marcador en Tiempo Real</h3>
+            <p className="text-xs text-slate-400 leading-relaxed font-body">
+              Control táctil para operar carreras, outs, goles, tarjetas y entradas en vivo para la afición.
+            </p>
+          </div>
+
+          <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
+            <div>
+              <span className="text-[11px] text-slate-400 block font-sports uppercase tracking-wider">Operación Sede</span>
+              <span className="text-lg font-scoreboard font-bold text-amber-400 tracking-wider">Marcador Digital</span>
+            </div>
+            <button
+              id="overview-goto-marcador"
+              onClick={() => onNavigateTab('marcador')}
+              className="px-3.5 py-2 bg-gradient-to-r from-amber-600 to-red-600 hover:from-amber-500 hover:to-red-500 text-white text-xs font-bold font-sports uppercase tracking-wider rounded-xl flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
+            >
+              <span>Operar Marcador</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>

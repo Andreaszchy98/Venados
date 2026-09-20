@@ -18,6 +18,9 @@ import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { ensureDefaultVenueExists } from './lib/defaultVenue';
 import { AutoDOMTranslator } from './components/shared/AutoDOMTranslator';
+import { StripeSuccessModal } from './components/stripe/StripeSuccessModal';
+import { StripeDemoCheckoutModal } from './components/stripe/StripeDemoCheckoutModal';
+import { AlertCircle, X } from 'lucide-react';
 
 function MainLayout() {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
@@ -43,6 +46,30 @@ function MainLayout() {
       return null;
     }
   });
+
+  // Estados para Stripe Checkout (Éxito, Cancelado y Simulación Demo)
+  const [stripeSuccessSessionId, setStripeSuccessSessionId] = useState<string | null>(null);
+  const [stripeDemoSessionId, setStripeDemoSessionId] = useState<string | null>(null);
+  const [stripeCancelledNotice, setStripeCancelledNotice] = useState<boolean>(false);
+
+  useEffect(() => {
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      const stripeStatus = searchParams.get('stripe_status');
+      const sessionId = searchParams.get('session_id');
+      const demoId = searchParams.get('stripe_checkout_demo');
+
+      if (stripeStatus === 'success' && sessionId) {
+        setStripeSuccessSessionId(sessionId);
+      } else if (demoId) {
+        setStripeDemoSessionId(demoId);
+      } else if (stripeStatus === 'cancelled') {
+        setStripeCancelledNotice(true);
+      }
+    } catch (e) {
+      console.warn('Error leyendo parámetros de Stripe:', e);
+    }
+  }, []);
 
   // Perfil de invitado para navegación abierta sin login
   const guestUser: UserProfile = useMemo(() => ({
@@ -175,6 +202,30 @@ function MainLayout() {
 
       {/* Contenido Principal */}
       <main className={`flex-1 w-full ${!userProfile || userProfile?.role === 'aficionado' ? 'p-0 max-w-none' : 'max-w-7xl mx-auto p-3 sm:p-6 lg:p-8'}`}>
+        {/* Banner de cancelación de Stripe si el usuario canceló el checkout */}
+        {stripeCancelledNotice && (
+          <div className="bg-amber-950/90 border-b border-amber-600/50 text-amber-200 px-4 py-3 flex items-center justify-between text-xs transition-all">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>El proceso de pago con tarjeta en Stripe fue cancelado. No se realizó ningún cargo a tu cuenta bancaria.</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setStripeCancelledNotice(false);
+                try {
+                  const url = new URL(window.location.href);
+                  url.searchParams.delete('stripe_status');
+                  window.history.replaceState({}, '', url.toString());
+                } catch {}
+              }}
+              className="p-1 text-amber-400 hover:text-white rounded hover:bg-amber-900/50 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {loadingAuth ? (
           <div className="min-h-[50vh] flex items-center justify-center">
             <LoadingSpinner message={t('hero.loading_session', 'Cargando eventos y experiencia VXP...')} />
@@ -268,6 +319,33 @@ function MainLayout() {
             : undefined
         }
       />
+
+      {/* Modal de éxito de Stripe Checkout (Verificación y Emisión de Boleto) */}
+      {stripeSuccessSessionId && (
+        <StripeSuccessModal
+          sessionId={stripeSuccessSessionId}
+          onClose={() => setStripeSuccessSessionId(null)}
+          onNavigateToTickets={() => {
+            setPendingView('boletos');
+            setStripeSuccessSessionId(null);
+          }}
+        />
+      )}
+
+      {/* Modal de simulación de pago Stripe para desarrollo/evaluación */}
+      {stripeDemoSessionId && (
+        <StripeDemoCheckoutModal
+          sessionId={stripeDemoSessionId}
+          onClose={() => {
+            setStripeDemoSessionId(null);
+            try {
+              const url = new URL(window.location.href);
+              url.searchParams.delete('stripe_checkout_demo');
+              window.history.replaceState({}, '', url.toString());
+            } catch {}
+          }}
+        />
+      )}
 
       {/* Pie de página discreto con soporte de traducción */}
       <footer className={`mt-auto border-t py-4 px-6 text-center text-xs transition-colors ${

@@ -48,6 +48,8 @@ export interface Venue {
   storePromoTitle?: string;
   storePromoSubtitle?: string;
   storePromoActive?: boolean;
+  // Tipos de evento permitidos para este recinto (ej. Teodoro Mariscal: baseball y concert; El Encanto: football y concert)
+  allowedEventTypes?: EventType[];
 }
 
 export type HeroSlideType = 'event' | 'store_promo';
@@ -92,6 +94,7 @@ export interface VenueEvent {
   orderingClosesAt?: string; // ISO datetime — hasta cuándo aceptan pedidos
   availableSeats?: number; // Asientos disponibles declarados por el admin de la sede
   totalCapacity?: number; // Capacidad / aforo total del recinto para el evento
+  status?: 'programado' | 'en_vivo' | 'finalizado' | 'cancelado'; // Estado del juego/evento
 }
 
 // ==========================================
@@ -119,6 +122,12 @@ export interface Ticket {
   qrId: string;
   gate?: string;
   createdAt: string;
+  stripePaymentIntentId?: string;
+  stripeSessionId?: string;
+  paymentStatus?: 'paid' | 'pending' | 'failed' | string;
+  paymentMethod?: string;
+  customerEmail?: string;
+  customerName?: string;
 }
 
 // Mapa físico — pertenece a la SEDE, no cambia entre eventos
@@ -133,7 +142,7 @@ export interface SeatSection {
 }
 
 // Disponibilidad — pertenece al EVENTO, se reinicia por cada partido/concierto
-export type SeatStatus = 'disponible' | 'vendido';
+export type SeatStatus = 'disponible' | 'vendido' | 'reservado';
 
 export interface EventSeat {
   id: string;
@@ -147,6 +156,9 @@ export interface EventSeat {
   ticketId?: string; // se llena cuando se vende
   purchaseId?: string;
   updatedAt?: string;
+  lockedUntil?: number; // Timestamp en ms del bloqueo temporal (8 min) para compras simultáneas
+  lockedBy?: string; // UID del usuario que retiene la butaca
+  lockedAt?: string; // ISO string de cuándo se bloqueó
 }
 
 // ==========================================
@@ -323,6 +335,15 @@ export interface FoodOrder {
   total: number;
   status: FoodOrderStatus;
   paymentMethod: string;
+  paymentStatus?: 'pagado' | 'pendiente' | 'reembolsado';
+  paymentDetails?: {
+    paymentIntentId?: string;
+    authCode?: string;
+    cardBrand?: string;
+    cardLast4?: string;
+    amount?: number;
+    timestamp?: string;
+  };
   // Solo para orderType === 'in-seat':
   section?: string;
   row?: string;
@@ -362,4 +383,118 @@ export interface AuthState {
   firebaseUser: import('firebase/auth').User | null;
   loading: boolean;
   error: string | null;
+}
+
+// ==========================================
+// 7. MARCADOR EN VIVO (FASE A)
+// ==========================================
+export type GameStatus = 'programado' | 'en_vivo' | 'finalizado';
+export type ScoreboardSport = 'baseball' | 'football';
+
+export interface InningScore {
+  inning: number;
+  home: number | null;
+  away: number | null;
+}
+
+export interface BaseballGameState {
+  currentInning: number;
+  isTopInning: boolean; // true = alta (visitante batea), false = baja (local batea)
+  outs: number; // 0-2
+  balls: number; // 0-3
+  strikes: number; // 0-2
+  inningScores: InningScore[];
+  homeHits: number;
+  awayHits: number;
+  homeErrors: number;
+  awayErrors: number;
+}
+
+export type FootballHalf = 'primer_tiempo' | 'entretiempo' | 'segundo_tiempo' | 'finalizado';
+
+export interface FootballCard {
+  team: 'home' | 'away';
+  playerName: string;
+  minute: number;
+  type: 'amarilla' | 'roja';
+}
+
+export interface FootballGoal {
+  team: 'home' | 'away';
+  playerName: string;
+  minute: number;
+}
+
+export interface FootballGameState {
+  half: FootballHalf;
+  minute: number; // minuto actual mostrado
+  addedTime: number; // minutos de tiempo agregado, si aplica
+  goals: FootballGoal[];
+  cards: FootballCard[];
+}
+
+export interface GameScoreboard {
+  id: string; // mismo id que el eventId
+  eventId: string;
+  venueId: string;
+  sport: ScoreboardSport;
+  status: GameStatus;
+  homeTeamName: string;
+  awayTeamName: string;
+  homeScore: number;
+  awayScore: number;
+  baseballState?: BaseballGameState; // solo si sport === 'baseball'
+  footballState?: FootballGameState; // solo si sport === 'football'
+  updatedAt: string;
+}
+
+// ==========================================
+// 8. ALINEACIONES Y ESTADÍSTICAS (FASE B)
+// ==========================================
+export interface LineupPlayer {
+  id: string;
+  eventId: string;
+  team: 'home' | 'away';
+  playerName: string;
+  jerseyNumber: string;
+  position: string;
+  battingOrder: number; // 1-9
+}
+
+export interface PlayerGameStats {
+  id: string;
+  eventId: string;
+  playerName: string;
+  team: 'home' | 'away';
+  atBats?: number;
+  hits?: number;
+  runs?: number;
+  rbi?: number;
+  inningsPitched?: number;
+  earnedRuns?: number;
+  strikeouts?: number;
+}
+
+// ==========================================
+// 9. HISTORIAL DE JUEGOS Y RESULTADOS
+// ==========================================
+export interface HistoricalGame {
+  id: string;
+  eventId: string;
+  venueId: string;
+  venueName: string;
+  city?: string;
+  sport: ScoreboardSport | 'basketball';
+  matchTitle: string;
+  homeTeamName: string;
+  awayTeamName: string;
+  homeScore: number;
+  awayScore: number;
+  date: string;
+  time?: string;
+  status: 'finalizado';
+  winnerTeam?: 'home' | 'away' | 'tie';
+  baseballState?: BaseballGameState;
+  footballState?: FootballGameState;
+  summaryNote?: string;
 }

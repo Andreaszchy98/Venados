@@ -18,6 +18,7 @@ import {
   Check,
   Package,
   Store,
+  CreditCard,
 } from 'lucide-react';
 
 interface RunnerOrdersQueueProps {
@@ -280,6 +281,21 @@ export const RunnerOrdersQueue: React.FC<RunnerOrdersQueueProps> = ({ user }) =>
                           </div>
                         ))}
                       </div>
+
+                      {/* Estatus de Pago para el Runner */}
+                      <div className="flex items-center justify-between text-xs px-1 pt-1">
+                        <span className="text-slate-400 font-medium">Cobro:</span>
+                        {order.paymentStatus === 'pagado' || order.paymentDetails || (order.paymentMethod && order.paymentMethod.toLowerCase().includes('tarjeta')) ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/90 text-emerald-300 border border-emerald-500/50 font-black text-[10px] tracking-wide">
+                            <CreditCard className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>PAGADO CON TARJETA (NO COBRAR)</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-950/90 text-amber-300 border border-amber-500/50 font-black text-[10px] tracking-wide">
+                            <span>💵 COBRAR ${order.total} MXN</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {/* Botón para tomar pedido */}
@@ -386,6 +402,21 @@ export const RunnerOrdersQueue: React.FC<RunnerOrdersQueueProps> = ({ user }) =>
                             <span><span className="text-red-400 font-black">{i.quantity}x</span> {i.name}</span>
                           </div>
                         ))}
+                      </div>
+
+                      {/* Estatus de Pago para el Runner */}
+                      <div className="flex items-center justify-between text-xs px-1 pt-1">
+                        <span className="text-slate-400 font-medium">Cobro al entregar:</span>
+                        {order.paymentStatus === 'pagado' || order.paymentDetails || (order.paymentMethod && order.paymentMethod.toLowerCase().includes('tarjeta')) ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/90 text-emerald-300 border border-emerald-500/50 font-black text-[10px] tracking-wide">
+                            <CreditCard className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>PAGADO CON TARJETA (NO COBRAR)</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-950/90 text-amber-300 border border-amber-500/50 font-black text-[10px] tracking-wide">
+                            <span>💵 COBRAR ${order.total} MXN</span>
+                          </span>
+                        )}
                       </div>
                     </div>
 

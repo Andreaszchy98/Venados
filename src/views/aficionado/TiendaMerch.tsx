@@ -7,6 +7,8 @@ import { getStadiumStoreProfile } from '../../lib/stadiumStoreProfiles';
 import { useTheme } from '../../context/ThemeContext';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { ErrorMessage } from '../../components/shared/ErrorMessage';
+import { CardPaymentModal } from '../../components/shared/CardPaymentModal';
+import { DirectPaymentResult } from '../../lib/stripe';
 import {
   ShoppingBag,
   ShoppingCart,
@@ -73,8 +75,10 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
     phone: user.phoneNumber || '',
     referenceNotes: '',
   });
-  const [paymentMethod, setPaymentMethod] = useState<'Efectivo / Terminal física' | 'Tarjeta' | 'Transferencia SPEI' | 'MercadoPago' | 'Efectivo en Tienda'>('Efectivo / Terminal física');
+  // Método de pago exclusivo por tarjeta
+  const [paymentMethod] = useState<'Tarjeta'>('Tarjeta');
   const [submittingOrder, setSubmittingOrder] = useState(false);
+  const [isCardModalOpen, setIsCardModalOpen] = useState(false);
 
   // Perfil de marca e identidad de la tienda del estadio actual (usa browsingVenueId de navegación)
   const activeVenueId = user.browsingVenueId || user.venueId;
@@ -136,18 +140,7 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
   const total = subtotal + shippingCost;
   const totalItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  const handlePlaceOrder = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (cart.length === 0) return;
-
-    // Si el usuario no tiene sesión iniciada, solicitamos login manteniendo su carrito intacto
-    if (!user || !user.uid) {
-      if (onRequireAuth) {
-        onRequireAuth();
-      }
-      return;
-    }
-
+  const executeOrderSubmission = async (paymentDetails?: DirectPaymentResult) => {
     setSubmittingOrder(true);
 
     try {
@@ -173,7 +166,7 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
         shippingType,
         carrier: shippingType === 'domicilio' ? 'DHL Express' : 'Recoger en Tienda Estadio',
         status: 'pendiente',
-        paymentMethod,
+        paymentMethod: paymentMethod === 'Tarjeta' ? 'Tarjeta en Línea' : paymentMethod,
         paymentStatus: 'pagado',
       };
 
@@ -196,6 +189,11 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
         orderPayload.notes = `Recoger en ${storeProfile.pickupLocation}`;
       }
 
+      if (paymentDetails) {
+        orderPayload.notes = (orderPayload.notes ? orderPayload.notes + ' | ' : '') +
+          `Pago tarjeta: ${paymentDetails.cardBrand} ****${paymentDetails.cardLast4} (Auth: ${paymentDetails.authCode})`;
+      }
+
       await createMerchOrder(orderPayload);
 
       // Si es administrador, reducir stock directamente; para aficionados, el almacén lo gestiona en logística
@@ -215,7 +213,11 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
       } catch {}
       setIsCheckingOut(false);
       setIsCartOpen(false);
-      setOrderSuccess(`¡Pedido confirmado con éxito! Total: $${total.toLocaleString('es-MX')} MXN. Puedes seguir el envío en la pestaña "Mis Pedidos".`);
+      setOrderSuccess(
+        `¡Pedido confirmado con éxito! Total: $${total.toLocaleString('es-MX')} MXN.${
+          paymentDetails ? ` Pago aprobado con tarjeta ${paymentDetails.cardBrand} terminación ${paymentDetails.cardLast4}.` : ''
+        } Puedes seguir el envío en la pestaña "Mis Pedidos".`
+      );
       fetchProducts();
       if (onOrderCompleted) onOrderCompleted();
     } catch (err: any) {
@@ -223,6 +225,27 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
     } finally {
       setSubmittingOrder(false);
     }
+  };
+
+  const handlePlaceOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (cart.length === 0) return;
+
+    // Si el usuario no tiene sesión iniciada, solicitamos login manteniendo su carrito intacto
+    if (!user || !user.uid) {
+      if (onRequireAuth) {
+        onRequireAuth();
+      }
+      return;
+    }
+
+    // Método exclusivo: abrir pasarela interactiva de pago con tarjeta en línea
+    setIsCardModalOpen(true);
+  };
+
+  const handleCardPaymentSuccess = async (result: DirectPaymentResult) => {
+    setIsCardModalOpen(false);
+    await executeOrderSubmission(result);
   };
 
   return (
@@ -631,160 +654,43 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                   )}
 
                   <div className="space-y-2 font-sports">
-                    <label className={`block font-bold uppercase tracking-wider text-xs ${
-                      theme === 'light' ? 'text-slate-800' : 'text-slate-300'
-                    }`}>
-                      Selecciona tu Método de Pago
-                    </label>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMethod('Efectivo / Terminal física')}
-                        className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between cursor-pointer ${
-                          paymentMethod === 'Efectivo / Terminal física'
-                            ? theme === 'light'
-                              ? 'border-emerald-600 bg-emerald-50 text-emerald-950 shadow-xs'
-                              : 'border-emerald-500 bg-emerald-950/40 text-white shadow-xs'
-                            : theme === 'light'
-                            ? 'border-slate-300 hover:border-slate-400 bg-white text-slate-800'
-                            : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17] text-white'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-base">💵</span>
-                          {paymentMethod === 'Efectivo / Terminal física' && (
-                            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                          )}
-                        </div>
-                        <div>
-                          <p className={`font-extrabold text-[11px] leading-tight uppercase ${
-                            theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
-                          }`}>
-                            Efectivo / Terminal física
-                          </p>
-                          <p className={`text-[10px] mt-0.5 font-sans ${
-                            theme === 'light' ? 'text-slate-600' : 'text-slate-400'
-                          }`}>
-                            Paga en efectivo o con tarjeta física al recibir o recoger
-                          </p>
-                        </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMethod('Tarjeta')}
-                        className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between cursor-pointer ${
-                          paymentMethod === 'Tarjeta'
-                            ? theme === 'light'
-                              ? 'border-red-600 bg-red-50 text-red-950 shadow-xs'
-                              : 'border-red-500 bg-red-950/40 text-white shadow-xs'
-                            : theme === 'light'
-                            ? 'border-slate-300 hover:border-slate-400 bg-white text-slate-800'
-                            : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17] text-white'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-base">💳</span>
-                          {paymentMethod === 'Tarjeta' && (
-                            <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                          )}
-                        </div>
-                        <div>
-                          <p className={`font-extrabold text-[11px] leading-tight uppercase ${
-                            theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
-                          }`}>
-                            Tarjeta en Línea
-                          </p>
-                          <p className={`text-[10px] mt-0.5 font-sans ${
-                            theme === 'light' ? 'text-slate-600' : 'text-slate-400'
-                          }`}>
-                            Visa, Mastercard, American Express
-                          </p>
-                        </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMethod('MercadoPago')}
-                        className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between cursor-pointer ${
-                          paymentMethod === 'MercadoPago'
-                            ? theme === 'light'
-                              ? 'border-sky-600 bg-sky-50 text-sky-950 shadow-xs'
-                              : 'border-sky-500 bg-sky-950/40 text-white shadow-xs'
-                            : theme === 'light'
-                            ? 'border-slate-300 hover:border-slate-400 bg-white text-slate-800'
-                            : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17] text-white'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-base">📱</span>
-                          {paymentMethod === 'MercadoPago' && (
-                            <span className="w-2 h-2 rounded-full bg-sky-500"></span>
-                          )}
-                        </div>
-                        <div>
-                          <p className={`font-extrabold text-[11px] leading-tight uppercase ${
-                            theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
-                          }`}>
-                            Mercado Pago
-                          </p>
-                          <p className={`text-[10px] mt-0.5 font-sans ${
-                            theme === 'light' ? 'text-slate-600' : 'text-slate-400'
-                          }`}>
-                            Saldo en cuenta, débito o crédito
-                          </p>
-                        </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMethod('Transferencia SPEI')}
-                        className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between cursor-pointer ${
-                          paymentMethod === 'Transferencia SPEI'
-                            ? theme === 'light'
-                              ? 'border-purple-600 bg-purple-50 text-purple-950 shadow-xs'
-                              : 'border-purple-500 bg-purple-950/40 text-white shadow-xs'
-                            : theme === 'light'
-                            ? 'border-slate-300 hover:border-slate-400 bg-white text-slate-800'
-                            : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17] text-white'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-base">🏦</span>
-                          {paymentMethod === 'Transferencia SPEI' && (
-                            <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-                          )}
-                        </div>
-                        <div>
-                          <p className={`font-extrabold text-[11px] leading-tight uppercase ${
-                            theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
-                          }`}>
-                            Transferencia SPEI
-                          </p>
-                          <p className={`text-[10px] mt-0.5 font-sans ${
-                            theme === 'light' ? 'text-slate-600' : 'text-slate-400'
-                          }`}>
-                            CLABE interbancaria directa
-                          </p>
-                        </div>
-                      </button>
+                    <div className="flex items-center justify-between">
+                      <label className={`block font-bold uppercase tracking-wider text-xs ${
+                        theme === 'light' ? 'text-slate-800' : 'text-slate-300'
+                      }`}>
+                        Método de Pago Autorizado
+                      </label>
+                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                        🔒 Encriptación SSL 256-bit
+                      </span>
                     </div>
 
-                    {paymentMethod === 'Efectivo / Terminal física' && (
-                      <div className={`p-2.5 rounded-xl text-[11px] font-medium flex items-center gap-2 font-sans border ${
-                        theme === 'light'
-                          ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
-                          : 'bg-[#0A0E17] border-emerald-500/50 text-emerald-300'
-                      }`}>
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 animate-pulse"></span>
-                        <span>
-                          {shippingType === 'tienda'
-                            ? 'Pagas directamente en caja de la Tienda Oficial del Estadio al recoger tus artículos.'
-                            : 'El repartidor llevará terminal física inalámbrica o cambio en efectivo para tu entrega.'}
-                        </span>
+                    <div className={`p-3.5 rounded-xl border-2 transition-all flex items-center justify-between ${
+                      theme === 'light'
+                        ? 'border-red-600 bg-red-50/70 text-red-950'
+                        : 'border-red-500 bg-red-950/40 text-white'
+                    }`}>
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-red-600/10 flex items-center justify-center text-xl">
+                          💳
+                        </div>
+                        <div>
+                          <p className={`font-extrabold text-xs uppercase leading-tight ${
+                            theme === 'light' ? 'text-slate-900' : 'text-white'
+                          }`}>
+                            Tarjeta en Línea (Débito o Crédito)
+                          </p>
+                          <p className={`text-[11px] mt-0.5 font-sans ${
+                            theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                          }`}>
+                            Visa, Mastercard, American Express • Cargo directo y seguro
+                          </p>
+                        </div>
                       </div>
-                    )}
+                      <span className="text-[10px] font-black uppercase px-2 py-1 rounded bg-red-600/20 text-red-600 dark:text-red-400 border border-red-500/30">
+                        Exclusivo
+                      </span>
+                    </div>
                   </div>
                 </form>
               ) : (
@@ -909,7 +815,7 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                         ? 'Procesando Pedido...'
                         : !user || !user.uid
                         ? `Iniciar Sesión para Pagar $${total.toLocaleString('es-MX')} MXN`
-                        : `Confirmar y Pagar $${total.toLocaleString('es-MX')} MXN`}
+                        : `Pagar con Tarjeta $${total.toLocaleString('es-MX')} MXN`}
                     </button>
                   </div>
                 ) : (
@@ -963,6 +869,23 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
           </div>
         </div>
       )}
+
+      {/* Modal interactivo de Formulario de Pago con Tarjeta para la Tienda Oficial */}
+      <CardPaymentModal
+        isOpen={isCardModalOpen}
+        onClose={() => setIsCardModalOpen(false)}
+        amount={total}
+        concept={`Tienda Oficial ${storeProfile.teamName} — ${totalItemsCount} artículo(s)`}
+        customerName={address.recipientName?.trim() || user.displayName || user.email || 'Aficionado'}
+        customerEmail={user.email || undefined}
+        orderType="tienda"
+        metadata={{
+          venueId: activeVenueId || 'venue-teodoro-mariscal',
+          shippingType,
+          itemsCount: String(totalItemsCount),
+        }}
+        onSuccess={handleCardPaymentSuccess}
+      />
     </div>
   );
 };

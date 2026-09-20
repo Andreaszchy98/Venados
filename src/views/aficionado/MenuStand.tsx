@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   StadiumStand,
   MenuItem,
@@ -25,6 +25,8 @@ import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
 import { getVenueById } from '../../lib/venues';
 import { useTheme } from '../../context/ThemeContext';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
+import { CardPaymentModal } from '../../components/shared/CardPaymentModal';
+import { DirectPaymentResult } from '../../lib/stripe';
 import {
   Utensils,
   ShoppingBag,
@@ -44,6 +46,9 @@ import {
   AlertCircle,
   Calendar,
   RefreshCw,
+  CreditCard,
+  ShieldCheck,
+  Lock,
 } from 'lucide-react';
 
 interface MenuStandProps {
@@ -122,8 +127,9 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
   
   // Modal de confirmación y tipo de entrega
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+  const [isCardModalOpen, setIsCardModalOpen] = useState(false);
   const [selectedOrderType, setSelectedOrderType] = useState<OrderType>('in-seat');
-  const [foodPaymentMethod, setFoodPaymentMethod] = useState<'Efectivo / Terminal física' | 'Tarjeta en Línea' | 'Venados Pay'>('Efectivo / Terminal física');
+  const [foodPaymentMethod, setFoodPaymentMethod] = useState<'Efectivo / Terminal física' | 'Tarjeta en Línea' | 'Venados Pay'>('Tarjeta en Línea');
   
   // Datos de entrega in-seat
   const [userTickets, setUserTickets] = useState<Ticket[]>([]);
@@ -142,6 +148,12 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
     row?: string;
     seat?: string;
     zoneName?: string;
+    paymentMethod?: string;
+    paymentStatus?: string;
+    cardBrand?: string;
+    cardLast4?: string;
+    authCode?: string;
+    amount?: number;
   } | null>(null);
 
   const [currentVenueName, setCurrentVenueName] = useState<string>('Estadio Teodoro Mariscal');
@@ -186,7 +198,7 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
     fetchStands();
   }, [user.browsingVenueId, user.venueId]);
 
-  // Cargar tickets del aficionado para autocompletar butaca
+  // Cargar tickets del aficionado
   useEffect(() => {
     if (!user?.uid) return;
     const unsubscribe = subscribeUserTickets(
@@ -194,20 +206,60 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
       (tickets) => {
         const activeTickets = tickets.filter((t) => t.status === 'activo');
         setUserTickets(activeTickets);
-        if (activeTickets.length > 0 && !selectedTicketId) {
-          const first = activeTickets[0];
-          setSelectedTicketId(first.id);
-          setSeatSection(first.section);
-          setSeatRow(first.row);
-          setSeatNumber(first.seat);
-        }
       },
       (err) => console.warn('Error fetching tickets for in-seat delivery:', err)
     );
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [user.uid]);
+  }, [user?.uid]);
+
+  // Boletos válidos EXCLUSIVAMENTE para el partido actual y el recinto seleccionado
+  // Se prohíbe explícitamente mostrar boletos de otro recinto o de partidos pasados/futuros
+  const validCurrentMatchTickets = useMemo(() => {
+    if (!userTickets || userTickets.length === 0) return [];
+    if (!activeOrderingEvent) return []; // Si no hay un partido actual en curso en este recinto, no hay boletos válidos para el partido actual
+
+    const targetVenueId = selectedStand?.venueId || user.browsingVenueId || user.venueId || DEFAULT_VENUE_ID;
+    const currentEventId = activeOrderingEvent.id;
+    const currentEventName = (activeOrderingEvent.name || '').trim().toLowerCase();
+
+    return userTickets.filter((t) => {
+      // 1. Debe estar activo
+      if (t.status !== 'activo') return false;
+
+      // 2. Debe pertenecer al mismo recinto (nunca a otro estadio)
+      const matchesVenue =
+        (t.venueId && t.venueId === targetVenueId) ||
+        (t.stadium && currentVenueName && t.stadium.toLowerCase().includes(currentVenueName.toLowerCase())) ||
+        (targetVenueId === DEFAULT_VENUE_ID && (!t.venueId || t.venueId === DEFAULT_VENUE_ID));
+
+      if (!matchesVenue) return false;
+
+      // 3. Debe pertenecer estrictamente al partido actual de ese recinto (nunca a otro evento o fecha)
+      const matchesEvent =
+        t.eventId === currentEventId ||
+        (t.matchTitle && currentEventName && t.matchTitle.toLowerCase() === currentEventName);
+
+      return matchesEvent;
+    });
+  }, [userTickets, activeOrderingEvent, selectedStand, user.browsingVenueId, user.venueId, currentVenueName]);
+
+  // Auto-seleccionar boleto válido del partido actual si existe
+  useEffect(() => {
+    if (validCurrentMatchTickets.length > 0) {
+      const alreadySelected = validCurrentMatchTickets.find((t) => t.id === selectedTicketId);
+      if (!alreadySelected) {
+        const first = validCurrentMatchTickets[0];
+        setSelectedTicketId(first.id);
+        setSeatSection(cleanSectionValue(first.section));
+        setSeatRow(cleanRowValue(first.row));
+        setSeatNumber(cleanSeatValue(first.seat));
+      }
+    } else {
+      setSelectedTicketId('');
+    }
+  }, [validCurrentMatchTickets]);
 
   // Resolver zona cuando cambie la sección
   useEffect(() => {
@@ -268,7 +320,7 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
 
   const handleTicketSelect = (ticketId: string) => {
     setSelectedTicketId(ticketId);
-    const found = userTickets.find((t) => t.id === ticketId);
+    const found = validCurrentMatchTickets.find((t) => t.id === ticketId);
     if (found) {
       setSeatSection(cleanSectionValue(found.section));
       setSeatRow(cleanRowValue(found.row));
@@ -280,6 +332,88 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
     if (cart.length === 0 || !selectedStand) return;
     setFormError(null);
     setIsCheckoutModalOpen(true);
+  };
+
+  const executeOrderPlacement = async (cardResult?: DirectPaymentResult) => {
+    if (cart.length === 0 || !selectedStand) return;
+
+    setPlacingOrder(true);
+    setFormError(null);
+
+    try {
+      const foodItems: FoodOrderItem[] = cart.map((c) => ({
+        itemId: c.item.id,
+        name: c.item.name,
+        price: c.item.price,
+        quantity: c.quantity,
+      }));
+
+      // Resolver zona final
+      let zoneId: string | undefined = undefined;
+      if (selectedOrderType === 'in-seat') {
+        const zone = await getZoneBySection(seatSection);
+        zoneId = zone?.id || 'zona-a';
+      }
+
+      const finalPaymentMethod = cardResult
+        ? `Tarjeta en Línea (${cardResult.cardBrand.toUpperCase()} •••• ${cardResult.cardLast4})`
+        : foodPaymentMethod;
+
+      const order = await createFoodOrder({
+        venueId: selectedStand.venueId || user.browsingVenueId || user.venueId || DEFAULT_VENUE_ID,
+        standId: selectedStand.id,
+        standName: selectedStand.name,
+        userId: user.uid,
+        customerName: user.displayName || 'Aficionado Teodoro Mariscal',
+        orderType: selectedOrderType,
+        items: foodItems,
+        total,
+        paymentMethod: finalPaymentMethod,
+        paymentStatus: cardResult ? 'pagado' : 'pendiente',
+        paymentDetails: cardResult
+          ? {
+              paymentIntentId: cardResult.paymentIntentId,
+              authCode: cardResult.authCode,
+              cardBrand: cardResult.cardBrand,
+              cardLast4: cardResult.cardLast4,
+              amount: cardResult.amount,
+              timestamp: cardResult.timestamp,
+            }
+          : undefined,
+        section: selectedOrderType === 'in-seat' ? cleanSectionValue(seatSection) : undefined,
+        row: selectedOrderType === 'in-seat' ? cleanRowValue(seatRow) : undefined,
+        seat: selectedOrderType === 'in-seat' ? cleanSeatValue(seatNumber) : undefined,
+        zoneId: zoneId,
+      });
+
+      setLastPlacedOrder({
+        code: order.pickupCode,
+        type: order.orderType,
+        section: order.section,
+        row: order.row,
+        seat: order.seat,
+        zoneName: resolvedZone?.name || 'Zona Asignada',
+        paymentMethod: finalPaymentMethod,
+        paymentStatus: order.paymentStatus || (cardResult ? 'pagado' : 'pendiente'),
+        cardBrand: cardResult?.cardBrand,
+        cardLast4: cardResult?.cardLast4,
+        authCode: cardResult?.authCode,
+        amount: total,
+      });
+
+      setCart([]);
+      try {
+        sessionStorage.removeItem('vxp_food_cart');
+      } catch {}
+      setIsCheckoutModalOpen(false);
+      setIsCardModalOpen(false);
+      if (onOrderSuccess) onOrderSuccess();
+    } catch (err: any) {
+      console.error('Error placing food order:', err);
+      setFormError(err.message || 'Error al procesar el pedido. Intenta de nuevo.');
+    } finally {
+      setPlacingOrder(false);
+    }
   };
 
   const handleConfirmOrder = async () => {
@@ -300,60 +434,18 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
       }
     }
 
-    setPlacingOrder(true);
-    setFormError(null);
-
-    try {
-      const foodItems: FoodOrderItem[] = cart.map((c) => ({
-        itemId: c.item.id,
-        name: c.item.name,
-        price: c.item.price,
-        quantity: c.quantity,
-      }));
-
-      // Resolver zona final
-      let zoneId: string | undefined = undefined;
-      if (selectedOrderType === 'in-seat') {
-        const zone = await getZoneBySection(seatSection);
-        zoneId = zone?.id || 'zona-a';
-      }
-
-      const order = await createFoodOrder({
-        standId: selectedStand.id,
-        standName: selectedStand.name,
-        userId: user.uid,
-        customerName: user.displayName || 'Aficionado Teodoro Mariscal',
-        orderType: selectedOrderType,
-        items: foodItems,
-        total,
-        paymentMethod: foodPaymentMethod,
-        section: selectedOrderType === 'in-seat' ? cleanSectionValue(seatSection) : undefined,
-        row: selectedOrderType === 'in-seat' ? cleanRowValue(seatRow) : undefined,
-        seat: selectedOrderType === 'in-seat' ? cleanSeatValue(seatNumber) : undefined,
-        zoneId: zoneId,
-      });
-
-      setLastPlacedOrder({
-        code: order.pickupCode,
-        type: order.orderType,
-        section: order.section,
-        row: order.row,
-        seat: order.seat,
-        zoneName: resolvedZone?.name || 'Zona Asignada',
-      });
-
-      setCart([]);
-      try {
-        sessionStorage.removeItem('vxp_food_cart');
-      } catch {}
-      setIsCheckoutModalOpen(false);
-      if (onOrderSuccess) onOrderSuccess();
-    } catch (err: any) {
-      console.error('Error placing food order:', err);
-      setFormError(err.message || 'Error al procesar el pedido. Intenta de nuevo.');
-    } finally {
-      setPlacingOrder(false);
+    // Si el aficionado seleccionó pago con tarjeta, abrimos la pasarela de pago segura
+    if (foodPaymentMethod === 'Tarjeta en Línea') {
+      setIsCardModalOpen(true);
+      return;
     }
+
+    // Si seleccionó pago al recibir o efectivo
+    await executeOrderPlacement();
+  };
+
+  const handleCardPaymentSuccess = async (result: DirectPaymentResult) => {
+    await executeOrderPlacement(result);
   };
 
   if (checkingOrderingWindow) {
@@ -364,10 +456,56 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
     );
   }
 
+  // Si no hay un evento próximo o si el evento más próximo ya finalizó:
+  // Mostrar pantalla indicando que no hay eventos próximos para este recinto
+  if (!activeOrderingEvent && !upcomingEvent) {
+    return (
+      <div className="py-10 max-w-lg mx-auto text-center space-y-6">
+        <div className={`p-8 sm:p-10 rounded-3xl border shadow-sm text-center space-y-4 ${
+          theme === 'light'
+            ? 'bg-white border-slate-200 text-slate-800'
+            : 'bg-[#101625] border-slate-800 text-white'
+        }`}>
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 mx-auto shadow-xs">
+            <Calendar className="w-8 h-8" />
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="text-xl sm:text-2xl font-black tracking-tight">
+              No hay eventos próximos para este recinto
+            </h2>
+            <p className={`text-xs sm:text-sm leading-relaxed ${
+              theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+            }`}>
+              Actualmente no se tienen partidos o espectáculos programados próximamente en{' '}
+              <strong className={theme === 'light' ? 'text-slate-900' : 'text-white'}>
+                {currentVenueName}
+              </strong>
+              , o el encuentro más próximo ya ha finalizado. El servicio de entrega de comida a butacas y preparación en concesiones se habilitará para las próximas fechas del calendario.
+            </p>
+          </div>
+
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+            {onGoToTickets && (
+              <button
+                type="button"
+                onClick={onGoToTickets}
+                className="w-full sm:w-auto px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <TicketIcon className="w-4 h-4" />
+                Ver Cartelera de Eventos
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Banner de Modo Catálogo si no hay evento en vivo */}
-      {!activeOrderingEvent && (
+      {/* Banner de Modo Catálogo si no hay evento en vivo pero sí un evento futuro */}
+      {!activeOrderingEvent && upcomingEvent && (
         <div className={`p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs border ${
           theme === 'light'
             ? 'bg-amber-50 border-amber-300 text-amber-950'
@@ -382,15 +520,13 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
               </span>
             </div>
           </div>
-          {upcomingEvent && (
-            <span className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border shrink-0 ${
-              theme === 'light'
-                ? 'text-amber-950 bg-amber-100 border-amber-300'
-                : 'text-amber-200 bg-amber-900/60 border-amber-500/40'
-            }`}>
-              Próximo evento: {upcomingEvent.name}
-            </span>
-          )}
+          <span className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border shrink-0 ${
+            theme === 'light'
+              ? 'text-amber-950 bg-amber-100 border-amber-300'
+              : 'text-amber-200 bg-amber-900/60 border-amber-500/40'
+          }`}>
+            Próximo evento: {upcomingEvent.name}
+          </span>
         </div>
       )}
 
@@ -458,6 +594,20 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
               }`}>
                 {lastPlacedOrder.code}
               </p>
+
+              {lastPlacedOrder.cardLast4 ? (
+                <div className="flex items-center gap-1.5 mt-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                  <CreditCard className="w-3.5 h-3.5" />
+                  <span>
+                    Pagado con Tarjeta {lastPlacedOrder.cardBrand?.toUpperCase()} •••• {lastPlacedOrder.cardLast4}
+                    {lastPlacedOrder.authCode ? ` (Auth: ${lastPlacedOrder.authCode})` : ''}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 mt-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                  <span>💵 Pago al recibir: {lastPlacedOrder.paymentMethod || 'Efectivo / Terminal'}</span>
+                </div>
+              )}
             </div>
 
             <div className="text-xs font-sans">
@@ -471,13 +621,22 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
                   <p className={`text-[11px] ${
                     theme === 'light' ? 'text-slate-600' : '!text-[#E2E8F0] text-slate-300'
                   }`}>
-                    Un Runner de estadio te lo llevará en cuanto la cocina lo tenga listo.
+                    {lastPlacedOrder.cardLast4
+                      ? 'Tu pedido ya está pagado. El Runner de estadio te lo llevará directamente a tu asiento sin necesidad de cobrar.'
+                      : 'Un Runner de estadio te lo llevará en cuanto la cocina lo tenga listo y te cobrará al entregar.'}
                   </p>
                 </div>
               ) : (
-                <p className={theme === 'light' ? 'text-slate-700' : 'text-slate-300'}>
-                  Pasa al mostrador cuando la pantalla o tu pestaña "Mis Pedidos" marque <strong className={theme === 'light' ? 'text-emerald-700 font-bold' : 'text-emerald-400 font-bold'}>LISTO</strong>.
-                </p>
+                <div className="space-y-0.5">
+                  <p className={theme === 'light' ? 'text-slate-700' : 'text-slate-300'}>
+                    Pasa al mostrador cuando la pantalla o tu pestaña "Mis Pedidos" marque <strong className={theme === 'light' ? 'text-emerald-700 font-bold' : 'text-emerald-400 font-bold'}>LISTO</strong>.
+                  </p>
+                  {lastPlacedOrder.cardLast4 && (
+                    <p className={`text-[11px] ${theme === 'light' ? 'text-slate-600' : '!text-[#E2E8F0] text-slate-300'}`}>
+                      Tu pedido ya está pagado en línea. Solo muestra tu código <strong>{lastPlacedOrder.code}</strong> para recoger.
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -933,15 +1092,20 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
                     )}
                   </div>
 
-                  {userTickets.length > 0 && (
+                  {validCurrentMatchTickets.length > 0 ? (
                     <div>
-                      <label className={`text-[11px] font-semibold flex items-center gap-1 mb-1 font-sans ${
-                        theme === 'light' ? 'text-slate-700' : 'text-slate-400'
-                      }`}>
-                        <TicketIcon className="w-3 h-3 text-red-500" /> Usar ubicación de tu boleto activo:
-                      </label>
+                      <div className="flex items-center justify-between mb-1 font-sans">
+                        <label className={`text-[11px] font-semibold flex items-center gap-1 ${
+                          theme === 'light' ? 'text-slate-700' : 'text-slate-400'
+                        }`}>
+                          <TicketIcon className="w-3 h-3 text-red-500" /> Boleto del partido actual:
+                        </label>
+                        <span className="text-[10px] font-bold text-emerald-500 flex items-center gap-0.5">
+                          <CheckCircle2 className="w-3 h-3" /> Partido en {currentVenueName}
+                        </span>
+                      </div>
                       <div className="space-y-1.5 max-h-28 overflow-y-auto">
-                        {userTickets.map((t) => (
+                        {validCurrentMatchTickets.map((t) => (
                           <button
                             key={t.id}
                             type="button"
@@ -949,11 +1113,11 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
                             className={`w-full p-2 rounded-xl text-left text-xs border flex items-center justify-between transition-all cursor-pointer ${
                               selectedTicketId === t.id
                                 ? theme === 'light'
-                                  ? 'bg-red-50 border-red-500 shadow-xs font-bold text-slate-900'
-                                  : 'bg-red-950/40 border-red-500 shadow-xs font-bold text-white'
-                                : theme === 'light'
-                                ? 'bg-white border-slate-300 text-slate-800 hover:bg-slate-50'
-                                : 'bg-[#141C2E] border-slate-700 text-slate-300 hover:text-white'
+                                ? 'bg-red-50 border-red-500 shadow-xs font-bold text-slate-900'
+                                : 'bg-red-950/40 border-red-500 shadow-xs font-bold text-white'
+                              : theme === 'light'
+                              ? 'bg-white border-slate-300 text-slate-800 hover:bg-slate-50'
+                              : 'bg-[#141C2E] border-slate-700 text-slate-300 hover:text-white'
                             }`}
                           >
                             <div>
@@ -968,6 +1132,26 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
                           </button>
                         ))}
                       </div>
+                    </div>
+                  ) : (
+                    <div className={`p-2.5 rounded-xl border text-xs font-sans space-y-1 ${
+                      theme === 'light'
+                        ? 'bg-amber-50/80 border-amber-200 text-amber-900'
+                        : 'bg-amber-950/30 border-amber-500/30 text-amber-200'
+                    }`}>
+                      <div className="flex items-center gap-1.5 font-bold text-[11px]">
+                        <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                        <span>
+                          {activeOrderingEvent
+                            ? `Sin boleto para el partido actual en ${currentVenueName}`
+                            : `Sin partido en juego en ${currentVenueName}`}
+                        </span>
+                      </div>
+                      <p className="text-[10.5px] leading-relaxed text-slate-600 dark:text-slate-300">
+                        {activeOrderingEvent
+                          ? `Tus boletos guardados no corresponden al encuentro actual (${activeOrderingEvent.name}). Si estás en el estadio con boleto impreso, ingresa tu butaca manualmente abajo.`
+                          : `Solo se permite la entrega a butaca con el boleto del partido actual en este recinto. Puedes usar Pickup Express o ingresar tu asiento manualmente.`}
+                      </p>
                     </div>
                   )}
 
@@ -1035,67 +1219,45 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
 
               {/* 2. Selector de Método de Pago */}
               <div className="space-y-2">
-                <label className={`block text-[11px] font-bold uppercase tracking-wider ${
-                  theme === 'light' ? 'text-slate-800' : '!text-[#E2E8F0] text-slate-200'
-                }`}>
-                  2. Método de Pago
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className={`block text-[11px] font-bold uppercase tracking-wider ${
+                    theme === 'light' ? 'text-slate-800' : '!text-[#E2E8F0] text-slate-200'
+                  }`}>
+                    2. Método de Pago
+                  </label>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    Pasarela SSL Segura
+                  </span>
+                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => setFoodPaymentMethod('Efectivo / Terminal física')}
-                    className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between cursor-pointer ${
-                      foodPaymentMethod === 'Efectivo / Terminal física'
-                        ? theme === 'light'
-                          ? 'border-emerald-600 bg-emerald-50 text-emerald-950 shadow-xs'
-                          : 'border-emerald-500 bg-emerald-950/40 text-white shadow-xs'
-                        : theme === 'light'
-                        ? 'border-slate-300 hover:border-slate-400 bg-white text-slate-800'
-                        : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17] text-slate-200'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-base">💵</span>
-                      {foodPaymentMethod === 'Efectivo / Terminal física' && (
-                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                      )}
-                    </div>
-                    <div>
-                      <p className={`font-extrabold text-[11px] leading-tight uppercase ${
-                        theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
-                      }`}>
-                        Efectivo / Terminal física
-                      </p>
-                      <p className={`text-[10px] mt-0.5 font-sans ${
-                        theme === 'light' ? 'text-slate-600' : '!text-[#E2E8F0] text-slate-300'
-                      }`}>
-                        Paga al recibir en tu butaca o en la barra
-                      </p>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
                     onClick={() => setFoodPaymentMethod('Tarjeta en Línea')}
-                    className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between cursor-pointer ${
+                    className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between cursor-pointer relative overflow-hidden ${
                       foodPaymentMethod === 'Tarjeta en Línea'
                         ? theme === 'light'
-                          ? 'border-red-600 bg-red-50 text-red-950 shadow-xs'
-                          : 'border-red-500 bg-red-950/40 text-white shadow-xs'
+                          ? 'border-red-600 bg-red-50/80 text-red-950 shadow-sm ring-1 ring-red-600/30'
+                          : 'border-red-500 bg-red-950/40 text-white shadow-sm ring-1 ring-red-500/30'
                         : theme === 'light'
                         ? 'border-slate-300 hover:border-slate-400 bg-white text-slate-800'
                         : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17] text-slate-200'
                     }`}
                   >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-base">💳</span>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <CreditCard className="w-4 h-4 text-red-500" />
+                        <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-red-600/15 text-red-500 border border-red-500/30">
+                          Recomendado
+                        </span>
+                      </div>
                       {foodPaymentMethod === 'Tarjeta en Línea' && (
-                        <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                        <span className="w-2.5 h-2.5 rounded-full bg-red-500"></span>
                       )}
                     </div>
                     <div>
-                      <p className={`font-extrabold text-[11px] leading-tight uppercase ${
+                      <p className={`font-extrabold text-xs leading-tight uppercase ${
                         theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
                       }`}>
                         Tarjeta en Línea
@@ -1103,13 +1265,59 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
                       <p className={`text-[10px] mt-0.5 font-sans ${
                         theme === 'light' ? 'text-slate-600' : '!text-[#E2E8F0] text-slate-300'
                       }`}>
-                        Visa, Mastercard, Amex
+                        Visa, Mastercard, Amex • Cobro directo
+                      </p>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFoodPaymentMethod('Efectivo / Terminal física')}
+                    className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between cursor-pointer ${
+                      foodPaymentMethod === 'Efectivo / Terminal física'
+                        ? theme === 'light'
+                          ? 'border-emerald-600 bg-emerald-50 text-emerald-950 shadow-sm'
+                          : 'border-emerald-500 bg-emerald-950/40 text-white shadow-sm'
+                        : theme === 'light'
+                        ? 'border-slate-300 hover:border-slate-400 bg-white text-slate-800'
+                        : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17] text-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-base">💵</span>
+                      {foodPaymentMethod === 'Efectivo / Terminal física' && (
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                      )}
+                    </div>
+                    <div>
+                      <p className={`font-extrabold text-xs leading-tight uppercase ${
+                        theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
+                      }`}>
+                        Terminal o Efectivo
+                      </p>
+                      <p className={`text-[10px] mt-0.5 font-sans ${
+                        theme === 'light' ? 'text-slate-600' : '!text-[#E2E8F0] text-slate-300'
+                      }`}>
+                        Pagas al recibir en butaca o barra
                       </p>
                     </div>
                   </button>
                 </div>
 
-                {foodPaymentMethod === 'Efectivo / Terminal física' && (
+                {foodPaymentMethod === 'Tarjeta en Línea' ? (
+                  <div className={`p-2.5 rounded-xl text-[11px] font-medium flex items-center gap-2 font-sans border ${
+                    theme === 'light'
+                      ? 'bg-red-50/70 border-red-200 text-red-950'
+                      : 'bg-red-950/20 border-red-500/30 text-red-200'
+                  }`}>
+                    <Lock className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                    <span>
+                      {selectedOrderType === 'in-seat'
+                        ? 'Tu orden quedará pagada de inmediato. El runner la llevará a tu butaca sin necesidad de cobrarte al entregar.'
+                        : 'Tu orden quedará pagada de inmediato. Solo muestra tu código en barra para retirar rápidamente.'}
+                    </span>
+                  </div>
+                ) : (
                   <div className={`p-2.5 rounded-xl text-[11px] font-medium flex items-center gap-2 font-sans border ${
                     theme === 'light'
                       ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
@@ -1159,15 +1367,20 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
                   className="flex-1 py-3 bg-red-600 hover:bg-red-500 active:bg-red-700 disabled:opacity-50 text-white font-black text-xs rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider"
                 >
                   {placingOrder ? (
-                    'Enviando orden a cocina...'
+                    'Procesando orden...'
                   ) : !user || !user.uid ? (
                     <>
-                      <span>Iniciar Sesión para Confirmar Pedido</span>
+                      <span>Iniciar Sesión para Continuar</span>
                       <ArrowRight className="w-4 h-4" />
+                    </>
+                  ) : foodPaymentMethod === 'Tarjeta en Línea' ? (
+                    <>
+                      <CreditCard className="w-4 h-4" />
+                      <span>Pagar con Tarjeta (${total.toLocaleString('es-MX')} MXN)</span>
                     </>
                   ) : (
                     <>
-                      <span>Confirmar y Enviar Pedido</span>
+                      <span>Confirmar Pedido (Pagar al Recibir)</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}
@@ -1177,6 +1390,32 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
           </div>
         </div>
       )}
+
+      {/* Modal de Pasarela de Pago con Tarjeta en Línea (Stripe Direct Checkout) */}
+      <CardPaymentModal
+        isOpen={isCardModalOpen}
+        onClose={() => setIsCardModalOpen(false)}
+        amount={total}
+        concept={`${selectedStand?.name || 'Comida Estadio'} — ${
+          selectedOrderType === 'in-seat'
+            ? `Entrega a Butaca (${cleanSectionValue(seatSection) ? `Sec. ${cleanSectionValue(seatSection)}, Fila ${cleanRowValue(seatRow)}, Asiento ${cleanSeatValue(seatNumber)}` : 'Butaca'})`
+            : 'Pick Up Express en Barra'
+        } (${totalCount} platillos)`}
+        customerName={user.displayName || user.email || 'Aficionado Teodoro Mariscal'}
+        customerEmail={user.email || undefined}
+        orderType="comida"
+        metadata={{
+          venueId: selectedStand?.venueId || user.browsingVenueId || user.venueId || DEFAULT_VENUE_ID,
+          standId: selectedStand?.id || '',
+          standName: selectedStand?.name || '',
+          orderType: selectedOrderType,
+          itemsCount: String(totalCount),
+          section: cleanSectionValue(seatSection) || '',
+          row: cleanRowValue(seatRow) || '',
+          seat: cleanSeatValue(seatNumber) || '',
+        }}
+        onSuccess={handleCardPaymentSuccess}
+      />
     </div>
   );
 };

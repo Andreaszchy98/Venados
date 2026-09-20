@@ -77,3 +77,25 @@ export function formatDeliverySeat(section?: string, row?: string, seat?: string
 
   return parts.length > 0 ? parts.join(', ') : 'Asiento no especificado';
 }
+
+/**
+ * Limpia y normaliza el texto de hora evitando duplicados como "18:00 hrs hrs" o "20:00 hrs hrs"
+ */
+export function formatMatchTime(time?: string): string {
+  if (!time) return '';
+  const trimmed = time.trim();
+  // Quitar cualquier sufijo repetido de "hrs", "horas", "h"
+  const cleaned = trimmed.replace(/\s*(hrs?|horas?)\b/gi, '').trim();
+  return cleaned ? `${cleaned} hrs` : '';
+}
+
+/**
+ * Formatea la etiqueta de fila de manera limpia garantizando no duplicar "Fila"
+ * Ej: cleanRowLabel("Fila A") => "Fila A", cleanRowLabel("A") => "Fila A"
+ */
+export function formatRowLabel(row?: string): string {
+  const cRow = cleanRowValue(row);
+  if (!cRow) return '';
+  if (isGeneralAdmissionRow(cRow)) return cRow;
+  return `Fila ${cRow}`;
+}

@@ -1,7 +1,8 @@
 import React from 'react';
 import { Ticket } from '../../types';
-import { Calendar, MapPin, QrCode, CheckCircle2, Clock, XCircle, ShieldCheck } from 'lucide-react';
+import { Calendar, MapPin, CheckCircle2, Clock, XCircle, ShieldCheck } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import { QRCodeDisplay } from './QRCodeDisplay';
 
 interface TicketCardProps {
   ticket: Ticket;
@@ -229,8 +230,8 @@ export const TicketCard: React.FC<TicketCardProps> = ({
           }`}
         ></div>
 
-        <div className="p-2.5 bg-white rounded-xl shadow-md inline-block border border-slate-200">
-          <QrCode className="w-16 h-16 text-slate-950" />
+        <div className="p-2 bg-white rounded-xl shadow-md inline-flex items-center justify-center border border-slate-200 overflow-hidden">
+          <QRCodeDisplay value={ticket.qrId} size={80} alt={`Código QR para boleto ${ticket.qrId}`} />
         </div>
         <div>
           <span

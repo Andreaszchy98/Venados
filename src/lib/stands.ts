@@ -14,6 +14,7 @@ import { db } from './firebase';
 import { StadiumStand, MenuItem } from '../types';
 import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
 import { DEFAULT_VENUE_ID } from './constants';
+import { getCachedData, setCachedData, invalidateCache } from './clientCache';
 
 const STANDS_COLLECTION = 'stands';
 const MENU_COLLECTION = 'menuItems';
@@ -181,6 +182,14 @@ const INITIAL_MENU_ITEMS: Record<string, Omit<MenuItem, 'id' | 'standId' | 'crea
 
 export async function getStadiumStands(venueId?: string): Promise<StadiumStand[]> {
   const isMariscal = !venueId || venueId === DEFAULT_VENUE_ID;
+  const targetVenueId = venueId || DEFAULT_VENUE_ID;
+  const cacheKey = `concessions_stands_${targetVenueId}`;
+
+  // 1. Revisar caché local primero
+  const cached = getCachedData<StadiumStand[]>(cacheKey);
+  if (cached && cached.length > 0) {
+    return cached;
+  }
 
   try {
     const q = venueId
@@ -200,10 +209,14 @@ export async function getStadiumStands(venueId?: string): Promise<StadiumStand[]
       try {
         const seeded = await seedInitialStandsAndMenu();
         const match = seeded.filter((s) => (s.venueId || DEFAULT_VENUE_ID) === DEFAULT_VENUE_ID);
-        return match.slice(0, 3);
+        const result = match.slice(0, 3);
+        setCachedData(cacheKey, result, 15);
+        return result;
       } catch (seedErr) {
         console.warn('No se pudieron sembrar los puestos en Firestore para Mariscal. Usando datos iniciales:', seedErr);
-        return INITIAL_STANDS.slice(0, 3);
+        const fallback = INITIAL_STANDS.slice(0, 3);
+        setCachedData(cacheKey, fallback, 15);
+        return fallback;
       }
     }
 
@@ -233,16 +246,21 @@ export async function getStadiumStands(venueId?: string): Promise<StadiumStand[]
       if (allDocs.length > 3) {
         cleanupDuplicateStands().catch(() => {});
       }
-      return deduplicated.slice(0, 3);
+      const result = deduplicated.slice(0, 3);
+      setCachedData(cacheKey, result, 15);
+      return result;
     }
 
+    setCachedData(cacheKey, deduplicated, 15);
     return deduplicated;
   } catch (err) {
     handleFirestoreError(err, OperationType.LIST, STANDS_COLLECTION);
     // En caso de fallo de red: solo devolver datos de muestra si es la sede del Mariscal.
     // Para cualquier otra sede solicitada explícitamente, siempre retornar arreglo vacío.
     if (isMariscal) {
-      return INITIAL_STANDS.slice(0, 3);
+      const fallback = INITIAL_STANDS.slice(0, 3);
+      setCachedData(cacheKey, fallback, 10);
+      return fallback;
     }
     return [];
   }
@@ -333,13 +351,21 @@ export async function seedInitialStandsAndMenu(): Promise<StadiumStand[]> {
 }
 
 export async function getMenuItemsByStand(standId: string): Promise<MenuItem[]> {
+  const cacheKey = `concessions_menu_stand_${standId}`;
+  const cached = getCachedData<MenuItem[]>(cacheKey);
+  if (cached && cached.length > 0) {
+    return cached;
+  }
+
   try {
     const q = query(
       collection(db, MENU_COLLECTION),
       where('standId', '==', standId)
     );
     const snap = await getDocs(q);
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() })) as MenuItem[];
+    const result = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as MenuItem[];
+    setCachedData(cacheKey, result, 15);
+    return result;
   } catch (err) {
     handleFirestoreError(err, OperationType.LIST, MENU_COLLECTION);
     return [];
@@ -347,6 +373,13 @@ export async function getMenuItemsByStand(standId: string): Promise<MenuItem[]> 
 }
 
 export async function getAllMenuItems(venueId?: string): Promise<MenuItem[]> {
+  const targetVenueId = venueId || DEFAULT_VENUE_ID;
+  const cacheKey = `concessions_menu_venue_${targetVenueId}`;
+  const cached = getCachedData<MenuItem[]>(cacheKey);
+  if (cached && cached.length > 0) {
+    return cached;
+  }
+
   try {
     const q = venueId
       ? query(collection(db, MENU_COLLECTION), where('venueId', '==', venueId), limit(150))
@@ -366,6 +399,7 @@ export async function getAllMenuItems(venueId?: string): Promise<MenuItem[]> {
         items = [];
       }
     }
+    setCachedData(cacheKey, items, 15);
     return items;
   } catch (err) {
     handleFirestoreError(err, OperationType.LIST, MENU_COLLECTION);
@@ -377,6 +411,7 @@ export async function toggleMenuItemAvailability(itemId: string, available: bool
   try {
     const docRef = doc(db, MENU_COLLECTION, itemId);
     await updateDoc(docRef, { available });
+    invalidateCache('concessions_menu_');
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `${MENU_COLLECTION}/${itemId}`);
   }
@@ -440,6 +475,7 @@ export async function createStadiumStand(
       updatedAt: now,
     };
     await setDoc(docRef, sanitizeFirestoreData(newStand));
+    invalidateCache('concessions_');
     return newStand;
   } catch (err) {
     handleFirestoreError(err, OperationType.CREATE, STANDS_COLLECTION);
@@ -461,6 +497,7 @@ export async function updateStadiumStand(
       updatedAt: new Date().toISOString(),
     };
     await updateDoc(docRef, sanitizeFirestoreData(payload));
+    invalidateCache('concessions_');
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `${STANDS_COLLECTION}/${standId}`);
   }
@@ -476,6 +513,7 @@ export async function toggleStandActive(standId: string, active: boolean): Promi
       active,
       updatedAt: new Date().toISOString(),
     });
+    invalidateCache('concessions_');
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `${STANDS_COLLECTION}/${standId}`);
   }
@@ -499,6 +537,7 @@ export async function deleteStadiumStand(standId: string): Promise<void> {
     } catch (e) {
       console.warn('Error limpiando items del menú para stand eliminado:', e);
     }
+    invalidateCache('concessions_');
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, `${STANDS_COLLECTION}/${standId}`);
   }

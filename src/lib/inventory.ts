@@ -10,12 +10,14 @@ import {
   where,
   orderBy,
   limit,
+  runTransaction,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { InventoryProduct, ProductCost } from '../types';
 import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
 import { DEFAULT_VENUE_ID } from './defaultVenue';
 import { normalizeGoogleDriveImageUrl, getDefaultProductPlaceholder } from './imageUtils';
+import { getCachedData, setCachedData, invalidateCache } from './clientCache';
 
 const COLLECTION_NAME = 'inventory';
 
@@ -360,6 +362,14 @@ export function getCuratedProductsForVenue(venueId: string): InventoryProduct[] 
 
 export async function getInventoryProducts(venueId?: string): Promise<InventoryProduct[]> {
   const targetVenueId = venueId || DEFAULT_VENUE_ID;
+  const cacheKey = `inventory_products_${targetVenueId}`;
+
+  // 1. Revisar caché local primero para eventos masivos
+  const cached = getCachedData<InventoryProduct[]>(cacheKey);
+  if (cached && cached.length > 0) {
+    return cached;
+  }
+
   try {
     const q = query(collection(db, COLLECTION_NAME), where('venueId', '==', targetVenueId), limit(150));
     let snap = await getDocs(q);
@@ -402,6 +412,7 @@ export async function getInventoryProducts(venueId?: string): Promise<InventoryP
           }
         }
         if (consolidated.length > 0) {
+          setCachedData(cacheKey, consolidated, 15);
           return consolidated;
         }
       }
@@ -410,10 +421,13 @@ export async function getInventoryProducts(venueId?: string): Promise<InventoryP
     if (snap.empty) {
       try {
         const seeded = await seedInitialProducts(targetVenueId);
+        setCachedData(cacheKey, seeded, 15);
         return seeded;
       } catch (seedErr) {
         console.warn('No se pudo sembrar el inventario en Firestore. Usando catálogo curado de la sede:', seedErr);
-        return getCuratedProductsForVenue(targetVenueId);
+        const fallback = getCuratedProductsForVenue(targetVenueId);
+        setCachedData(cacheKey, fallback, 10);
+        return fallback;
       }
     }
 
@@ -426,10 +440,13 @@ export async function getInventoryProducts(venueId?: string): Promise<InventoryP
       };
     }) as InventoryProduct[];
 
+    setCachedData(cacheKey, products, 15);
     return products;
   } catch (err) {
     console.warn('Error al cargar inventario desde Firestore, usando catálogo curado de la sede:', err);
-    return getCuratedProductsForVenue(targetVenueId);
+    const fallback = getCuratedProductsForVenue(targetVenueId);
+    setCachedData(cacheKey, fallback, 10);
+    return fallback;
   }
 }
 
@@ -554,6 +571,7 @@ export async function saveInventoryProduct(
       await setProductCost(savedProduct.id, costPrice);
     }
 
+    invalidateCache('inventory_products_');
     return savedProduct;
   } catch (err) {
     handleFirestoreError(
@@ -564,6 +582,10 @@ export async function saveInventoryProduct(
   }
 }
 
+/**
+ * Ajusta el stock de un producto de forma atómica usando runTransaction.
+ * Evita condiciones de carrera en compras o modificaciones masivas simultáneas.
+ */
 export async function adjustProductStock(
   productId: string,
   quantityChange: number,
@@ -572,7 +594,56 @@ export async function adjustProductStock(
 ): Promise<number> {
   try {
     const docRef = doc(db, COLLECTION_NAME, productId);
-    const snap = await getDoc(docRef);
+    const newStock = await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(docRef);
+
+      let currentStock = 0;
+      let venueId = fallbackProduct?.venueId || DEFAULT_VENUE_ID;
+      let existingData: any = {};
+
+      if (snap.exists()) {
+        existingData = snap.data();
+        currentStock = typeof existingData.stock === 'number' ? existingData.stock : 0;
+        venueId = existingData.venueId || venueId;
+      } else if (fallbackProduct) {
+        currentStock = typeof fallbackProduct.stock === 'number' ? fallbackProduct.stock : 0;
+      }
+
+      const calculatedStock = Math.max(0, currentStock + quantityChange);
+
+      const payload = {
+        ...(fallbackProduct || {}),
+        ...existingData,
+        stock: calculatedStock,
+        venueId,
+        updatedAt: new Date().toISOString(),
+      };
+
+      transaction.set(docRef, sanitizeFirestoreData(payload), { merge: true });
+      return calculatedStock;
+    });
+
+    invalidateCache('inventory_products_');
+    return newStock;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `${COLLECTION_NAME}/${productId}`);
+    return 0;
+  }
+}
+
+/**
+ * Deducción atómica de inventario para compras en tienda / concesiones.
+ * Si dos usuarios compran la última pieza al mismo milisegundo, la transacción
+ * garantiza que solo el primero obtenga el producto y rechaza al segundo por falta de stock.
+ */
+export async function deductProductStockAtomic(
+  productId: string,
+  quantityToDeduct: number,
+  fallbackProduct?: Partial<InventoryProduct>
+): Promise<number> {
+  const docRef = doc(db, COLLECTION_NAME, productId);
+  const updatedStock = await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(docRef);
 
     let currentStock = 0;
     let venueId = fallbackProduct?.venueId || DEFAULT_VENUE_ID;
@@ -586,22 +657,28 @@ export async function adjustProductStock(
       currentStock = typeof fallbackProduct.stock === 'number' ? fallbackProduct.stock : 0;
     }
 
-    const newStock = Math.max(0, currentStock + quantityChange);
+    if (currentStock < quantityToDeduct) {
+      throw new Error(
+        `INSUFFICIENT_STOCK: Stock insuficiente para el producto (${currentStock} disponible(s), solicitado ${quantityToDeduct}).`
+      );
+    }
+
+    const calculatedStock = currentStock - quantityToDeduct;
 
     const payload = {
       ...(fallbackProduct || {}),
       ...existingData,
-      stock: newStock,
+      stock: calculatedStock,
       venueId,
       updatedAt: new Date().toISOString(),
     };
 
-    await setDoc(docRef, sanitizeFirestoreData(payload), { merge: true });
+    transaction.set(docRef, sanitizeFirestoreData(payload), { merge: true });
+    return calculatedStock;
+  });
 
-    return newStock;
-  } catch (err) {
-    handleFirestoreError(err, OperationType.UPDATE, `${COLLECTION_NAME}/${productId}`);
-  }
+  invalidateCache('inventory_products_');
+  return updatedStock;
 }
 
 export async function deleteInventoryProduct(productId: string): Promise<void> {
@@ -616,6 +693,7 @@ export async function deleteInventoryProduct(productId: string): Promise<void> {
 
     const docRef = doc(db, COLLECTION_NAME, productId);
     await deleteDoc(docRef);
+    invalidateCache('inventory_products_');
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, `${COLLECTION_NAME}/${productId}`);
   }

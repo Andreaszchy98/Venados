@@ -7,6 +7,8 @@ import { LogisticaAdmin } from './LogisticaAdmin';
 import { PersonalAdmin } from './PersonalAdmin';
 import { NegociosAdmin } from './NegociosAdmin';
 import { EventsManager } from './EventsManager';
+import { MarcadorControl } from './MarcadorControl';
+import { MarcadorEnVivo } from '../aficionado/MarcadorEnVivo';
 import { useLanguage } from '../../context/LanguageContext';
 import {
   ShieldAlert,
@@ -20,13 +22,14 @@ import {
   ChevronDown,
   Check,
   Layers,
+  Radio,
 } from 'lucide-react';
 
 interface AdminViewProps {
   user: UserProfile;
 }
 
-export type AdminTab = 'resumen' | 'eventos' | 'ventas' | 'inventario' | 'logistica' | 'personal' | 'negocios';
+export type AdminTab = 'resumen' | 'eventos' | 'marcador' | 'ventas' | 'inventario' | 'logistica' | 'personal' | 'negocios';
 
 interface SectionConfig {
   id: AdminTab;
@@ -49,6 +52,16 @@ const ADMIN_SECTIONS: SectionConfig[] = [
     defaultDesc: 'Métricas clave y accesos directos',
     iconColor: 'text-red-700',
     badgeBg: 'bg-red-50 text-red-700 border-red-200',
+  },
+  {
+    id: 'marcador',
+    icon: Radio,
+    labelKey: 'admin.tabs.scoreboard',
+    defaultLabel: 'Marcador en Vivo',
+    descKey: 'admin.sections.scoreboard_desc',
+    defaultDesc: 'Control táctil de partidos en tiempo real',
+    iconColor: 'text-amber-500',
+    badgeBg: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
   },
   {
     id: 'eventos',
@@ -115,6 +128,8 @@ const ADMIN_SECTIONS: SectionConfig[] = [
 export const AdminView: React.FC<AdminViewProps> = ({ user }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('resumen');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [previewScoreboardEventId, setPreviewScoreboardEventId] = useState<string | null>(null);
+  const [selectedEventIdForScoreboard, setSelectedEventIdForScoreboard] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { t } = useLanguage();
 
@@ -277,10 +292,34 @@ export const AdminView: React.FC<AdminViewProps> = ({ user }) => {
       </div>
 
       {/* Renderizado de Pestaña Activa */}
+      {previewScoreboardEventId ? (
+        <div className="fixed inset-0 z-50 bg-[#080C14] overflow-y-auto">
+          <MarcadorEnVivo
+            eventId={previewScoreboardEventId}
+            onBack={() => setPreviewScoreboardEventId(null)}
+          />
+        </div>
+      ) : null}
+
       {activeTab === 'resumen' && (
         <AdminOverview user={user} onNavigateTab={(tab) => setActiveTab(tab as any)} />
       )}
-      {activeTab === 'eventos' && <EventsManager user={user} />}
+      {activeTab === 'marcador' && (
+        <MarcadorControl
+          user={user}
+          initialEventId={selectedEventIdForScoreboard}
+          onViewFanScoreboard={(eventId) => setPreviewScoreboardEventId(eventId)}
+        />
+      )}
+      {activeTab === 'eventos' && (
+        <EventsManager
+          user={user}
+          onOpenScoreboard={(eventId) => {
+            setSelectedEventIdForScoreboard(eventId);
+            setActiveTab('marcador');
+          }}
+        />
+      )}
       {activeTab === 'negocios' && <NegociosAdmin user={user} />}
       {activeTab === 'personal' && <PersonalAdmin user={user} />}
       {activeTab === 'ventas' && <VentasAdmin user={user} />}

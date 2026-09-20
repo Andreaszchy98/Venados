@@ -45,9 +45,12 @@ export const TaquillaView: React.FC<TaquillaViewProps> = ({ user }) => {
 
   const filteredTickets = tickets.filter(
     (t) =>
-      t.qrId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.section.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.matchTitle.toLowerCase().includes(searchTerm.toLowerCase())
+      (t.qrId && t.qrId.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (t.section && t.section.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (t.matchTitle && t.matchTitle.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (t.customerName && t.customerName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (t.customerEmail && t.customerEmail.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (t.stripePaymentIntentId && t.stripePaymentIntentId.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   return (

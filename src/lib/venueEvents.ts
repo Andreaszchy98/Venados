@@ -58,9 +58,55 @@ export function isDeletedMazatlanFCEvent(e: { id?: string; name?: string }): boo
 }
 
 /**
+ * Obtiene el objeto Date correspondiente al inicio del evento combinando date y time
+ */
+export function getEventDateTime(event: { date: string; time?: string }): Date {
+  let hours = 20;
+  let minutes = 0;
+  if (event.time) {
+    const match = event.time.match(/(\d{1,2}):(\d{2})/);
+    if (match) {
+      hours = parseInt(match[1], 10);
+      minutes = parseInt(match[2], 10);
+    }
+  }
+
+  const dateParts = event.date.split('-');
+  const year = parseInt(dateParts[0], 10) || 2026;
+  const month = (parseInt(dateParts[1], 10) || 10) - 1;
+  const day = parseInt(dateParts[2], 10) || 15;
+
+  return new Date(year, month, day, hours, minutes, 0);
+}
+
+/**
+ * Determina si la fecha y horario del evento ya concluyeron.
+ * Si ya pasó la fecha del evento, las ventas deben cerrarse y marcarse como finalizado.
+ */
+export function isEventPassed(event: { date: string; time?: string; orderingClosesAt?: string; status?: string }): boolean {
+  if (event.status === 'finalizado') return true;
+
+  const now = Date.now();
+
+  // 1. Si se configuró orderingClosesAt explícito
+  if (event.orderingClosesAt) {
+    const closesTime = new Date(event.orderingClosesAt).getTime();
+    if (!isNaN(closesTime) && now > closesTime) {
+      return true;
+    }
+  }
+
+  // 2. Por fecha y hora del evento: se considera concluido transcurridas 3.5 horas desde su inicio
+  const eventStart = getEventDateTime(event);
+  const eventEndTime = eventStart.getTime() + 3.5 * 60 * 60 * 1000;
+
+  return now > eventEndTime;
+}
+
+/**
  * Parsea y normaliza un documento de evento asegurando que su posterUrl
- * esté normalizado y que sus priceTiers correspondan exactamente
- * a las secciones del mapa del estadio, purgando las anteriores (preferente lateral, bleachers, platea baja, etc.)
+ * esté normalizado, cerrando automáticamente ventas si la fecha ya pasó,
+ * y verificando priceTiers oficiales.
  */
 export function parseVenueEventDoc(id: string, data: any): VenueEvent {
   const rawPoster = typeof data.posterUrl === 'string' ? data.posterUrl.trim() : '';
@@ -75,9 +121,25 @@ export function parseVenueEventDoc(id: string, data: any): VenueEvent {
   // Resolver tiers oficiales del mapa eliminando cualquier sección anterior
   const officialPriceTiers = getOfficialPriceTiersForEvent(baseEvent, data.venueName);
 
+  // Verificación de fecha vencida: si la fecha ya pasó, cerrar venta y marcar como finalizado
+  const isPast = isEventPassed(baseEvent);
+  const ticketsAvailable = isPast ? false : (baseEvent.ticketsAvailable !== undefined ? baseEvent.ticketsAvailable : true);
+  const status = isPast ? 'finalizado' : (baseEvent.status || 'programado');
+
+  // Si en Firestore aún figuraba abierto o sin marcar como finalizado, sincronizar en segundo plano
+  if (isPast && (data.ticketsAvailable !== false || data.status !== 'finalizado')) {
+    updateDoc(doc(db, COLLECTION_NAME, id), {
+      ticketsAvailable: false,
+      status: 'finalizado',
+      updatedAt: new Date().toISOString(),
+    }).catch(() => {});
+  }
+
   return {
     ...baseEvent,
     priceTiers: officialPriceTiers,
+    ticketsAvailable,
+    status,
   };
 }
 
@@ -509,10 +571,14 @@ export function evaluateActiveAndUpcomingEvents(events: VenueEvent[]): {
 } {
   const now = new Date().toISOString();
 
-  // 1. Evento activo: está activo y el momento actual cae dentro de la ventana de pedidos
+  // 1. Evento activo: está activo y el momento actual cae dentro de la ventana de pedidos (o status === 'en_vivo'),
+  // y NO está finalizado, cancelado ni concluido por fecha.
   const activeEvent =
     events.find((e) => {
-      if (!e.active) return false;
+      if (!e.active || e.status === 'finalizado' || e.status === 'cancelado') return false;
+      if (isEventPassed(e)) return false;
+      if (e.status === 'en_vivo') return true;
+
       let opens = e.orderingOpensAt;
       let closes = e.orderingClosesAt;
       if (!opens || !closes) {
@@ -523,11 +589,14 @@ export function evaluateActiveAndUpcomingEvents(events: VenueEvent[]): {
       return now >= opens && now <= closes;
     }) || null;
 
-  // 2. Próximo evento programado: no es el activo y su cierre/apertura es futuro
+  // 2. Próximo evento programado: no es el activo, no está finalizado ni concluido, y su fecha/cierre es futuro
   const upcomingCandidates = events
     .filter((e) => {
       if (!e.active) return false;
+      if (e.status === 'finalizado' || e.status === 'cancelado') return false;
+      if (isEventPassed(e)) return false;
       if (activeEvent && e.id === activeEvent.id) return false;
+
       let closes = e.orderingClosesAt;
       if (!closes) {
         const computed = computeDefaultOrderingWindow(e.date, e.time);
@@ -541,8 +610,8 @@ export function evaluateActiveAndUpcomingEvents(events: VenueEvent[]): {
       return aOpen.localeCompare(bOpen);
     });
 
-  // Si no hay futuros estrictos, usar el primer evento disponible para no dejar la vista sin referencia
-  const upcomingEvent = upcomingCandidates[0] || (!activeEvent && events.length > 0 ? events[0] : null);
+  // Si no hay eventos futuros reales, el próximo evento es null
+  const upcomingEvent = upcomingCandidates.length > 0 ? upcomingCandidates[0] : null;
 
   return { activeEvent, upcomingEvent };
 }

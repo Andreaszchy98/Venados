@@ -28,6 +28,12 @@ export async function createFoodOrder(
     const codeNum = Math.floor(100 + Math.random() * 900);
     const pickupCode = `V-${codeNum}`;
 
+    const paymentStatus =
+      orderData.paymentStatus ||
+      (orderData.paymentDetails || (orderData.paymentMethod && orderData.paymentMethod.toLowerCase().includes('tarjeta'))
+        ? 'pagado'
+        : 'pendiente');
+
     const newOrder: FoodOrder = {
       ...orderData,
       venueId: (orderData as any).venueId || DEFAULT_VENUE_ID,
@@ -35,6 +41,8 @@ export async function createFoodOrder(
       pickupCode,
       status: 'pendiente',
       runnerId: null,
+      paymentStatus,
+      paymentDetails: orderData.paymentDetails || undefined,
       statusHistory: [
         {
           status: 'pendiente',
@@ -60,11 +68,13 @@ export async function createFoodOrder(
         eventId: DEFAULT_EVENT_ID,
         referenceId: newOrder.id,
         customerName: newOrder.customerName,
-        description: `[${newOrder.orderType.toUpperCase()}] ${newOrder.standName} (${newOrder.pickupCode}): ${newOrder.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')}`,
+        description: `[${newOrder.orderType.toUpperCase()}] ${newOrder.standName} (${newOrder.pickupCode}): ${newOrder.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')}${newOrder.paymentDetails ? ` [Tarjeta ${newOrder.paymentDetails.cardBrand} ****${newOrder.paymentDetails.cardLast4} Auth: ${newOrder.paymentDetails.authCode}]` : ''}`,
         amount: newOrder.total,
-        paymentMethod: newOrder.paymentMethod || 'Tarjeta',
+        paymentMethod: newOrder.paymentDetails
+          ? `Tarjeta ${newOrder.paymentDetails.cardBrand} (•••• ${newOrder.paymentDetails.cardLast4})`
+          : newOrder.paymentMethod || 'Tarjeta',
         date: now,
-        status: 'completada',
+        status: newOrder.paymentStatus === 'pagado' ? 'completada' : 'pendiente',
       });
     } catch {
       // Ignorar si el usuario no tiene permisos directos para escribir en /sales

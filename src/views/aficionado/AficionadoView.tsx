@@ -6,6 +6,8 @@ import { TiendaMerch } from './TiendaMerch';
 import { MenuStand } from './MenuStand';
 import { MisPedidos } from './MisPedidos';
 import { CarteleraLanding } from '../../components/cartelera/CarteleraLanding';
+import { HistorialJuegos } from './HistorialJuegos';
+import { MarcadorEnVivo } from './MarcadorEnVivo';
 import { useLanguage } from '../../context/LanguageContext';
 import { useTheme } from '../../context/ThemeContext';
 import { subscribeVenues } from '../../lib/venues';
@@ -25,13 +27,14 @@ import {
   Sparkles,
   CheckCircle2,
   Film,
+  Trophy,
 } from 'lucide-react';
 
 interface AficionadoViewProps {
   user: UserProfile;
   pendingEventId?: string | null;
   onClearPendingEvent?: () => void;
-  initialTab?: 'cartelera' | 'boletos' | 'membresia' | 'tienda' | 'comida' | 'pedidos';
+  initialTab?: 'cartelera' | 'boletos' | 'membresia' | 'tienda' | 'comida' | 'pedidos' | 'historial';
   onRequireAuth?: () => void;
 }
 
@@ -42,12 +45,13 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
   initialTab,
   onRequireAuth,
 }) => {
-  const [activeTab, setActiveTab] = useState<'cartelera' | 'boletos' | 'membresia' | 'tienda' | 'comida' | 'pedidos'>(() => {
+  const [activeTab, setActiveTab] = useState<'cartelera' | 'boletos' | 'membresia' | 'tienda' | 'comida' | 'pedidos' | 'historial'>(() => {
     if (pendingEventId) return 'boletos';
     if (initialTab) return initialTab;
     return 'cartelera';
   });
   const [selectedEventId, setSelectedEventId] = useState<string | null>(pendingEventId || null);
+  const [scoreboardEventId, setScoreboardEventId] = useState<string | null>(null);
   const { t } = useLanguage();
   const { theme } = useTheme();
 
@@ -199,62 +203,84 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
         </div>
       )}
 
-      {/* Contenido de la vista según pestaña activa */}
-      {activeTab === 'cartelera' && (
-        <CarteleraLanding
-          user={effectiveUser}
-          initialEventId={selectedEventId}
-          onClearInitialEvent={() => {
-            setSelectedEventId(null);
-            onClearPendingEvent?.();
-          }}
-          onSelectEvent={(eventId) => {
-            setSelectedEventId(eventId);
-          }}
-          onTicketPurchased={() => {
+      {/* Visor de Marcador en Vivo / Resumen si hay un evento seleccionado */}
+      {scoreboardEventId ? (
+        <MarcadorEnVivo
+          eventId={scoreboardEventId}
+          venueId={selectedVenueId}
+          onBack={() => setScoreboardEventId(null)}
+          onBuyTickets={() => {
+            setScoreboardEventId(null);
             setActiveTab('boletos');
           }}
-          onSelectStore={(type) => setActiveTab(type)}
-          onSelectTab={(tab) => setActiveTab(tab)}
-          onOpenAuth={onRequireAuth}
-          showBottomNav={false}
         />
-      )}
-      {activeTab === 'boletos' && (
-        <MisBoletos
-          user={effectiveUser}
-          initialEventId={selectedEventId}
-          onClearInitialEvent={() => {
-            setSelectedEventId(null);
-            onClearPendingEvent?.();
-          }}
-          selectedVenueId={selectedVenueId}
-          onSelectVenue={handleSelectVenue}
-          onRequireAuth={onRequireAuth}
-          onNavigateToCartelera={() => setActiveTab('cartelera')}
-        />
-      )}
-      {activeTab === 'membresia' && <MiMembresia user={effectiveUser} />}
-      {activeTab === 'tienda' && (
-        <TiendaMerch
-          user={effectiveUser}
-          onOrderCompleted={() => setActiveTab('pedidos')}
-          onRequireAuth={onRequireAuth}
-        />
-      )}
-      {activeTab === 'comida' && (
-        <MenuStand
-          user={effectiveUser}
-          onOrderSuccess={() => setActiveTab('pedidos')}
-          onGoToTickets={() => setActiveTab('boletos')}
-          onRequireAuth={onRequireAuth}
-        />
-      )}
-      {activeTab === 'pedidos' && (
-        <MisPedidos
-          user={effectiveUser}
-          onOpenAuth={onRequireAuth}
-        />
+      ) : (
+        <>
+          {/* Contenido de la vista según pestaña activa */}
+          {activeTab === 'cartelera' && (
+            <CarteleraLanding
+              user={effectiveUser}
+              initialEventId={selectedEventId}
+              onClearInitialEvent={() => {
+                setSelectedEventId(null);
+                onClearPendingEvent?.();
+              }}
+              onSelectEvent={(eventId) => {
+                setSelectedEventId(eventId);
+              }}
+              onTicketPurchased={() => {
+                setActiveTab('boletos');
+              }}
+              onSelectStore={(type) => setActiveTab(type)}
+              onSelectTab={(tab) => setActiveTab(tab)}
+              onOpenAuth={onRequireAuth}
+              showBottomNav={false}
+            />
+          )}
+          {activeTab === 'boletos' && (
+            <MisBoletos
+              user={effectiveUser}
+              initialEventId={selectedEventId}
+              onClearInitialEvent={() => {
+                setSelectedEventId(null);
+                onClearPendingEvent?.();
+              }}
+              selectedVenueId={selectedVenueId}
+              onSelectVenue={handleSelectVenue}
+              onRequireAuth={onRequireAuth}
+              onNavigateToCartelera={() => setActiveTab('cartelera')}
+            />
+          )}
+          {activeTab === 'membresia' && <MiMembresia user={effectiveUser} />}
+          {activeTab === 'tienda' && (
+            <TiendaMerch
+              user={effectiveUser}
+              onOrderCompleted={() => setActiveTab('pedidos')}
+              onRequireAuth={onRequireAuth}
+            />
+          )}
+          {activeTab === 'comida' && (
+            <MenuStand
+              user={effectiveUser}
+              onOrderSuccess={() => setActiveTab('pedidos')}
+              onGoToTickets={() => setActiveTab('boletos')}
+              onRequireAuth={onRequireAuth}
+            />
+          )}
+          {activeTab === 'pedidos' && (
+            <MisPedidos
+              user={effectiveUser}
+              onOpenAuth={onRequireAuth}
+            />
+          )}
+          {activeTab === 'historial' && (
+            <HistorialJuegos
+              initialVenueId={selectedVenueId}
+              venues={venues}
+              onSelectGame={(eventId) => setScoreboardEventId(eventId)}
+            />
+          )}
+        </>
       )}
 
       {/* Menú de Navegación Inferior Fijo (5 Pestañas: Cartelera, Boletos, Tienda, Comida, Pedidos) */}

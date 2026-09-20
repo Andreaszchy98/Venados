@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { UserProfile, VenueEvent, SeatSection, EventSeat, EventType } from '../../types';
 import {
   BaseballFieldGraphic,
@@ -11,6 +11,9 @@ import {
   subscribeSeatSections,
   subscribeEventSeats,
   purchaseSeatsTransaction,
+  lockSeatSelectionTransaction,
+  releaseSeatLockTransaction,
+  SEAT_LOCK_DURATION_MS,
   getZonePrice,
   MARISCAL_ZONES,
   getStadiumZones,
@@ -19,9 +22,13 @@ import {
   SeatPurchaseItem,
   buildSectionsForVenue,
 } from '../../lib/seatMap';
+import { isEventPassed } from '../../lib/venueEvents';
 import { EncantoStadiumMap } from '../../components/stadiumMaps/EncantoStadiumMap';
 import { TeodoroMariscalStadiumMap } from '../../components/stadiumMaps/TeodoroMariscalStadiumMap';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
+import { createStripeCheckoutSession } from '../../lib/stripe';
+import { CardPaymentModal } from '../../components/shared/CardPaymentModal';
+import { DirectPaymentResult } from '../../lib/stripe';
 import {
   MapPin,
   Calendar,
@@ -30,7 +37,6 @@ import {
   AlertCircle,
   ShieldCheck,
   CreditCard,
-  Banknote,
   X,
   Users,
   Maximize2,
@@ -98,11 +104,90 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
   const [selectedSeats, setSelectedSeats] = useState<SeatPurchaseItem[]>(() => {
     try {
       const saved = sessionStorage.getItem(`vxp_seats_${event.id}`);
-      return saved ? JSON.parse(saved) : [];
+      if (!saved) return [];
+      const parsed = JSON.parse(saved);
+      if (!Array.isArray(parsed)) return [];
+      const uniqueMap = new Map<string, SeatPurchaseItem>();
+      for (const item of parsed) {
+        if (item && item.seatId && !uniqueMap.has(item.seatId)) {
+          uniqueMap.set(item.seatId, item);
+        }
+      }
+      return Array.from(uniqueMap.values());
     } catch {
       return [];
     }
   });
+
+  // Evitar ejecuciones duplicadas concurrentes por doble clic sobre el mismo asiento
+  const pendingSeatLocks = useRef<Set<string>>(new Set());
+
+  // Detección automática de cierre de venta o evento finalizado
+  const isEventClosed = useMemo(() => {
+    return (
+      isEventPassed(event) ||
+      event.status === 'finalizado' ||
+      event.status === 'cancelado' ||
+      event.ticketsAvailable === false
+    );
+  }, [event]);
+
+  // Timestamp de expiración de la reserva atómica de 8 minutos
+  const [lockExpiresAt, setLockExpiresAt] = useState<number | null>(() => {
+    try {
+      const saved = sessionStorage.getItem(`vxp_seats_lock_${event.id}`);
+      return saved ? Number(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [lockRemainingSeconds, setLockRemainingSeconds] = useState<number>(0);
+
+  // Contador regresivo para el bloqueo de 8 minutos
+  useEffect(() => {
+    if (!lockExpiresAt || selectedSeats.length === 0) {
+      setLockRemainingSeconds(0);
+      return;
+    }
+
+    const updateTimer = () => {
+      const now = Date.now();
+      const diff = Math.max(0, Math.ceil((lockExpiresAt - now) / 1000));
+      setLockRemainingSeconds(diff);
+
+      if (diff === 0) {
+        // Expiraron los 8 minutos de reserva: liberar asientos automáticamente
+        const userId = user?.uid || 'guest';
+        selectedSeats.forEach((s) => {
+          releaseSeatLockTransaction(s.seatId, userId).catch(() => {});
+        });
+        setSelectedSeats([]);
+        setLockExpiresAt(null);
+        try {
+          sessionStorage.removeItem(`vxp_seats_${event.id}`);
+          sessionStorage.removeItem(`vxp_seats_lock_${event.id}`);
+        } catch {}
+        setPurchaseError(
+          'Tu tiempo de reserva exclusiva de 8 minutos ha concluido. Los asientos han sido liberados para otros aficionados.'
+        );
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [lockExpiresAt, selectedSeats, event.id, user?.uid]);
+
+  // Guardar lockExpiresAt en sessionStorage
+  useEffect(() => {
+    try {
+      if (lockExpiresAt && selectedSeats.length > 0) {
+        sessionStorage.setItem(`vxp_seats_lock_${event.id}`, String(lockExpiresAt));
+      } else {
+        sessionStorage.removeItem(`vxp_seats_lock_${event.id}`);
+      }
+    } catch {}
+  }, [lockExpiresAt, selectedSeats.length, event.id]);
 
   // Guardar asientos seleccionados en sessionStorage en cada cambio
   useEffect(() => {
@@ -117,10 +202,12 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
     }
   }, [selectedSeats, event.id]);
 
-  // Método de pago
-  const [paymentMethod, setPaymentMethod] = useState<'Efectivo / Taquilla' | 'Tarjeta en Línea' | 'Venados Pay'>('Efectivo / Taquilla');
+  // Método de pago (Exclusivo Tarjeta en Línea)
+  const [paymentMethod] = useState<'Tarjeta en Línea'>('Tarjeta en Línea');
   const [purchasing, setPurchasing] = useState(false);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
+  const [isCardModalOpen, setIsCardModalOpen] = useState(false);
+  const [externalStripeUrl, setExternalStripeUrl] = useState<string | null>(null);
 
   // Helper para normalizar identificadores de sección (elimina guiones, espacios y mayúsculas)
   const normalizeSec = (val?: string | null) => (val || '').trim().toUpperCase().replace(/[\s_-]+/g, '');
@@ -255,7 +342,16 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
   const currentSectionSeats = useMemo(() => {
     if (!currentSection) return [];
     const key = normalizeSec(currentSection.sectionNumber);
-    return seatsBySection.get(key) || [];
+    const rawSeats = seatsBySection.get(key) || [];
+    // Deduplicar estrictamente por id y por (rowLabel + seatNumber)
+    const uniqueSeatsMap = new Map<string, EventSeat>();
+    for (const s of rawSeats) {
+      const uniqueKey = s.id || `${s.rowLabel}_${s.seatNumber}`;
+      if (!uniqueSeatsMap.has(uniqueKey)) {
+        uniqueSeatsMap.set(uniqueKey, s);
+      }
+    }
+    return Array.from(uniqueSeatsMap.values());
   }, [currentSection, seatsBySection]);
 
   // Estadísticas globales de disponibilidad (Toma en cuenta si el admin de la sede declaró asientos disponibles)
@@ -277,33 +373,104 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
     return { total, sold, available };
   }, [sections, eventSeats, isEncanto, event?.availableSeats, event?.totalCapacity]);
 
-  // Alternar selección de un asiento
-  const handleToggleSeat = (seat: EventSeat, section: SeatSection) => {
+  // Alternar selección de un asiento mediante Transacción Atómica con bloqueo de 8 minutos
+  const handleToggleSeat = async (seat: EventSeat, section: SeatSection) => {
+    if (isEventClosed) {
+      setPurchaseError('La venta de boletos ha finalizado o está cerrada para este evento.');
+      return;
+    }
+
     if (seat.status === 'vendido') return;
 
+    // Prevenir bloqueos duplicados en transiciones concurrentes / doble clic
+    if (pendingSeatLocks.current.has(seat.id)) return;
+
+    const userId = user?.uid || 'guest';
     setPurchaseError(null);
     const isAlreadySelected = selectedSeats.some((s) => s.seatId === seat.id);
 
     if (isAlreadySelected) {
-      setSelectedSeats((prev) => prev.filter((s) => s.seatId !== seat.id));
+      // Liberar bloqueo atómico en Firestore
+      releaseSeatLockTransaction(seat.id, userId).catch(() => {});
+      setSelectedSeats((prev) => {
+        const remaining = prev.filter((s) => s.seatId !== seat.id);
+        if (remaining.length === 0) {
+          setLockExpiresAt(null);
+        }
+        return remaining;
+      });
     } else {
-      const price = getZonePrice(section.zoneName, event);
-      const newItem: SeatPurchaseItem = {
-        seatId: seat.id,
-        sectionId: section.id,
-        sectionNumber: section.sectionNumber,
-        zoneName: section.zoneName,
-        rowLabel: seat.rowLabel,
-        seatNumber: seat.seatNumber,
-        price,
-      };
-      setSelectedSeats((prev) => [...prev, newItem]);
+      pendingSeatLocks.current.add(seat.id);
+      try {
+        const lockRes = await lockSeatSelectionTransaction({
+          eventId: event.id,
+          seatId: seat.id,
+          userId,
+          sectionNumber: section.sectionNumber,
+          rowLabel: seat.rowLabel,
+          seatNumber: seat.seatNumber,
+          zoneName: section.zoneName,
+          sectionId: section.id,
+        });
+
+        // Registrar o actualizar expiración
+        setLockExpiresAt(lockRes.lockedUntil);
+
+        const price = getZonePrice(section.zoneName, event);
+        const newItem: SeatPurchaseItem = {
+          seatId: seat.id,
+          sectionId: section.id,
+          sectionNumber: section.sectionNumber,
+          zoneName: section.zoneName,
+          rowLabel: seat.rowLabel,
+          seatNumber: seat.seatNumber,
+          price,
+        };
+        setSelectedSeats((prev) => {
+          if (prev.some((s) => s.seatId === newItem.seatId)) {
+            return prev;
+          }
+          return [...prev, newItem];
+        });
+      } catch (err: any) {
+        console.warn('Conflicto o error al bloquear asiento:', err);
+        const cleanMsg =
+          err.message
+            ?.replace('SEAT_LOCKED_BY_OTHER: ', '')
+            ?.replace('SEAT_ALREADY_SOLD: ', '') ||
+          'Este asiento no está disponible en este momento.';
+        setPurchaseError(cleanMsg);
+      } finally {
+        pendingSeatLocks.current.delete(seat.id);
+      }
     }
   };
 
-  // Quitar un asiento de la lista de compra
+  // Quitar un asiento de la lista de compra y liberar el bloqueo
   const handleRemoveSeat = (seatId: string) => {
-    setSelectedSeats((prev) => prev.filter((s) => s.seatId !== seatId));
+    const userId = user?.uid || 'guest';
+    releaseSeatLockTransaction(seatId, userId).catch(() => {});
+    setSelectedSeats((prev) => {
+      const remaining = prev.filter((s) => s.seatId !== seatId);
+      if (remaining.length === 0) {
+        setLockExpiresAt(null);
+      }
+      return remaining;
+    });
+  };
+
+  // Limpiar todos los asientos seleccionados y liberar sus bloqueos
+  const handleClearSelectedSeats = () => {
+    const userId = user?.uid || 'guest';
+    selectedSeats.forEach((s) => {
+      releaseSeatLockTransaction(s.seatId, userId).catch(() => {});
+    });
+    setSelectedSeats([]);
+    setLockExpiresAt(null);
+    try {
+      sessionStorage.removeItem(`vxp_seats_${event.id}`);
+      sessionStorage.removeItem(`vxp_seats_lock_${event.id}`);
+    } catch {}
   };
 
   // Total acumulado a pagar
@@ -326,6 +493,51 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
     setPurchasing(true);
     setPurchaseError(null);
 
+    // Abrir pasarela segura de pago con tarjeta en línea (método exclusivo para boletos)
+    setPurchasing(false);
+    setIsCardModalOpen(true);
+
+    // Precargar sesión externa opcional de Stripe (sin bloquear ni redirigir la ventana actual)
+    try {
+      const firstSeat = selectedSeats[0];
+      createStripeCheckoutSession(
+        {
+          eventId: event.id,
+          matchTitle: event.name,
+          stadium: stadiumName,
+          venueId: event.venueId,
+          sectionId: firstSeat.sectionId || firstSeat.sectionNumber,
+          section: `${firstSeat.zoneName} - Sec. ${firstSeat.sectionNumber}`,
+          seatRow: `Fila ${firstSeat.rowLabel}`,
+          seatNumber: `Asiento ${firstSeat.seatNumber}`,
+          price: totalAmount,
+          userId: user.uid,
+          customerName: user.displayName || user.email || 'Aficionado',
+          customerEmail: user.email || undefined,
+          gate: stadiumZones[firstSeat.zoneName]?.gate || event.gate || 'Puertas Generales',
+          seatId: firstSeat.seatId,
+          selectedSeats,
+        },
+        user.email || undefined,
+        `${window.location.origin}/?stripe_status=success`,
+        `${window.location.origin}/?stripe_status=cancelled`
+      )
+        .then((res) => {
+          if (res?.sessionUrl) {
+            setExternalStripeUrl(res.sessionUrl);
+          }
+        })
+        .catch((err) => {
+          console.warn('Stripe checkout session externa opcional no disponible:', err);
+        });
+    } catch {}
+  };
+
+  const handleCardPaymentSuccess = async (paymentResult: DirectPaymentResult) => {
+    setIsCardModalOpen(false);
+    setPurchasing(true);
+    setPurchaseError(null);
+
     try {
       const result = await purchaseSeatsTransaction({
         userId: user.uid,
@@ -333,7 +545,7 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
         event,
         stadiumName,
         selectedSeats,
-        paymentMethod,
+        paymentMethod: 'Tarjeta en Línea',
       });
 
       try {
@@ -342,8 +554,8 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
 
       onPurchaseSuccess(result.purchaseId, result.count);
     } catch (err: any) {
-      console.error('Error en transacción de compra:', err);
-      const message = err.message || 'Error al procesar la compra de asientos.';
+      console.error('Error en transacción de compra con tarjeta:', err);
+      const message = err.message || 'Error al emitir los boletos tras el pago.';
       setPurchaseError(message);
     } finally {
       setPurchasing(false);
@@ -461,6 +673,21 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Banner si el evento ya finalizó o la venta está cerrada */}
+      {isEventClosed && (
+        <div className="bg-red-950/80 border border-red-500/70 rounded-2xl p-4 flex items-center gap-3 text-red-200 shadow-xl">
+          <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
+          <div className="space-y-0.5">
+            <p className="font-bold text-sm font-sports uppercase tracking-wider text-red-100">
+              Venta de boletos concluida / Juego o evento finalizado
+            </p>
+            <p className="text-xs text-red-300">
+              La fecha y horario programados para este evento ya pasaron o la venta ha sido cerrada. El mapa de butacas está en modo de consulta.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* 2. Barra de Leyenda de Zonas y Filtro Rápido */}
       <div className="bg-[#0F1626] p-3 sm:p-4 rounded-2xl border border-slate-700/80 shadow-xl space-y-2">
@@ -681,7 +908,7 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
               </div>
 
               {/* Leyenda de estado de butaca */}
-              <div className="flex items-center justify-center gap-4 text-[11px] text-slate-300 font-sports">
+              <div className="flex flex-wrap items-center justify-center gap-3.5 text-[11px] text-slate-300 font-sports">
                 <div className="flex items-center gap-1.5">
                   <div className="w-4 h-4 rounded-md border-2 border-emerald-500 bg-[#141C2E]"></div>
                   <span>Disponible</span>
@@ -694,7 +921,13 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                   >
                     ✓
                   </div>
-                  <span className="font-bold text-white">Seleccionado</span>
+                  <span className="font-bold text-white">Tu Selección</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-4 h-4 rounded-md bg-amber-950/70 border border-amber-500/80 text-amber-300 flex items-center justify-center text-[9px] font-mono">
+                    ⏳
+                  </div>
+                  <span className="text-amber-300">Apartado (8 min)</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <div className="w-4 h-4 rounded-md bg-slate-800 border border-slate-700 text-slate-500 flex items-center justify-center text-[10px]">
@@ -717,7 +950,7 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                   const seatsPerRow = isEncanto ? currentSection.seatsPerRow || 10 : 10;
                   const seatsList = Array.from({ length: seatsPerRow }, (_, idx) => {
                     const seatNum = idx + 1;
-                    const existingSeat = rowSeats.find((s) => s.seatNumber === seatNum);
+                    const existingSeat = rowSeats.find((s) => Number(s.seatNumber) === seatNum);
                     if (existingSeat) {
                       return existingSeat;
                     }
@@ -734,7 +967,7 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                   });
 
                   return (
-                    <div key={rowLabel} className="flex items-center gap-2">
+                    <div key={`row_${currentSection.sectionNumber}_${rowLabel}`} className="flex items-center gap-2">
                       <span className="w-6 h-6 rounded-lg bg-slate-800 text-amber-400 font-mono font-bold text-[11px] flex items-center justify-center shrink-0 border border-slate-700">
                         {rowLabel}
                       </span>
@@ -745,24 +978,44 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                           gridTemplateColumns: `repeat(${seatsPerRow}, minmax(0, 1fr))`,
                         }}
                       >
-                        {seatsList.map((seat) => {
+                        {seatsList.map((seat, sIdx) => {
                           const isSelected = selectedSeats.some((s) => s.seatId === seat.id);
                           const isSold =
                             seat.status === 'vendido' &&
                             normalizeSec(seat.sectionNumber) === normalizeSec(currentSection.sectionNumber);
+                          const now = Date.now();
+                          const isLockedByOther =
+                            !isSelected &&
+                            seat.status === 'reservado' &&
+                            seat.lockedUntil !== undefined &&
+                            seat.lockedUntil > now &&
+                            seat.lockedBy !== (user?.uid || 'guest') &&
+                            normalizeSec(seat.sectionNumber) === normalizeSec(currentSection.sectionNumber);
 
                           return (
                             <button
-                              key={seat.id}
+                              key={`seat_btn_${currentSection.sectionNumber}_${rowLabel}_${seat.seatNumber}_${seat.id || sIdx}`}
                               type="button"
                               onClick={() => handleToggleSeat(seat, currentSection)}
-                              disabled={isSold}
-                              title={`Fila ${seat.rowLabel} Asiento ${seat.seatNumber} - ${
-                                isSold ? 'Vendido' : isSelected ? 'Seleccionado' : 'Disponible'
-                              }`}
+                              disabled={isSold || isLockedByOther || isEventClosed}
+                              title={
+                                isEventClosed
+                                  ? 'Venta de boletos concluida'
+                                  : isSold
+                                  ? `Fila ${seat.rowLabel} Asiento ${seat.seatNumber} - Vendido`
+                                  : isLockedByOther
+                                  ? `Fila ${seat.rowLabel} Asiento ${seat.seatNumber} - Apartado por otro usuario (8 min)`
+                                  : isSelected
+                                  ? `Fila ${seat.rowLabel} Asiento ${seat.seatNumber} - Tu selección`
+                                  : `Fila ${seat.rowLabel} Asiento ${seat.seatNumber} - Disponible`
+                              }
                               className={`aspect-square rounded-lg text-[10px] font-extrabold transition-all flex items-center justify-center cursor-pointer ${
-                                isSold
+                                isEventClosed
+                                  ? 'bg-slate-900/90 border border-slate-800 text-slate-600 cursor-not-allowed opacity-60'
+                                  : isSold
                                   ? 'bg-slate-900 border border-slate-800 text-slate-600 cursor-not-allowed line-through'
+                                  : isLockedByOther
+                                  ? 'bg-amber-950/70 border border-amber-500/80 text-amber-300 cursor-not-allowed shadow-inner font-mono'
                                   : isSelected
                                   ? isEncanto
                                     ? 'bg-amber-500 text-black font-black shadow-md scale-105 ring-2 ring-amber-400'
@@ -770,7 +1023,7 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                                   : 'bg-[#141C2E] hover:bg-emerald-950/60 text-slate-100 border-2 border-emerald-500/80 hover:scale-105 hover:border-emerald-400'
                               }`}
                             >
-                              {isSelected ? '✓' : seat.seatNumber}
+                              {isLockedByOther ? '⏳' : isSelected ? '✓' : seat.seatNumber}
                             </button>
                           );
                         })}
@@ -830,13 +1083,21 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
             {/* Asientos Seleccionados (Chips) */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-slate-300 flex items-center gap-1 font-sports uppercase tracking-wide">
-                  <Users className={`w-3.5 h-3.5 ${isEncanto ? 'text-amber-400' : 'text-red-500'}`} />
-                  Asientos Seleccionados ({selectedSeats.length})
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-slate-300 flex items-center gap-1 font-sports uppercase tracking-wide">
+                    <Users className={`w-3.5 h-3.5 ${isEncanto ? 'text-amber-400' : 'text-red-500'}`} />
+                    Asientos Seleccionados ({selectedSeats.length})
+                  </span>
+                  {lockRemainingSeconds > 0 && selectedSeats.length > 0 && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-950/70 border border-amber-500/60 text-amber-300 text-[10px] font-bold font-mono animate-pulse">
+                      <Clock className="w-3 h-3 text-amber-400" />
+                      Reserva: {Math.floor(lockRemainingSeconds / 60)}:{(lockRemainingSeconds % 60).toString().padStart(2, '0')} min
+                    </span>
+                  )}
+                </div>
                 {selectedSeats.length > 0 && (
                   <button
-                    onClick={() => setSelectedSeats([])}
+                    onClick={handleClearSelectedSeats}
                     className="text-[11px] text-red-400 hover:text-red-300 font-bold cursor-pointer font-sports tracking-wider uppercase"
                   >
                     Limpiar selección
@@ -850,9 +1111,9 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1.5 bg-[#0A0E17] rounded-xl border border-slate-700/80">
-                  {selectedSeats.map((item) => (
+                  {selectedSeats.map((item, itemIdx) => (
                     <span
-                      key={item.seatId}
+                      key={`selected_chip_${item.seatId}_${itemIdx}`}
                       className="inline-flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg bg-[#141C2E] border border-slate-700 text-xs font-bold text-white shadow-xs font-sports"
                     >
                       <span>
@@ -874,39 +1135,41 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
               )}
             </div>
 
-            {/* Método de Pago */}
+            {/* Método de Pago (Exclusivo Tarjeta en Línea) */}
             <div className="space-y-2 pt-2 border-t border-slate-700/70">
-              <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 block font-sports">
-                Método de Pago
-              </span>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod('Efectivo / Taquilla')}
-                  className={`p-2.5 rounded-xl border text-left transition-all flex items-center gap-2 cursor-pointer ${
-                    paymentMethod === 'Efectivo / Taquilla'
-                      ? 'border-emerald-500 bg-emerald-950/40 text-emerald-300 font-bold ring-1 ring-emerald-500'
-                      : 'border-slate-700 bg-[#0A0E17] text-slate-300 hover:border-slate-600'
-                  }`}
-                >
-                  <Banknote className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span className="text-xs truncate font-sports">Efectivo / Taquilla</span>
-                </button>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 block font-sports">
+                  Método de Pago
+                </span>
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 font-sports">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  Pasarela SSL Segura
+                </span>
+              </div>
 
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod('Tarjeta en Línea')}
-                  className={`p-2.5 rounded-xl border text-left transition-all flex items-center gap-2 cursor-pointer ${
-                    paymentMethod === 'Tarjeta en Línea'
-                      ? isEncanto
-                        ? 'border-amber-500 bg-amber-950/40 text-amber-300 font-bold ring-1 ring-amber-500'
-                        : 'border-red-500 bg-red-950/40 text-red-300 font-bold ring-1 ring-red-500'
-                      : 'border-slate-700 bg-[#0A0E17] text-slate-300 hover:border-slate-600'
-                  }`}
-                >
-                  <CreditCard className={`w-4 h-4 ${isEncanto ? 'text-amber-400' : 'text-red-500'} shrink-0`} />
-                  <span className="text-xs truncate font-sports">Tarjeta en Línea</span>
-                </button>
+              <div className={`p-3 rounded-xl border flex items-center justify-between ${
+                isEncanto
+                  ? 'border-amber-500/50 bg-amber-950/30 text-amber-200'
+                  : 'border-red-500/50 bg-red-950/30 text-red-200'
+              }`}>
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                    isEncanto ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400'
+                  }`}>
+                    <CreditCard className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-wide text-white font-sports">
+                      Tarjeta en Línea
+                    </p>
+                    <p className="text-[10px] text-slate-400 font-sans">
+                      Visa, Mastercard, Amex • Cobro directo Stripe
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                  Activo
+                </span>
               </div>
             </div>
 
@@ -930,14 +1193,16 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                 id="btn-confirm-seat-transaction"
                 type="button"
                 onClick={handleConfirmPurchase}
-                disabled={purchasing || selectedSeats.length === 0}
+                disabled={purchasing || selectedSeats.length === 0 || isEventClosed}
                 className={`w-full py-3.5 ${
                   isEncanto
                     ? 'bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-black font-black shadow-amber-500/20'
                     : 'bg-red-600 hover:bg-red-500 active:bg-red-700 text-white'
-                } disabled:opacity-50 font-black text-xs sm:text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer font-sports uppercase tracking-wider`}
+                } disabled:opacity-50 disabled:cursor-not-allowed font-black text-xs sm:text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer font-sports uppercase tracking-wider`}
               >
-                {purchasing ? (
+                {isEventClosed ? (
+                  <span>Venta Concluida (Evento Finalizado)</span>
+                ) : purchasing ? (
                   'Verificando asientos en tiempo real...'
                 ) : !user || !user.uid ? (
                   <>
@@ -949,9 +1214,9 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                   </>
                 ) : (
                   <>
-                    <ShieldCheck className="w-4 h-4" />
+                    <CreditCard className="w-4 h-4" />
                     <span>
-                      Confirmar Compra ({selectedSeats.length}{' '}
+                      Pagar con Tarjeta ({selectedSeats.length}{' '}
                       {selectedSeats.length === 1 ? 'Boleto' : 'Boletos'} — ${totalAmount} MXN)
                     </span>
                   </>
@@ -966,6 +1231,28 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Modal de Formulario de Pago con Tarjeta en Línea */}
+      <CardPaymentModal
+        isOpen={isCardModalOpen}
+        onClose={() => setIsCardModalOpen(false)}
+        amount={totalAmount}
+        concept={`${event.name} — ${selectedSeats.length} boleto(s) (${selectedSeats
+          .map((s) => `Sec. ${s.sectionNumber} Fila ${s.rowLabel} As.${s.seatNumber}`)
+          .slice(0, 3)
+          .join(', ')}${selectedSeats.length > 3 ? '...' : ''})`}
+        customerName={user.displayName || user.email || 'Aficionado'}
+        customerEmail={user.email || undefined}
+        orderType="boletos"
+        metadata={{
+          eventId: event.id,
+          venueId: event.venueId,
+          matchTitle: event.name,
+          seatsCount: String(selectedSeats.length),
+        }}
+        externalSessionUrl={externalStripeUrl}
+        onSuccess={handleCardPaymentSuccess}
+      />
     </div>
   );
 };

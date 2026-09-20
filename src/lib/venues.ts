@@ -22,6 +22,38 @@ const VENUES_COLLECTION = 'venues';
 const EVENTS_COLLECTION = 'venueEvents';
 
 /**
+ * Determina los tipos de evento permitidos para un recinto dado.
+ * Reglas de negocio:
+ * - Estadio Teodoro Mariscal: solo béisbol y conciertos ('baseball', 'concert')
+ * - Estadio El Encanto: solo fútbol y conciertos ('football', 'concert')
+ * - 'todos' o indefinido: null (permite todas las categorías)
+ */
+export function getAllowedEventTypesForVenue(venueOrIdOrName?: Venue | string | null): EventType[] | null {
+  if (!venueOrIdOrName || venueOrIdOrName === 'todos') return null;
+
+  const id = typeof venueOrIdOrName === 'string' ? venueOrIdOrName : venueOrIdOrName.id || '';
+  const name = typeof venueOrIdOrName === 'string' ? venueOrIdOrName : venueOrIdOrName.name || '';
+  const str = `${id} ${name}`.toLowerCase();
+
+  // Estadio Teodoro Mariscal: solo béisbol y conciertos
+  if (str.includes('teodoro') || str.includes('mariscal') || id === DEFAULT_VENUE_ID) {
+    return ['baseball', 'concert'];
+  }
+
+  // Estadio El Encanto: solo fútbol y conciertos
+  if (str.includes('encanto') || id === 'venue-encanto') {
+    return ['football', 'concert'];
+  }
+
+  // Si el objeto Venue tiene declarados allowedEventTypes explícitamente
+  if (typeof venueOrIdOrName === 'object' && venueOrIdOrName.allowedEventTypes && venueOrIdOrName.allowedEventTypes.length > 0) {
+    return venueOrIdOrName.allowedEventTypes;
+  }
+
+  return null;
+}
+
+/**
  * Escuchar todos los recintos (Venues) en tiempo real
  */
 export function subscribeVenues(

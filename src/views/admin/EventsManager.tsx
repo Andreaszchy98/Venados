@@ -11,6 +11,7 @@ import {
   computeDefaultOrderingWindow,
 } from '../../lib/venueEvents';
 import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
+import { getAllowedEventTypesForVenue } from '../../lib/venues';
 import { normalizeGoogleDriveImageUrl, isGoogleDriveUrl } from '../../lib/imageUtils';
 import { getOfficialPriceTiersForEvent, getOfficialPriceTiersForVenue, isLegacySection } from '../../lib/seatMap';
 import { ConfirmationModal } from '../../components/shared/ConfirmationModal';
@@ -37,10 +38,12 @@ import {
   UtensilsCrossed,
   RotateCcw,
   Armchair,
+  Radio,
 } from 'lucide-react';
 
 interface EventsManagerProps {
   user: UserProfile;
+  onOpenScoreboard?: (eventId: string) => void;
 }
 
 function toDateTimeLocal(isoString?: string): string {
@@ -86,7 +89,7 @@ const DEFAULT_TIERS: EventPriceTier[] = [
   { section: 'Sky', price: 160 },
 ];
 
-export const EventsManager: React.FC<EventsManagerProps> = ({ user }) => {
+export const EventsManager: React.FC<EventsManagerProps> = ({ user, onOpenScoreboard }) => {
   // El superadmin NO debe tener acceso a esta vista ni a la gestión de eventos
   if (user.role !== 'admin') {
     return (
@@ -784,6 +787,17 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user }) => {
 
               {/* Botones de acción rápida: Toggles */}
               <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
+                {(ev.type === 'baseball' || ev.type === 'football' || ev.type === 'basketball') && onOpenScoreboard && (
+                  <button
+                    onClick={() => onOpenScoreboard(ev.id)}
+                    className="py-1.5 px-3 rounded-xl text-[11px] font-bold font-sports uppercase tracking-wider bg-gradient-to-r from-amber-600 to-red-600 hover:from-amber-500 hover:to-red-500 text-white shadow-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-98"
+                    title="Operar marcador en vivo para este encuentro"
+                  >
+                    <Radio className="w-3.5 h-3.5" />
+                    <span>Marcador</span>
+                  </button>
+                )}
+
                 <button
                   onClick={() => handleToggleTickets(ev)}
                   className={`flex-1 py-1.5 px-2.5 rounded-xl text-[11px] font-bold font-sports uppercase tracking-wider border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
@@ -875,11 +889,24 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user }) => {
                     onChange={(e) => setFormType(e.target.value as EventType)}
                     className="w-full px-3 py-2 bg-[#0A0E17] border border-slate-700/80 rounded-xl text-xs font-semibold text-white focus:outline-hidden focus:border-red-500"
                   >
-                    <option value="baseball">Béisbol</option>
-                    <option value="football">Fútbol</option>
-                    <option value="basketball">Básquetbol</option>
-                    <option value="concert">Concierto / Recital</option>
-                    <option value="other">Otro Espectáculo</option>
+                    {(() => {
+                      const allowed = getAllowedEventTypesForVenue(currentVenueId);
+                      const allOptions = [
+                        { value: 'baseball', label: 'Béisbol' },
+                        { value: 'football', label: 'Fútbol' },
+                        { value: 'basketball', label: 'Básquetbol' },
+                        { value: 'concert', label: 'Concierto / Recital' },
+                        { value: 'other', label: 'Otro Espectáculo' },
+                      ];
+                      const optionsToRender = allowed
+                        ? allOptions.filter((opt) => allowed.includes(opt.value as any))
+                        : allOptions;
+                      return optionsToRender.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ));
+                    })()}
                   </select>
                 </div>
 

@@ -23,6 +23,7 @@ import {
   Activity,
   RefreshCw,
 } from 'lucide-react';
+import { StripePendingPaymentsModal } from '../../components/admin/StripePendingPaymentsModal';
 
 interface VentasAdminProps {
   user?: UserProfile;
@@ -35,6 +36,7 @@ export const VentasAdmin: React.FC<VentasAdminProps> = ({ user }) => {
   const [selectedChannel, setSelectedChannel] = useState<string>('Todos');
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState<'todos' | 'hoy' | 'semana'>('todos');
+  const [isStripeModalOpen, setIsStripeModalOpen] = useState(false);
   const [metrics, setMetrics] = useState({
     totalGrossRevenue: 0,
     ticketsRevenue: 0,
@@ -135,13 +137,23 @@ export const VentasAdmin: React.FC<VentasAdminProps> = ({ user }) => {
           </p>
         </div>
 
-        <button
-          onClick={handleExportCSV}
-          className="px-4 py-2.5 bg-[#141E34] hover:bg-[#1A2846] text-white font-black text-xs uppercase tracking-wider rounded-xl border border-slate-700 shadow-sm flex items-center gap-2 self-start sm:self-auto font-sports transition-colors cursor-pointer"
-        >
-          <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-          <span>Exportar a CSV / Excel</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-3 self-start sm:self-auto">
+          <button
+            onClick={() => setIsStripeModalOpen(true)}
+            className="px-4 py-2.5 bg-indigo-950/80 hover:bg-indigo-900/90 text-indigo-300 hover:text-white font-black text-xs uppercase tracking-wider rounded-xl border border-indigo-700/60 shadow-sm flex items-center gap-2 font-sports transition-colors cursor-pointer"
+          >
+            <CreditCard className="w-4 h-4 text-indigo-400" />
+            <span>Verificar Pagos Stripe</span>
+          </button>
+
+          <button
+            onClick={handleExportCSV}
+            className="px-4 py-2.5 bg-[#141E34] hover:bg-[#1A2846] text-white font-black text-xs uppercase tracking-wider rounded-xl border border-slate-700 shadow-sm flex items-center gap-2 font-sports transition-colors cursor-pointer"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+            <span>Exportar a CSV / Excel</span>
+          </button>
+        </div>
       </div>
 
       {/* Tarjetas KPI de Ventas por Canal (Scoreboard Style) */}
@@ -268,6 +280,12 @@ export const VentasAdmin: React.FC<VentasAdminProps> = ({ user }) => {
           </div>
         </div>
       )}
+
+      {/* Modal para verificar y conciliar pagos pendientes en Stripe */}
+      <StripePendingPaymentsModal
+        isOpen={isStripeModalOpen}
+        onClose={() => setIsStripeModalOpen(false)}
+      />
     </div>
   );
 };

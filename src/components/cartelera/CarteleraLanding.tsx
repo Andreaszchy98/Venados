@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { VenueEvent, Venue, EventType, UserProfile, EventPriceTier } from '../../types';
+import { VenueEvent, Venue, EventType, UserProfile, EventPriceTier, GameScoreboard } from '../../types';
 import { DEFAULT_VENUES, DEFAULT_VENUE_ID, DEFAULT_FALLBACK_EVENT } from '../../lib/defaultVenue';
-import { subscribeVenues } from '../../lib/venues';
+import { subscribeVenues, getAllowedEventTypesForVenue } from '../../lib/venues';
 import { DEFAULT_FALLBACK_EVENTS } from '../../lib/venueEvents';
 import { normalizeGoogleDriveImageUrl, getEventPosterPlaceholder } from '../../lib/imageUtils';
 import { getOfficialPriceTiersForEvent } from '../../lib/seatMap';
 import { purchaseTicketWithSaleRecord } from '../../lib/tickets';
 import { SeatMapSelector } from '../../views/aficionado/SeatMapSelector';
+import { MarcadorEnVivo } from '../../views/aficionado/MarcadorEnVivo';
+import { HistorialJuegos } from '../../views/aficionado/HistorialJuegos';
+import { subscribeAllScoreboards } from '../../lib/scoreboard';
 import { collection, query, limit, onSnapshot, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useTheme } from '../../context/ThemeContext';
@@ -34,6 +37,8 @@ import {
   Plus,
   CreditCard,
   ShieldCheck,
+  Radio,
+  Trophy,
 } from 'lucide-react';
 
 interface CarteleraLandingProps {
@@ -66,11 +71,17 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
   // Evento activo para cargar el mapa interactivo de asientos en esta misma pantalla
   const [selectedMapEvent, setSelectedMapEvent] = useState<VenueEvent | null>(null);
 
+  // Evento activo para ver el marcador en vivo a pantalla completa
+  const [selectedScoreboardEventId, setSelectedScoreboardEventId] = useState<string | null>(null);
+
+  // Marcadores en vivo en tiempo real indexados por eventId
+  const [liveScoreboards, setLiveScoreboards] = useState<Record<string, GameScoreboard>>({});
+
   // Estados para compra rápida sin mapa
   const [quickBuyEvent, setQuickBuyEvent] = useState<VenueEvent | null>(null);
   const [quickBuyTier, setQuickBuyTier] = useState<EventPriceTier | null>(null);
   const [quickBuyQuantity, setQuickBuyQuantity] = useState<number>(1);
-  const [quickBuyPayment, setQuickBuyPayment] = useState<'Efectivo / Taquilla' | 'Tarjeta en Línea' | 'Venados Pay'>('Efectivo / Taquilla');
+  const [quickBuyPayment] = useState<'Tarjeta en Línea'>('Tarjeta en Línea');
   const [quickBuyLoading, setQuickBuyLoading] = useState<boolean>(false);
   const [quickBuySuccessMsg, setQuickBuySuccessMsg] = useState<string | null>(null);
 
@@ -98,6 +109,9 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
   // Eventos de cartelera
   const [allEvents, setAllEvents] = useState<VenueEvent[]>(DEFAULT_FALLBACK_EVENTS);
   const [loadingEvents, setLoadingEvents] = useState(true);
+
+  // Modo de vista: 'cartelera' (próximos eventos) o 'historial' (marcadores de juegos finalizados)
+  const [carteleraMode, setCarteleraMode] = useState<'cartelera' | 'historial'>('cartelera');
 
   // Filtro por categoría deportiva o espectáculo
   const [selectedCategory, setSelectedCategory] = useState<'todos' | 'baseball' | 'football' | 'concert' | 'other'>('todos');
@@ -129,6 +143,14 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
       if (loadedVenues && loadedVenues.length > 0) {
         setVenues(loadedVenues);
       }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Escuchar marcadores en vivo en tiempo real para todos los eventos deportivos
+  useEffect(() => {
+    const unsubscribe = subscribeAllScoreboards((scores) => {
+      setLiveScoreboards(scores);
     });
     return () => unsubscribe();
   }, []);
@@ -222,6 +244,35 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
     return () => unsubscribe();
   }, []);
 
+  // Categorías disponibles según el recinto seleccionado:
+  // - Estadio Teodoro Mariscal: solo béisbol y conciertos (sin fútbol)
+  // - Estadio El Encanto: solo fútbol y conciertos (sin béisbol)
+  // - 'todos': todas las categorías
+  const availableCategories = useMemo(() => {
+    const selectedVenueObj = venues.find((v) => v.id === selectedVenueId);
+    const allowed = getAllowedEventTypesForVenue(selectedVenueObj || (selectedVenueId !== 'todos' ? selectedVenueId : null));
+
+    const allCategories: { id: 'todos' | 'baseball' | 'football' | 'concert'; label: string }[] = [
+      { id: 'todos', label: 'Todos' },
+      { id: 'baseball', label: '⚾ Béisbol' },
+      { id: 'football', label: '⚽ Fútbol' },
+      { id: 'concert', label: '🎤 Conciertos' },
+    ];
+
+    if (!allowed) return allCategories;
+    return allCategories.filter((c) => c.id === 'todos' || allowed.includes(c.id as any));
+  }, [selectedVenueId, venues]);
+
+  // Si cambia la sede y la categoría seleccionada no está permitida en esa sede, reiniciar a 'todos'
+  useEffect(() => {
+    if (selectedVenueId === 'todos') return;
+    const selectedVenueObj = venues.find((v) => v.id === selectedVenueId);
+    const allowed = getAllowedEventTypesForVenue(selectedVenueObj || selectedVenueId);
+    if (allowed && selectedCategory !== 'todos' && !allowed.includes(selectedCategory as any)) {
+      setSelectedCategory('todos');
+    }
+  }, [selectedVenueId, venues, selectedCategory]);
+
   // Eventos filtrados por Ciudad, Sede y Categoría
   const filteredEvents = useMemo(() => {
     // 1. Filtrar por activos
@@ -243,6 +294,12 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
     // 3. Filtrar por sede puntual si no es 'todos'
     if (selectedVenueId !== 'todos') {
       list = list.filter((e) => e.venueId === selectedVenueId);
+      // Aplicar además restricción estricta de tipos de evento permitidos por sede
+      const selectedVenueObj = venueMap.get(selectedVenueId);
+      const allowed = getAllowedEventTypesForVenue(selectedVenueObj || selectedVenueId);
+      if (allowed) {
+        list = list.filter((e) => allowed.includes(e.type));
+      }
     }
 
     // 4. Filtrar por categoría
@@ -314,7 +371,6 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
       setQuickBuyTier({ section: 'General', price: 200 });
     }
     setQuickBuyQuantity(1);
-    setQuickBuyPayment('Efectivo / Taquilla');
     setQuickBuySuccessMsg(null);
   };
 
@@ -378,8 +434,21 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
     <div className={`min-h-screen px-3 sm:px-6 lg:px-8 py-4 sm:py-6 pb-28 transition-colors ${
       theme === 'light' ? 'bg-[#F4F6F9] text-slate-900' : 'bg-[#0A0E17] text-slate-100'
     }`}>
-      {/* 0. VISTA DIRECTA DE MAPA INTERACTIVO DENTRO DE CARTELERA */}
-      {selectedMapEvent ? (
+      {/* 0.0. VISTA DIRECTA DE MARCADOR EN VIVO DESDE CARTELERA */}
+      {selectedScoreboardEventId ? (
+        <MarcadorEnVivo
+          eventId={selectedScoreboardEventId}
+          venueId={selectedVenueId !== 'todos' ? selectedVenueId : undefined}
+          onBack={() => setSelectedScoreboardEventId(null)}
+          onBuyTickets={(evId) => {
+            const target = allEvents.find((e) => e.id === evId);
+            setSelectedScoreboardEventId(null);
+            if (target) {
+              setSelectedMapEvent(target);
+            }
+          }}
+        />
+      ) : selectedMapEvent ? (
         <div className="max-w-6xl mx-auto space-y-4">
           <div className={`p-4 rounded-3xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xl ${
             theme === 'light' ? 'bg-white border-slate-200' : 'bg-[#0F1626] border-slate-700/80'
@@ -611,54 +680,99 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
         </div>
       </div>
 
-      {/* 2. FILA DE FILTRO DE DEPORTE COMPACTO CON FECHA INTEGRADA */}
-      <div className="max-w-6xl mx-auto mb-4 flex flex-wrap items-center justify-between gap-2.5">
-        {/* Fecha y subtítulo ligeros integrados sin fondo pesado */}
-        <div className="flex items-center gap-2 text-xs">
-          <span className={`font-extrabold capitalize flex items-center gap-1.5 ${
-            theme === 'light' ? 'text-slate-900' : 'text-white'
+      {/* 2. FILA DE SELECCIÓN DE VISTA (CARTELERA VS MARCADORES FINALIZADOS) Y FILTROS */}
+      <div className="max-w-6xl mx-auto mb-4 space-y-3">
+        {/* Switcher de Vista: Cartelera vs Marcadores de Juegos Finalizados */}
+        <div className="flex flex-wrap items-center justify-between gap-2.5">
+          <div className={`p-1 rounded-2xl border flex items-center gap-1 shadow-xs ${
+            theme === 'light' ? 'bg-white border-slate-200' : 'bg-[#101625] border-slate-800'
           }`}>
-            <Calendar className="w-3.5 h-3.5 text-red-500" />
-            {todayFormatted}
-          </span>
-          <span className={theme === 'light' ? 'text-slate-300' : 'text-slate-600'}>•</span>
-          <span className={`text-[11px] font-black uppercase tracking-wider ${
-            theme === 'light' ? 'text-amber-800' : 'text-amber-400/90'
-          }`}>
-            Cartelera Deportiva
-          </span>
+            <button
+              id="btn-vista-cartelera"
+              type="button"
+              onClick={() => setCarteleraMode('cartelera')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-sports uppercase tracking-wider font-bold transition-all cursor-pointer ${
+                carteleraMode === 'cartelera'
+                  ? 'bg-red-600 text-white shadow-sm'
+                  : theme === 'light'
+                  ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+              }`}
+            >
+              <Film className="w-3.5 h-3.5" />
+              <span>Cartelera de Eventos</span>
+            </button>
+            <button
+              id="btn-vista-marcadores-finalizados"
+              type="button"
+              onClick={() => setCarteleraMode('historial')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-sports uppercase tracking-wider font-bold transition-all cursor-pointer ${
+                carteleraMode === 'historial'
+                  ? 'bg-amber-600 text-white shadow-sm'
+                  : theme === 'light'
+                  ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+              }`}
+            >
+              <Trophy className="w-3.5 h-3.5" />
+              <span>Marcadores Finalizados</span>
+            </button>
+          </div>
+
+          {/* Fecha y subtítulo ligeros integrados */}
+          <div className="flex items-center gap-2 text-xs">
+            <span className={`font-extrabold capitalize flex items-center gap-1.5 ${
+              theme === 'light' ? 'text-slate-900' : 'text-white'
+            }`}>
+              <Calendar className="w-3.5 h-3.5 text-red-500" />
+              {todayFormatted}
+            </span>
+            <span className={theme === 'light' ? 'text-slate-300' : 'text-slate-600'}>•</span>
+            <span className={`text-[11px] font-black uppercase tracking-wider ${
+              theme === 'light' ? 'text-amber-800' : 'text-amber-400/90'
+            }`}>
+              {carteleraMode === 'cartelera' ? 'Cartelera Deportiva' : 'Historial de Resultados'}
+            </span>
+          </div>
         </div>
 
-        {/* Chips de filtro deportivo compactos (menor padding y altura) */}
-        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
-          {[
-            { id: 'todos', label: 'Todos' },
-            { id: 'baseball', label: '⚾ Béisbol' },
-            { id: 'football', label: '⚽ Fútbol' },
-            { id: 'concert', label: '🎤 Conciertos' },
-          ].map((cat) => {
-            const isSelected = selectedCategory === cat.id;
-            return (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => setSelectedCategory(cat.id as any)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                  isSelected
-                    ? 'bg-red-600 text-white shadow-xs'
-                    : theme === 'light'
-                    ? 'bg-white text-slate-700 hover:text-slate-900 border border-slate-200 hover:border-slate-300 shadow-xs'
-                    : 'bg-[#101625] text-slate-400 hover:text-slate-200 border border-slate-800 hover:border-slate-700'
-                }`}
-              >
-                {cat.label}
-              </button>
-            );
-          })}
-        </div>
+        {/* Chips de filtro deportivo compactos (Solo en modo Cartelera; respetan recinto seleccionado) */}
+        {carteleraMode === 'cartelera' && (
+          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
+            {availableCategories.map((cat) => {
+              const isSelected = selectedCategory === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setSelectedCategory(cat.id as any)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                    isSelected
+                      ? 'bg-red-600 text-white shadow-xs'
+                      : theme === 'light'
+                      ? 'bg-white text-slate-700 hover:text-slate-900 border border-slate-200 hover:border-slate-300 shadow-xs'
+                      : 'bg-[#101625] text-slate-400 hover:text-slate-200 border border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {/* 3. CARTELERA EN REJILLA VERTICAL DE PÓSTERS */}
+      {/* 3. CONTENIDO PRINCIPAL: HISTORIAL DE MARCADORES O CARTELERA EN REJILLA DE PÓSTERS */}
+      {carteleraMode === 'historial' ? (
+        <div className="max-w-6xl mx-auto">
+          <HistorialJuegos
+            initialVenueId={selectedVenueId !== 'todos' ? selectedVenueId : undefined}
+            venues={venues}
+            onSelectGame={(eventId) => setSelectedScoreboardEventId(eventId)}
+            onBack={() => setCarteleraMode('cartelera')}
+          />
+        </div>
+      ) : (
       <main className="max-w-6xl mx-auto">
         {loadingEvents ? (
           <div className="py-20 text-center space-y-3">
@@ -813,6 +927,66 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
                       </div>
                     </div>
 
+                    {/* MARCADOR EN VIVO EN LA TARJETA DEL EVENTO */}
+                    {(() => {
+                      const sc = liveScoreboards[ev.id];
+                      const isSupportedSport = ev.type === 'baseball' || ev.type === 'football' || ev.type === 'basketball';
+                      const hasActiveScore = sc && isSupportedSport && (sc.status === 'en_vivo' || sc.status === 'finalizado');
+                      if (!hasActiveScore) return null;
+
+                      return (
+                        <div className={`mt-2 p-2 rounded-xl border flex flex-col gap-1.5 transition-all ${
+                          sc.status === 'en_vivo'
+                            ? theme === 'light'
+                              ? 'bg-rose-50 border-rose-300 shadow-xs'
+                              : 'bg-red-950/40 border-red-500/60 shadow-xs'
+                            : theme === 'light'
+                            ? 'bg-slate-100 border-slate-300'
+                            : 'bg-slate-900/60 border-slate-700/80'
+                        }`}>
+                          <div className="flex items-center justify-between gap-1 text-[11px] font-sports font-black">
+                            <div className="flex items-center gap-1.5 truncate">
+                              {sc.status === 'en_vivo' ? (
+                                <span className="flex items-center gap-1 text-red-500 animate-pulse shrink-0">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
+                                  <span>EN VIVO</span>
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 font-mono text-[10px] shrink-0">FINAL</span>
+                              )}
+                              <span className="text-slate-500">·</span>
+                              <span className={`truncate ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>
+                                {sc.awayTeamName.substring(0, 3).toUpperCase()} {sc.awayScore} - {sc.homeScore} {sc.homeTeamName.substring(0, 3).toUpperCase()}
+                              </span>
+                            </div>
+
+                            {sc.sport === 'baseball' && sc.baseballState && (
+                              <span className="text-amber-400 font-mono text-[10px] shrink-0">
+                                {sc.baseballState.isTopInning ? '▲' : '▼'} E{sc.baseballState.currentInning}
+                              </span>
+                            )}
+                            {sc.sport === 'football' && sc.footballState && (
+                              <span className="text-emerald-400 font-mono text-[10px] shrink-0">
+                                {sc.footballState.minute}'
+                              </span>
+                            )}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedScoreboardEventId(ev.id);
+                            }}
+                            className="w-full py-1 px-2 rounded-lg bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-sports font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer transition-all shadow-xs"
+                          >
+                            <Radio className="w-3 h-3 animate-pulse" />
+                            <span>Ver Marcador Completo</span>
+                          </button>
+                        </div>
+                      );
+                    })()}
+
                     {/* Botones de Selección: Mapa interactivo y Compra Rápida sin mapa */}
                     <div className={`space-y-1.5 mt-2.5 pt-2 border-t transition-colors ${
                       theme === 'light' ? 'border-slate-200' : 'border-slate-800/80'
@@ -937,8 +1111,9 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
           </div>
         </div>
       </main>
-        </>
       )}
+    </>
+  )}
 
       {/* 4. MODAL FLOTANTE DE SINOPSIS DEL EVENTO */}
       {synopsisEvent && (
@@ -1302,30 +1477,35 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
                   </div>
                 </div>
 
-                {/* Método de Pago */}
+                {/* Método de Pago (Exclusivo Tarjeta en Línea) */}
                 <div className="space-y-1.5">
-                  <label className={`text-xs font-black uppercase tracking-wider block ${
-                    theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                  <div className="flex items-center justify-between">
+                    <label className={`text-xs font-black uppercase tracking-wider block ${
+                      theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                    }`}>
+                      Método de Pago:
+                    </label>
+                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                      🔒 Pago Seguro SSL
+                    </span>
+                  </div>
+                  <div className={`p-2.5 rounded-xl border flex items-center justify-between ${
+                    theme === 'light'
+                      ? 'border-red-500 bg-red-50/70 text-red-950'
+                      : 'border-red-500/50 bg-red-950/40 text-red-200'
                   }`}>
-                    Método de Pago:
-                  </label>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {['Efectivo / Taquilla', 'Tarjeta Débito/Crédito', 'Transferencia SPEI'].map((met) => (
-                      <button
-                        key={met}
-                        type="button"
-                        onClick={() => setQuickBuyPayment(met)}
-                        className={`p-2 rounded-xl text-[10px] font-bold border transition-all cursor-pointer text-center leading-tight ${
-                          quickBuyPayment === met
-                            ? 'bg-red-600 text-white border-red-500'
-                            : theme === 'light'
-                            ? 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
-                            : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:bg-slate-800'
-                        }`}
-                      >
-                        {met}
-                      </button>
-                    ))}
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">💳</span>
+                      <div>
+                        <p className="text-xs font-black uppercase">Tarjeta en Línea</p>
+                        <p className={`text-[10px] ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
+                          Visa, Mastercard, Amex • Débito o Crédito
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-red-600/20 text-red-600 dark:text-red-400 border border-red-500/30">
+                      Exclusivo
+                    </span>
                   </div>
                 </div>
 

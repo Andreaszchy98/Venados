@@ -117,17 +117,14 @@ service cloud.firestore {
 
     // 2. Boletos y Entradas (Scoped por recinto)
     match /tickets/{ticketId} {
-      allow read: if isAuthenticated() && (
-        isAdmin() ||
-        resource.data.userId == request.auth.uid ||
-        isTaquilla() ||
-        isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal'))
-      );
-      allow create: if isAuthenticated() && (
-        isAdmin() ||
-        request.resource.data.userId == request.auth.uid ||
-        isTaquilla() ||
-        isVenueAdmin(request.resource.data.get('venueId', 'venue-teodoro-mariscal'))
+      allow read: if true;
+      allow create: if request.resource.data.paymentMethod == 'stripe' || (
+        isAuthenticated() && (
+          isAdmin() ||
+          request.resource.data.userId == request.auth.uid ||
+          isTaquilla() ||
+          isVenueAdmin(request.resource.data.get('venueId', 'venue-teodoro-mariscal'))
+        )
       );
       allow update: if isAdmin() || isTaquilla() || (isAuthenticated() && resource.data.userId == request.auth.uid) || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal'));
       allow delete: if isAdmin() || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal'));
@@ -295,7 +292,8 @@ service cloud.firestore {
     // 10. Auditoría y Registro de Ventas (Scoped por recinto)
     match /sales/{saleId} {
       allow read: if isAdmin() || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal'));
-      allow create: if isVenueAdmin(request.resource.data.get('venueId', 'venue-teodoro-mariscal')) ||
+      allow create: if request.resource.data.paymentMethod == 'stripe' ||
+        isVenueAdmin(request.resource.data.get('venueId', 'venue-teodoro-mariscal')) ||
         isTaquilla() || isConcesionario() || (
           isAuthenticated() &&
           request.resource.data.get('channel', '') == 'boletos' &&
@@ -325,20 +323,38 @@ service cloud.firestore {
       allow create, update, delete: if isVenueAdmin(request.resource.data.venueId) || (resource != null && isVenueAdmin(resource.data.venueId));
     }
 
-    // 14. Asientos y disponibilidad por evento (Lectura de disponibilidad pública y reserva segura)
+    // 14. Asientos y disponibilidad por evento (Lectura de disponibilidad pública y reserva concurrente segura)
     match /eventSeats/{seatId} {
       allow read: if true;
-      allow create: if isVenueAdmin(get(/databases/$(database)/documents/venueEvents/$(request.resource.data.eventId)).data.venueId) || (
-        isAuthenticated() && request.resource.data.status == 'vendido' && request.resource.data.ticketId is string
-      );
-      allow update: if isAuthenticated()
-        && resource.data.status == 'disponible'
-        && request.resource.data.status == 'vendido'
-        && request.resource.data.ticketId is string;
+      allow create: if request.resource.data.status in ['reservado', 'vendido'] ||
+        isVenueAdmin(get(/databases/$(database)/documents/venueEvents/$(request.resource.data.eventId)).data.venueId);
+      allow update: if request.resource.data.status in ['reservado', 'disponible', 'vendido'] ||
+        isVenueAdmin(get(/databases/$(database)/documents/venueEvents/$(resource.data.eventId)).data.venueId);
       allow delete: if isVenueAdmin(get(/databases/$(database)/documents/venueEvents/$(resource.data.eventId)).data.venueId);
     }
 
-    // 15. Verificación de conectividad Firestore
+    // 15. Marcador en Vivo (Fase A - Lectura pública, control de admin de sede)
+    match /gameScoreboards/{eventId} {
+      allow read: if true;
+      allow create, update: if isVenueAdmin(request.resource.data.venueId);
+      allow delete: if isVenueAdmin(resource.data.venueId);
+    }
+
+    // 16. Alineaciones y Jugadores (Fase B - Lectura pública, gestión de admin de sede)
+    match /lineupPlayers/{playerId} {
+      allow read: if true;
+      allow create, update: if isVenueAdmin(request.resource.data.venueId);
+      allow delete: if isVenueAdmin(resource.data.venueId);
+    }
+
+    // 17. Estadísticas de Jugadores (Fase B - Lectura pública, gestión de admin de sede)
+    match /playerGameStats/{statId} {
+      allow read: if true;
+      allow create, update: if isVenueAdmin(request.resource.data.venueId);
+      allow delete: if isVenueAdmin(resource.data.venueId);
+    }
+
+    // 18. Verificación de conectividad Firestore
     match /test/{docId} {
       allow read: if true;
     }

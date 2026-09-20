@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   Clock,
   ShoppingBag,
+  CreditCard,
 } from 'lucide-react';
 
 interface MisPedidosProps {
@@ -283,8 +284,17 @@ export const MisPedidos: React.FC<MisPedidosProps> = ({ user, onOpenAuth }) => {
                       )}
                     </div>
 
-                    <div className="text-[11px] text-slate-400 font-sans">
-                      {t('orders.payment', 'Pago')}: <span className="font-semibold text-white">{order.paymentMethod}</span>
+                    <div className="text-[11px] font-sans flex items-center gap-1.5">
+                      {order.paymentStatus === 'pagado' || order.paymentDetails || (order.paymentMethod && order.paymentMethod.toLowerCase().includes('tarjeta')) ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold">
+                          <CreditCard className="w-3 h-3 text-emerald-400" />
+                          <span>Pagado con Tarjeta {order.paymentDetails?.cardBrand ? `(${order.paymentDetails.cardBrand.toUpperCase()} •••• ${order.paymentDetails.cardLast4})` : ''}</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-800/80 text-slate-300 border border-slate-700 text-[10px] font-medium">
+                          <span>💵 {t('orders.payment', 'Pago')}: <strong className="text-white">{order.paymentMethod}</strong></span>
+                        </span>
+                      )}
                     </div>
                   </div>
 

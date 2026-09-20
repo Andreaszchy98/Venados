@@ -637,7 +637,15 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
                     <div className="pt-2 border-t border-slate-800 space-y-2">
                       <div className="flex justify-between items-center text-xs font-bold text-slate-300">
                         <span>Total: <strong className="text-emerald-400 font-scoreboard text-base">${order.total} MXN</strong></span>
-                        <span className="capitalize text-[11px] text-slate-400 font-medium">Estado: {order.status}</span>
+                        {order.paymentStatus === 'pagado' || order.paymentDetails || (order.paymentMethod && order.paymentMethod.toLowerCase().includes('tarjeta')) ? (
+                          <span className="px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold">
+                            💳 Tarjeta Acreditada
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-500/40 text-[10px] font-medium">
+                            💵 Cobro en Entrega
+                          </span>
+                        )}
                       </div>
 
                       {isPending && (

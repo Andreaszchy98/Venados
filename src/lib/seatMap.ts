@@ -15,6 +15,8 @@ import { db } from './firebase';
 import { SeatSection, EventSeat, SeatStatus, VenueEvent, Ticket } from '../types';
 import { DEFAULT_VENUE_ID } from './defaultVenue';
 import { handleFirestoreError, OperationType } from './errorHandler';
+import { getCachedData, setCachedData } from './clientCache';
+import { isEventPassed } from './venueEvents';
 
 export interface ZoneMeta {
   name: string;
@@ -701,44 +703,66 @@ export function sanitizeVenueSections(venueId: string, rawSections: SeatSection[
 }
 
 /**
- * Obtener las secciones del estadio para una sede
+ * Obtener las secciones del estadio para una sede (con caché local de 30 minutos)
  */
 export async function getSeatSectionsForVenue(venueId: string = DEFAULT_VENUE_ID): Promise<SeatSection[]> {
+  const cacheKey = `stadium_sections_${venueId}`;
+  const cached = getCachedData<SeatSection[]>(cacheKey);
+  if (cached && cached.length > 0) {
+    return cached;
+  }
+
   try {
     const q = query(collection(db, 'seatSections'), where('venueId', '==', venueId));
     const snap = await getDocs(q);
 
     if (snap.empty) {
-      return await seedSeatMapForVenue(venueId);
+      const seeded = await seedSeatMapForVenue(venueId);
+      setCachedData(cacheKey, seeded, 30);
+      return seeded;
     }
 
     const raw = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<SeatSection, 'id'>) }));
-    return sanitizeVenueSections(venueId, raw);
+    const sanitized = sanitizeVenueSections(venueId, raw);
+    setCachedData(cacheKey, sanitized, 30);
+    return sanitized;
   } catch (err) {
     console.warn('Error fetching seat sections:', err);
     const localData = buildSectionsForVenue(venueId);
-    return localData.map((d) => ({ id: `${venueId}_sec_${d.sectionNumber.replace(/\s+/g, '_')}`, ...d }));
+    const fallback = localData.map((d) => ({ id: `${venueId}_sec_${d.sectionNumber.replace(/\s+/g, '_')}`, ...d }));
+    setCachedData(cacheKey, fallback, 10);
+    return fallback;
   }
 }
 
 /**
- * Escuchar secciones en tiempo real
+ * Escuchar secciones en tiempo real con soporte de caché previo
  */
 export function subscribeSeatSections(
   venueId: string,
   callback: (sections: SeatSection[]) => void,
   onError?: (err: any) => void
 ): () => void {
+  const cacheKey = `stadium_sections_${venueId}`;
+  const cached = getCachedData<SeatSection[]>(cacheKey);
+  if (cached && cached.length > 0) {
+    callback(cached);
+  }
+
   const q = query(collection(db, 'seatSections'), where('venueId', '==', venueId));
   return onSnapshot(
     q,
     (snap) => {
       if (snap.empty) {
         const localData = buildSectionsForVenue(venueId);
-        callback(localData.map((d) => ({ id: `${venueId}_sec_${d.sectionNumber.replace(/\s+/g, '_')}`, ...d })));
+        const fallback = localData.map((d) => ({ id: `${venueId}_sec_${d.sectionNumber.replace(/\s+/g, '_')}`, ...d }));
+        setCachedData(cacheKey, fallback, 30);
+        callback(fallback);
       } else {
         const raw = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<SeatSection, 'id'>) }));
-        callback(sanitizeVenueSections(venueId, raw));
+        const sanitized = sanitizeVenueSections(venueId, raw);
+        setCachedData(cacheKey, sanitized, 30);
+        callback(sanitized);
       }
     },
     (err) => {
@@ -864,6 +888,126 @@ export interface SeatPurchaseItem {
   price: number;
 }
 
+export const SEAT_LOCK_DURATION_MS = 8 * 60 * 1000; // 8 minutos
+
+export interface LockSeatParams {
+  eventId: string;
+  seatId: string;
+  userId: string;
+  sectionNumber: string;
+  rowLabel: string;
+  seatNumber: number;
+  zoneName: string;
+  sectionId?: string;
+}
+
+/**
+ * Bloqueo atómico de asiento por 8 minutos usando runTransaction:
+ * Si dos usuarios intentan apartar la misma butaca al mismo milisegundo, la transacción
+ * otorga la reserva exclusiva de 8 minutos al primero y rechaza/notifica al segundo.
+ */
+export async function lockSeatSelectionTransaction(
+  params: LockSeatParams
+): Promise<{ success: boolean; lockedUntil: number }> {
+  const { eventId, seatId, userId, sectionNumber, rowLabel, seatNumber, zoneName, sectionId } = params;
+  const seatRef = doc(db, 'eventSeats', seatId);
+  const now = Date.now();
+  const lockedUntil = now + SEAT_LOCK_DURATION_MS;
+
+  return await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(seatRef);
+
+    if (snap.exists()) {
+      const data = snap.data() as EventSeat;
+
+      // 1. Si ya está vendido, rechazar
+      if (data.status === 'vendido') {
+        throw new Error('SEAT_ALREADY_SOLD: Esta butaca ya ha sido vendida.');
+      }
+
+      // 2. Si está reservado por OTRO usuario y el bloqueo sigue activo
+      const isLockedByOther =
+        data.status === 'reservado' &&
+        data.lockedUntil &&
+        data.lockedUntil > now &&
+        data.lockedBy &&
+        data.lockedBy !== userId;
+
+      if (isLockedByOther) {
+        const remainingSeconds = Math.max(1, Math.ceil(((data.lockedUntil || now) - now) / 1000));
+        const minutes = Math.floor(remainingSeconds / 60);
+        const seconds = remainingSeconds % 60;
+        throw new Error(
+          `SEAT_LOCKED_BY_OTHER: Esta butaca está bloqueada por otro usuario (tiempo restante: ${minutes}:${
+            seconds < 10 ? '0' : ''
+          }${seconds} min). Selecciona otra butaca.`
+        );
+      }
+
+      // 3. El asiento está libre o el lock expiró o pertenece al mismo usuario: Bloquear por 8 minutos
+      transaction.update(seatRef, {
+        status: 'reservado',
+        lockedUntil,
+        lockedBy: userId,
+        lockedAt: new Date(now).toISOString(),
+        updatedAt: new Date(now).toISOString(),
+      });
+    } else {
+      // Si el documento aún no existía en Firestore, crearlo de forma atómica en estado 'reservado'
+      transaction.set(seatRef, {
+        id: seatId,
+        eventId,
+        sectionId: sectionId || '',
+        sectionNumber,
+        zoneName,
+        rowLabel,
+        seatNumber,
+        status: 'reservado',
+        lockedUntil,
+        lockedBy: userId,
+        lockedAt: new Date(now).toISOString(),
+        updatedAt: new Date(now).toISOString(),
+      });
+    }
+
+    return { success: true, lockedUntil };
+  });
+}
+
+/**
+ * Libera el bloqueo de un asiento cuando el usuario lo deselecciona o cancela su carrito
+ */
+export async function releaseSeatLockTransaction(seatId: string, userId: string): Promise<boolean> {
+  const seatRef = doc(db, 'eventSeats', seatId);
+  const now = Date.now();
+
+  try {
+    await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(seatRef);
+      if (!snap.exists()) return;
+
+      const data = snap.data() as EventSeat;
+      // Solo liberamos si no está vendido y pertenece al usuario (o si el lock expiró)
+      if (
+        data.status === 'reservado' &&
+        (data.lockedBy === userId || (data.lockedUntil && data.lockedUntil <= now))
+      ) {
+        transaction.update(seatRef, {
+          status: 'disponible',
+          lockedUntil: null,
+          lockedBy: null,
+          lockedAt: null,
+          updatedAt: new Date(now).toISOString(),
+        });
+      }
+    });
+    return true;
+  } catch (err) {
+    console.warn('Advertencia liberando bloqueo de asiento:', err);
+    return false;
+  }
+}
+
 export interface PurchaseSeatsParams {
   userId: string;
   customerName: string;
@@ -891,6 +1035,11 @@ export interface PurchaseResult {
 export async function purchaseSeatsTransaction(params: PurchaseSeatsParams): Promise<PurchaseResult> {
   const { userId, customerName, event, stadiumName, selectedSeats, paymentMethod } = params;
 
+  // 0. Comprobación automática de fecha del evento
+  if (isEventPassed(event)) {
+    throw new Error('EVENT_EXPIRED: La venta de boletos para este evento ha concluido automáticamente porque el juego o evento ya finalizó.');
+  }
+
   if (!selectedSeats || selectedSeats.length === 0) {
     throw new Error('Debes seleccionar al menos un asiento.');
   }
@@ -904,6 +1053,7 @@ export async function purchaseSeatsTransaction(params: PurchaseSeatsParams): Pro
     // 1. TODAS LAS LECTURAS PRIMERO (Regla estricta de Firestore Transaction)
     const seatSnapshots: { ref: any; seat: SeatPurchaseItem; isNew: boolean }[] = [];
     const unavailableSeats: string[] = [];
+    const currentTimeMs = Date.now();
 
     for (const seat of selectedSeats) {
       const seatRef = doc(db, 'eventSeats', seat.seatId);
@@ -915,9 +1065,18 @@ export async function purchaseSeatsTransaction(params: PurchaseSeatsParams): Pro
       }
 
       const data = snap.data() as EventSeat;
-      if (data.status !== 'disponible') {
+      const isSold = data.status === 'vendido';
+      const isLockedByOther =
+        data.status === 'reservado' &&
+        data.lockedUntil &&
+        data.lockedUntil > currentTimeMs &&
+        data.lockedBy !== userId;
+
+      if (isSold || isLockedByOther) {
         unavailableSeats.push(
-          `Sec ${seat.sectionNumber} - Fila ${seat.rowLabel} Asiento ${seat.seatNumber}`
+          `Sec ${seat.sectionNumber} - Fila ${seat.rowLabel} Asiento ${seat.seatNumber} (${
+            isSold ? 'Vendido' : 'Reservado temporalmente por otro usuario'
+          })`
         );
         continue;
       }
@@ -982,6 +1141,8 @@ export async function purchaseSeatsTransaction(params: PurchaseSeatsParams): Pro
           purchaseId,
           updatedAt: now,
           userId,
+          lockedUntil: null,
+          lockedBy: null,
         });
       } else {
         transaction.update(seatRef, {
@@ -990,6 +1151,8 @@ export async function purchaseSeatsTransaction(params: PurchaseSeatsParams): Pro
           purchaseId,
           updatedAt: now,
           userId,
+          lockedUntil: null,
+          lockedBy: null,
         });
       }
 

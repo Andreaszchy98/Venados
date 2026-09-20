@@ -12,6 +12,7 @@ import { subscribeVenues, getAllVenues } from '../../lib/venues';
 import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
 import { getOfficialPriceTiersForEvent } from '../../lib/seatMap';
 import { TicketCard } from '../../components/shared/TicketCard';
+import { BoletoDetalle } from './BoletoDetalle';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { SeatMapSelector } from './SeatMapSelector';
 import { useLanguage } from '../../context/LanguageContext';
@@ -32,6 +33,7 @@ import {
   Sparkles,
   Building2,
   ChevronDown,
+  ChevronRight,
   Users,
   Grid,
   QrCode,
@@ -83,10 +85,34 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
   const [activeEvents, setActiveEvents] = useState<VenueEvent[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
 
-  // Selección de compra
+  // Detalle de boleto a pantalla completa
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  const [selectedTicketSiblings, setSelectedTicketSiblings] = useState<Ticket[]>([]);
+  const [selectedEventPoster, setSelectedEventPoster] = useState<VenueEvent | null>(null);
+
+  // Obtener póster/evento del boleto en detalle
+  useEffect(() => {
+    if (!selectedTicketId) {
+      setSelectedEventPoster(null);
+      return;
+    }
+    const ticket = tickets.find((t) => t.id === selectedTicketId);
+    if (!ticket) return;
+
+    const found = activeEvents.find((e) => e.id === ticket.eventId);
+    if (found) {
+      setSelectedEventPoster(found);
+    } else if (ticket.eventId) {
+      getVenueEventById(ticket.eventId).then((ev) => {
+        if (ev) setSelectedEventPoster(ev);
+      });
+    }
+  }, [selectedTicketId, tickets, activeEvents]);
+
+  // Selección de compra (Exclusivo Tarjeta en Línea)
   const [selectedEvent, setSelectedEvent] = useState<VenueEvent | null>(null);
   const [selectedTier, setSelectedTier] = useState<EventPriceTier | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'Efectivo / Terminal física en Taquilla' | 'Tarjeta en Línea' | 'Venados Pay'>('Efectivo / Terminal física en Taquilla');
+  const [paymentMethod] = useState<'Tarjeta en Línea'>('Tarjeta en Línea');
   const [purchasing, setPurchasing] = useState(false);
   const [purchaseSuccessMsg, setPurchaseSuccessMsg] = useState<string | null>(null);
   const [showSeatMap, setShowSeatMap] = useState<boolean>(false);
@@ -341,18 +367,8 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
     return true;
   });
 
-  // Agrupación visual de boletos comprados juntos mediante purchaseId
-  const groupedTickets = useMemo(() => {
-    const groups: {
-      key: string;
-      purchaseId: string;
-      tickets: Ticket[];
-      matchTitle: string;
-      matchDate: string;
-      matchTime?: string;
-      stadium: string;
-    }[] = [];
-
+  // Agrupación en Compras Compactas (1 sola fila por Compra Conjunta o boleto individual)
+  const compactPurchases = useMemo(() => {
     const map = new Map<string, Ticket[]>();
     const singles: Ticket[] = [];
 
@@ -367,24 +383,176 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
       }
     }
 
+    const list: {
+      key: string;
+      purchaseId?: string;
+      tickets: Ticket[];
+      matchTitle: string;
+      matchDate: string;
+      matchTime?: string;
+      stadium: string;
+      totalPrice: number;
+    }[] = [];
+
+    // Agregar compras conjuntas
     for (const [pId, tList] of map.entries()) {
-      if (tList.length > 1) {
-        groups.push({
-          key: pId,
-          purchaseId: pId,
-          tickets: tList,
-          matchTitle: tList[0]?.matchTitle || '',
-          matchDate: tList[0]?.matchDate || '',
-          matchTime: tList[0]?.matchTime,
-          stadium: tList[0]?.stadium || '',
-        });
-      } else {
-        singles.push(...tList);
-      }
+      list.push({
+        key: pId,
+        purchaseId: pId,
+        tickets: tList,
+        matchTitle: tList[0]?.matchTitle || 'Evento Deportivo',
+        matchDate: tList[0]?.matchDate || '',
+        matchTime: tList[0]?.matchTime,
+        stadium: tList[0]?.stadium || 'Estadio',
+        totalPrice: tList.reduce((sum, t) => sum + (t.price || 0), 0),
+      });
     }
 
-    return { groups, singles };
+    // Agregar boletos individuales
+    for (const t of singles) {
+      list.push({
+        key: t.id,
+        purchaseId: t.purchaseId,
+        tickets: [t],
+        matchTitle: t.matchTitle || 'Evento Deportivo',
+        matchDate: t.matchDate || '',
+        matchTime: t.matchTime,
+        stadium: t.stadium || 'Estadio',
+        totalPrice: t.price || 0,
+      });
+    }
+
+    return list;
   }, [filteredTickets]);
+
+  // Formatear zona, fila y butacas combinadas en una sola línea (estilo Cinépolis)
+  const formatSeatsLine = (ticketsList: Ticket[]) => {
+    if (!ticketsList || ticketsList.length === 0) return { section: '', row: '', butacas: '' };
+
+    const cleanSeat = (s: string) => (s || '').replace(/^(Butaca|Asiento)\s*/i, '').trim();
+
+    if (ticketsList.length === 1) {
+      const t = ticketsList[0];
+      return {
+        section: t.section,
+        row: t.row.startsWith('Fila') ? t.row : `Fila ${t.row}`,
+        butacas: `Butaca ${cleanSeat(t.seat)}`,
+      };
+    }
+
+    const first = ticketsList[0];
+    const sameSection = ticketsList.every((t) => t.section === first.section);
+    const sameRow = ticketsList.every((t) => t.row === first.row);
+    const seatNumbers = ticketsList.map((t) => cleanSeat(t.seat)).join(', ');
+
+    if (sameSection && sameRow) {
+      return {
+        section: first.section,
+        row: first.row.startsWith('Fila') ? first.row : `Fila ${first.row}`,
+        butacas: `Butacas ${seatNumbers}`,
+      };
+    }
+
+    if (sameSection) {
+      const seats = ticketsList
+        .map((t) => `F${t.row}: B${cleanSeat(t.seat)}`)
+        .join(', ');
+      return {
+        section: first.section,
+        row: 'Varias filas',
+        butacas: seats,
+      };
+    }
+
+    // Diferentes secciones
+    const seats = ticketsList
+      .map((t) => `${t.section} F${t.row}-B${cleanSeat(t.seat)}`)
+      .join(', ');
+    return {
+      section: `${ticketsList.length} Secciones`,
+      row: 'Múltiples',
+      butacas: seats,
+    };
+  };
+
+  // Determinar badge de estado combinado
+  const getStatusBadge = (ticketsList: Ticket[]) => {
+    const activeCount = ticketsList.filter((t) => t.status === 'activo').length;
+    const usedCount = ticketsList.filter((t) => t.status === 'usado').length;
+    const cancelledCount = ticketsList.filter((t) => t.status === 'cancelado').length;
+
+    if (activeCount === ticketsList.length) {
+      return {
+        status: 'activo',
+        label: 'Acceso Válido',
+        Icon: CheckCircle2,
+        badgeClass:
+          theme === 'light'
+            ? 'bg-emerald-100 text-emerald-950 border-emerald-300'
+            : 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40',
+        iconClass: 'text-emerald-600',
+      };
+    }
+
+    if (usedCount === ticketsList.length) {
+      return {
+        status: 'usado',
+        label: 'Utilizado',
+        Icon: Clock,
+        badgeClass:
+          theme === 'light'
+            ? 'bg-slate-200 text-slate-800 border-slate-300'
+            : 'bg-slate-800 text-slate-300 border-slate-700',
+        iconClass: 'text-slate-500',
+      };
+    }
+
+    if (cancelledCount === ticketsList.length) {
+      return {
+        status: 'cancelado',
+        label: 'Cancelado',
+        Icon: XCircle,
+        badgeClass:
+          theme === 'light'
+            ? 'bg-red-100 text-red-950 border-red-300'
+            : 'bg-red-950/80 text-red-300 border-red-500/40',
+        iconClass: 'text-red-500',
+      };
+    }
+
+    // Uso parcial si hay una mezcla
+    return {
+      status: 'parcial',
+      label: 'Parcialmente Utilizado',
+      Icon: Clock,
+      badgeClass:
+        theme === 'light'
+          ? 'bg-amber-100 text-amber-950 border-amber-300'
+          : 'bg-amber-950/80 text-amber-300 border-amber-500/40',
+      iconClass: 'text-amber-600',
+    };
+  };
+
+  // Vista dedicada a pantalla completa para el boleto seleccionado
+  if (selectedTicketId) {
+    const selectedTicket = tickets.find((t) => t.id === selectedTicketId);
+    if (selectedTicket) {
+      return (
+        <BoletoDetalle
+          ticket={selectedTicket}
+          siblingTickets={selectedTicketSiblings.length > 0 ? selectedTicketSiblings : [selectedTicket]}
+          event={selectedEventPoster}
+          onBack={() => {
+            setSelectedTicketId(null);
+            setSelectedTicketSiblings([]);
+          }}
+          onSelectTicket={(newId) => {
+            setSelectedTicketId(newId);
+          }}
+        />
+      );
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -631,199 +799,112 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
               </div>
             </div>
           ) : (
-            <div className="space-y-4">
-              {/* Grupos de Boletos de Compra Conjunta */}
-              {groupedTickets.groups.map((grp) => (
-                <div
-                  key={grp.key}
-                  id={`joint-purchase-group-${grp.purchaseId}`}
-                  className={`rounded-2xl sm:rounded-3xl border shadow-xl overflow-hidden ${
-                    theme === 'light'
-                      ? 'bg-white border-slate-200 text-slate-900'
-                      : 'bg-[#0F1626] border-slate-700/80 text-white'
-                  }`}
-                >
-                  {/* Encabezado Único del Evento para todo el grupo */}
-                  <div className={`p-4 sm:p-5 border-b flex flex-col md:flex-row md:items-center justify-between gap-3 ${
-                    theme === 'light'
-                      ? 'bg-slate-50 border-slate-200'
-                      : 'bg-gradient-to-r from-[#141C2E] to-[#0F1626] border-slate-700/80'
-                  }`}>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-black uppercase tracking-wider bg-red-600 text-white font-sports">
-                          🎟️ Compra Conjunta ({grp.tickets.length} asientos)
-                        </span>
-                        <span className={`font-mono text-xs font-bold px-2 py-0.5 rounded border ${
-                          theme === 'light'
-                            ? 'text-slate-900 bg-slate-200 border-slate-300'
-                            : 'text-white bg-slate-800 border-slate-600'
-                        }`}>
-                          Ref: #{grp.purchaseId.slice(-7)}
-                        </span>
-                      </div>
-                      <h3 className={`text-base sm:text-lg font-black leading-tight font-sports tracking-wide ${
-                        theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
-                      }`}>
-                        {grp.matchTitle}
-                      </h3>
-                      <div className={`mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs ${
-                        theme === 'light' ? 'text-slate-700' : 'text-slate-300'
-                      }`}>
-                        <span className={`inline-flex items-center gap-1.5 font-semibold ${
-                          theme === 'light' ? 'text-slate-800' : 'text-slate-200'
-                        }`}>
-                          <Calendar className="w-3.5 h-3.5 text-red-500" />
-                          {grp.matchDate} {grp.matchTime && `• ${grp.matchTime}`}
-                        </span>
-                        <span className={`inline-flex items-center gap-1.5 ${
-                          theme === 'light' ? 'text-slate-700' : 'text-slate-300'
-                        }`}>
-                          <MapPin className={`w-3.5 h-3.5 ${theme === 'light' ? 'text-amber-600' : 'text-amber-400'}`} />
-                          {grp.stadium}
-                        </span>
-                      </div>
-                    </div>
+            <div className="space-y-3">
+              {compactPurchases.map((purchase) => {
+                const seats = formatSeatsLine(purchase.tickets);
+                const badge = getStatusBadge(purchase.tickets);
+                const BadgeIcon = badge.Icon;
+                const isJoint = purchase.tickets.length > 1;
 
-                    <div className={`flex items-center md:flex-col md:items-end justify-between border-t md:border-t-0 pt-2 md:pt-0 ${
-                      theme === 'light' ? 'border-slate-200' : 'border-slate-700/50'
-                    }`}>
-                      <span className={`text-[11px] font-semibold uppercase tracking-wider font-sports ${
-                        theme === 'light' ? 'text-slate-600' : 'text-slate-400'
-                      }`}>
-                        Total compra
-                      </span>
-                      <span className={`text-base sm:text-lg font-scoreboard font-bold ${
-                        theme === 'light' ? 'text-emerald-700' : 'text-emerald-400'
-                      }`}>
-                        ${grp.tickets.reduce((sum, t) => sum + (t.price || 0), 0)} MXN
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Listado Compacto de Asientos del Grupo (sin repetir datos del partido) */}
-                  <div className={`divide-y p-2 sm:p-4 ${
-                    theme === 'light' ? 'divide-slate-200' : 'divide-slate-800'
-                  }`}>
-                    {grp.tickets.map((ticket, idx) => (
+                return (
+                  <button
+                    key={purchase.key}
+                    id={`compact-ticket-row-${purchase.key}`}
+                    type="button"
+                    onClick={() => {
+                      setSelectedTicketId(purchase.tickets[0].id);
+                      setSelectedTicketSiblings(purchase.tickets);
+                    }}
+                    className={`w-full p-3.5 sm:p-4 rounded-2xl border shadow-xs text-left flex items-center justify-between gap-3 sm:gap-4 transition-all cursor-pointer group ${
+                      theme === 'light'
+                        ? 'bg-white border-slate-200 hover:border-red-400 hover:bg-red-50/30 active:bg-red-100/50 text-slate-900'
+                        : 'bg-[#0F1626] border-slate-700/80 hover:border-red-500/60 hover:bg-[#141C2E] active:bg-[#182338] text-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 sm:gap-3.5 min-w-0 flex-1">
+                      {/* Ícono / Miniatura de QR estilizada */}
                       <div
-                        key={ticket.id}
-                        id={`joint-seat-row-${ticket.id}`}
-                        className={`p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl transition-colors ${
-                          theme === 'light' ? 'hover:bg-slate-50' : 'hover:bg-[#141C2E]/60'
+                        className={`relative w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center shrink-0 border shadow-xs transition-transform group-hover:scale-105 ${
+                          theme === 'light'
+                            ? 'bg-slate-100 border-slate-300 text-slate-800'
+                            : 'bg-[#0A0E17] border-slate-700 text-slate-200'
                         }`}
                       >
-                        {/* Ubicación del asiento: Zona, Fila, Butaca y Precio */}
-                        <div className="flex items-center gap-3">
-                          <div className={`w-7 h-7 rounded-lg font-sports font-bold text-xs flex items-center justify-center shrink-0 border ${
-                            theme === 'light'
-                              ? 'bg-red-50 text-red-700 border-red-200'
-                              : 'bg-red-900/30 text-red-400 border-red-700/40'
-                          }`}>
-                            #{idx + 1}
-                          </div>
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className={`text-xs sm:text-sm font-black font-sports ${
-                                theme === 'light' ? 'text-slate-900' : 'text-white'
-                              }`}>
-                                {ticket.section}
-                              </span>
-                              <span className={theme === 'light' ? 'text-slate-400' : 'text-slate-600'}>•</span>
-                              <span className={`text-xs font-mono font-bold ${
-                                theme === 'light' ? 'text-amber-800' : 'text-amber-400'
-                              }`}>
-                                {ticket.row}
-                              </span>
-                              <span className={theme === 'light' ? 'text-slate-400' : 'text-slate-600'}>•</span>
-                              <span className={`text-xs font-mono font-bold ${
-                                theme === 'light' ? 'text-red-700' : 'text-red-400'
-                              }`}>
-                                {ticket.seat}
-                              </span>
-                            </div>
-                            <div className={`flex items-center gap-2 text-[11px] ${
-                              theme === 'light' ? 'text-slate-600' : 'text-slate-400'
-                            }`}>
-                              <span>Precio: <strong className={`font-bold ${
-                                theme === 'light' ? 'text-emerald-700' : 'text-emerald-400'
-                              }`}>${ticket.price} MXN</strong></span>
-                              {ticket.gate && (
-                                <>
-                                  <span className={theme === 'light' ? 'text-slate-400' : 'text-slate-600'}>•</span>
-                                  <span>Puerta: <strong className={theme === 'light' ? 'text-slate-800' : 'text-slate-200'}>{ticket.gate}</strong></span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </div>
+                        <QrCode className="w-5 h-5 sm:w-6 sm:h-6 text-red-500" />
+                        {isJoint && (
+                          <span className="absolute -bottom-1 -right-1 px-1.5 py-0.5 rounded-md text-[9px] font-black bg-red-600 text-white shadow-xs font-sports leading-none">
+                            x{purchase.tickets.length}
+                          </span>
+                        )}
+                      </div>
 
-                        {/* Estado y QR individual para torniquete */}
-                        <div className={`flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 ${
-                          theme === 'light' ? 'border-slate-200' : 'border-slate-800'
-                        }`}>
-                          {ticket.status === 'activo' ? (
-                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border font-sports ${
-                              theme === 'light'
-                                ? 'bg-emerald-100 text-emerald-950 border-emerald-300'
-                                : 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40'
-                            }`}>
-                              <CheckCircle2 className={`w-3.5 h-3.5 ${theme === 'light' ? 'text-emerald-800' : 'text-emerald-400'}`} />
-                              Acceso Válido
-                            </span>
-                          ) : ticket.status === 'usado' ? (
-                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border font-sports ${
-                              theme === 'light'
-                                ? 'bg-slate-200 text-slate-900 border-slate-300'
-                                : 'bg-slate-800 text-slate-300 border-slate-700'
-                            }`}>
-                              <Clock className="w-3.5 h-3.5 text-slate-500" />
-                              Utilizado
-                            </span>
-                          ) : (
-                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border font-sports ${
-                              theme === 'light'
-                                ? 'bg-red-100 text-red-950 border-red-300'
-                                : 'bg-red-950/80 text-red-300 border-red-500/40'
-                            }`}>
-                              <XCircle className="w-3.5 h-3.5 text-red-500" />
-                              Cancelado
+                      {/* Bloque central de datos en 3 líneas */}
+                      <div className="min-w-0 flex-1 space-y-0.5 sm:space-y-1">
+                        {/* 1. Nombre del evento (una sola línea con truncate) */}
+                        <div className="flex items-center gap-2 min-w-0">
+                          <h4
+                            className={`text-xs sm:text-sm font-black font-sports truncate leading-tight ${
+                              theme === 'light' ? 'text-slate-900' : 'text-white'
+                            }`}
+                            title={purchase.matchTitle}
+                          >
+                            {purchase.matchTitle}
+                          </h4>
+                          {isJoint && (
+                            <span className="hidden xs:inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-red-600/10 text-red-600 dark:bg-red-950/60 dark:text-red-300 font-sports shrink-0 border border-red-500/20">
+                              {purchase.tickets.length} Boletos
                             </span>
                           )}
-
-                          {/* Código QR individual del asiento para torniquete */}
-                          <div className={`flex items-center gap-2 p-1.5 pr-2.5 rounded-xl border ${
-                            theme === 'light'
-                              ? 'bg-slate-100 border-slate-300 text-slate-900'
-                              : 'bg-[#0A0E17] border-slate-700 text-slate-200'
-                          }`}>
-                            <div className="p-1 bg-white rounded border border-slate-300 shadow-2xs">
-                              <QrCode className="w-7 h-7 text-slate-950" />
-                            </div>
-                            <div className="text-left">
-                              <span className={`text-[10px] font-mono block font-bold leading-tight ${
-                                theme === 'light' ? 'text-slate-900' : 'text-slate-200'
-                              }`}>
-                                {ticket.qrId || ticket.id.slice(0, 8)}
-                              </span>
-                              <span className={`text-[9px] block font-sports uppercase tracking-wider ${
-                                theme === 'light' ? 'text-slate-600' : 'text-slate-400'
-                              }`}>
-                                Torniquete
-                              </span>
-                            </div>
-                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
 
-              {/* Boletos Individuales */}
-              {groupedTickets.singles.map((ticket) => (
-                <TicketCard key={ticket.id} ticket={ticket} />
-              ))}
+                        {/* 2. Fecha corta y sede */}
+                        <p
+                          className={`text-[11px] sm:text-xs truncate flex items-center gap-1.5 ${
+                            theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                          }`}
+                        >
+                          <span className="inline-flex items-center gap-1 font-semibold shrink-0">
+                            <Calendar className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                            {purchase.matchDate} {purchase.matchTime && `• ${purchase.matchTime}`}
+                          </span>
+                          <span>•</span>
+                          <span className="inline-flex items-center gap-1 truncate">
+                            <MapPin className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                            {purchase.stadium}
+                          </span>
+                        </p>
+
+                        {/* 3. Zona/sección, fila, y butacas combinadas en UNA sola línea */}
+                        <p className="text-[11px] sm:text-xs font-bold flex items-center gap-1.5 flex-wrap truncate">
+                          <span className={theme === 'light' ? 'text-slate-900' : 'text-white'}>
+                            {seats.section}
+                          </span>
+                          <span className={theme === 'light' ? 'text-slate-300' : 'text-slate-600'}>•</span>
+                          <span className={`font-mono ${theme === 'light' ? 'text-amber-800' : 'text-amber-400'}`}>
+                            {seats.row}
+                          </span>
+                          <span className={theme === 'light' ? 'text-slate-300' : 'text-slate-600'}>•</span>
+                          <span className={`font-mono ${theme === 'light' ? 'text-red-700' : 'text-red-400'}`}>
+                            {seats.butacas}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Bloque derecho: Badge de estado y flecha para indicar interactividad */}
+                    <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                      <span
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-bold border font-sports whitespace-nowrap ${badge.badgeClass}`}
+                      >
+                        <BadgeIcon className={`w-3 h-3 ${badge.iconClass} shrink-0`} />
+                        <span>{badge.label}</span>
+                      </span>
+
+                      <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-red-500 group-hover:translate-x-0.5 transition-all shrink-0" />
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -1105,44 +1186,35 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
                         </div>
                       </div>
 
-                      {/* Método de pago */}
+                      {/* Método de pago (Exclusivo Tarjeta en Línea) */}
                       <div>
-                        <label className={`text-xs font-bold block mb-1.5 font-sports uppercase tracking-wider ${
-                          theme === 'light' ? 'text-slate-800' : 'text-slate-300'
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className={`text-xs font-bold font-sports uppercase tracking-wider ${
+                            theme === 'light' ? 'text-slate-800' : 'text-slate-300'
+                          }`}>
+                            Método de pago
+                          </label>
+                          <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 font-sports">
+                            SSL Seguro
+                          </span>
+                        </div>
+                        <div className={`p-2.5 rounded-xl border flex items-center justify-between font-sports ${
+                          theme === 'light'
+                            ? 'border-red-500 bg-red-50/70 text-red-900'
+                            : 'border-red-500/50 bg-red-950/40 text-red-200'
                         }`}>
-                          Método de pago
-                        </label>
-                        <div className="grid grid-cols-2 gap-2 font-sports">
-                          <button
-                            type="button"
-                            onClick={() => setPaymentMethod('Efectivo / Terminal física en Taquilla')}
-                            className={`p-2 rounded-xl border text-center text-xs font-bold transition-all cursor-pointer ${
-                              paymentMethod === 'Efectivo / Terminal física en Taquilla'
-                                ? theme === 'light'
-                                  ? 'border-emerald-500 bg-emerald-50 text-emerald-900 ring-1 ring-emerald-500'
-                                  : 'border-emerald-500 bg-emerald-950/40 text-emerald-300'
-                                : theme === 'light'
-                                ? 'border-slate-200 hover:border-slate-300 bg-slate-50 text-slate-700'
-                                : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17] text-slate-400'
-                            }`}
-                          >
-                            💵 Taquilla
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setPaymentMethod('Tarjeta en Línea')}
-                            className={`p-2 rounded-xl border text-center text-xs font-bold transition-all cursor-pointer ${
-                              paymentMethod === 'Tarjeta en Línea'
-                                ? theme === 'light'
-                                  ? 'border-red-500 bg-red-50 text-red-900 ring-1 ring-red-500'
-                                  : 'border-red-500 bg-red-950/40 text-red-300'
-                                : theme === 'light'
-                                ? 'border-slate-200 hover:border-slate-300 bg-slate-50 text-slate-700'
-                                : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17] text-slate-400'
-                            }`}
-                          >
-                            💳 En Línea
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">💳</span>
+                            <div>
+                              <p className="text-xs font-black uppercase">Tarjeta en Línea</p>
+                              <p className={`text-[10px] font-sans ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
+                                Visa, Mastercard, Amex
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30">
+                            Exclusivo
+                          </span>
                         </div>
                       </div>
 
