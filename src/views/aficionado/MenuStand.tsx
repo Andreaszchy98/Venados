@@ -8,7 +8,9 @@ import {
   Ticket,
   Zone,
   VenueEvent,
+  FoodOrder,
 } from '../../types';
+import { PurchaseSuccessModal } from '../../components/shared/PurchaseSuccessModal';
 import { getStadiumStands, getMenuItemsByStand } from '../../lib/stands';
 import { createFoodOrder } from '../../lib/foodOrders';
 import { subscribeUserTickets } from '../../lib/tickets';
@@ -157,6 +159,9 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
   } | null>(null);
 
   const [currentVenueName, setCurrentVenueName] = useState<string>('Estadio Teodoro Mariscal');
+
+  // Popup de confirmación oficial de pedido de comida
+  const [completedFoodOrder, setCompletedFoodOrder] = useState<FoodOrder | null>(null);
 
   useEffect(() => {
     const fetchVenueInfo = async () => {
@@ -407,7 +412,7 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
       } catch {}
       setIsCheckoutModalOpen(false);
       setIsCardModalOpen(false);
-      if (onOrderSuccess) onOrderSuccess();
+      setCompletedFoodOrder(order);
     } catch (err: any) {
       console.error('Error placing food order:', err);
       setFormError(err.message || 'Error al procesar el pedido. Intenta de nuevo.');
@@ -1416,6 +1421,23 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
         }}
         onSuccess={handleCardPaymentSuccess}
       />
+
+      {/* Modal Popup de Confirmación Oficial de Pedido de Comida */}
+      {completedFoodOrder && (
+        <PurchaseSuccessModal
+          isOpen={true}
+          type="food"
+          foodOrder={completedFoodOrder}
+          onClose={() => {
+            setCompletedFoodOrder(null);
+            if (onOrderSuccess) onOrderSuccess();
+          }}
+          onNavigateToOrders={() => {
+            setCompletedFoodOrder(null);
+            if (onOrderSuccess) onOrderSuccess();
+          }}
+        />
+      )}
     </div>
   );
 };

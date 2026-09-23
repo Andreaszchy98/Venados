@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { UserProfile, VenueEvent, SeatSection, EventSeat, EventType } from '../../types';
+import { UserProfile, VenueEvent, SeatSection, EventSeat, EventType, Ticket } from '../../types';
+import { PurchaseSuccessModal } from '../../components/shared/PurchaseSuccessModal';
 import {
   BaseballFieldGraphic,
   SoccerFieldGraphic,
@@ -208,6 +209,11 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
   const [isCardModalOpen, setIsCardModalOpen] = useState(false);
   const [externalStripeUrl, setExternalStripeUrl] = useState<string | null>(null);
+
+  // Popup de confirmación oficial de boletos
+  const [completedTickets, setCompletedTickets] = useState<Ticket[] | null>(null);
+  const [completedPurchaseId, setCompletedPurchaseId] = useState<string | null>(null);
+  const [completedTicketsCount, setCompletedTicketsCount] = useState<number>(0);
 
   // Helper para normalizar identificadores de sección (elimina guiones, espacios y mayúsculas)
   const normalizeSec = (val?: string | null) => (val || '').trim().toUpperCase().replace(/[\s_-]+/g, '');
@@ -542,17 +548,25 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
       const result = await purchaseSeatsTransaction({
         userId: user.uid,
         customerName: user.displayName || user.email || 'Aficionado',
+        customerEmail: user.email || undefined,
         event,
         stadiumName,
         selectedSeats,
-        paymentMethod: 'Tarjeta en Línea',
+        paymentMethod: `Tarjeta (${paymentResult.cardBrand || 'Visa'} •••• ${paymentResult.cardLast4 || '4242'})`,
+        stripePaymentIntentId: paymentResult.paymentIntentId,
       });
 
       try {
         sessionStorage.removeItem(`vxp_seats_${event.id}`);
       } catch {}
 
-      onPurchaseSuccess(result.purchaseId, result.count);
+      if (result.tickets && result.tickets.length > 0) {
+        setCompletedTickets(result.tickets);
+        setCompletedPurchaseId(result.purchaseId);
+        setCompletedTicketsCount(result.count);
+      } else {
+        onPurchaseSuccess(result.purchaseId, result.count);
+      }
     } catch (err: any) {
       console.error('Error en transacción de compra con tarjeta:', err);
       const message = err.message || 'Error al emitir los boletos tras el pago.';
@@ -1253,6 +1267,27 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
         externalSessionUrl={externalStripeUrl}
         onSuccess={handleCardPaymentSuccess}
       />
+
+      {/* Modal Popup de Confirmación Oficial de Boletos Emitidos */}
+      {completedTickets && completedTickets.length > 0 && (
+        <PurchaseSuccessModal
+          isOpen={true}
+          type="ticket"
+          tickets={completedTickets}
+          onClose={() => {
+            const pid = completedPurchaseId || '';
+            const cnt = completedTicketsCount || completedTickets.length;
+            setCompletedTickets(null);
+            onPurchaseSuccess(pid, cnt);
+          }}
+          onNavigateToTickets={() => {
+            const pid = completedPurchaseId || '';
+            const cnt = completedTicketsCount || completedTickets.length;
+            setCompletedTickets(null);
+            onPurchaseSuccess(pid, cnt);
+          }}
+        />
+      )}
     </div>
   );
 };

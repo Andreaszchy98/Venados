@@ -169,12 +169,36 @@ export async function createSampleTicketsForUser(userId: string): Promise<void> 
 }
 
 /**
- * Actualizar estado de boleto (para taquilla / validación)
+ * Actualizar estado de boleto (para taquilla / validación).
+ * Si el boleto pertenece a una compra conjunta (purchaseId), actualiza TODOS los boletos
+ * de esa misma compra para que se validen/usen juntos en un solo escaneo.
  */
 export async function updateTicketStatus(
   ticketId: string,
-  newStatus: 'activo' | 'usado' | 'cancelado'
+  newStatus: 'activo' | 'usado' | 'cancelado',
+  purchaseId?: string
 ): Promise<void> {
+  // Si tenemos purchaseId o lo podemos consultar, validar todos los boletos de la compra
+  if (purchaseId) {
+    try {
+      const q = query(
+        collection(db, 'tickets'),
+        where('purchaseId', '==', purchaseId)
+      );
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const updatePromises = snap.docs.map((d) =>
+          updateDoc(doc(db, 'tickets', d.id), { status: newStatus })
+        );
+        await Promise.all(updatePromises);
+        return;
+      }
+    } catch (err) {
+      console.warn('Error al actualizar por purchaseId, actualizando por ID individual:', err);
+    }
+  }
+
+  // Si no hay purchaseId o no se encontró, actualizar por ID directo
   const ticketRef = doc(db, 'tickets', ticketId);
   await updateDoc(ticketRef, {
     status: newStatus,

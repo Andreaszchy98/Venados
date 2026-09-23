@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { InventoryProduct, UserProfile, OrderItem, ShippingAddress } from '../../types';
+import { InventoryProduct, UserProfile, OrderItem, ShippingAddress, MerchOrder } from '../../types';
+import { PurchaseSuccessModal } from '../../components/shared/PurchaseSuccessModal';
 import { getInventoryProducts, adjustProductStock } from '../../lib/inventory';
 import { createMerchOrder } from '../../lib/logistics';
 import { normalizeGoogleDriveImageUrl, getDefaultProductPlaceholder } from '../../lib/imageUtils';
@@ -49,6 +50,9 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<{ src: string; title: string; category?: string } | null>(null);
+
+  // Popup de confirmación oficial de compra de tienda
+  const [completedMerchOrder, setCompletedMerchOrder] = useState<MerchOrder | null>(null);
 
   // Sincronizar carrito con sessionStorage para no perder artículos ante recarga o inicio de sesión
   useEffect(() => {
@@ -192,9 +196,11 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
       if (paymentDetails) {
         orderPayload.notes = (orderPayload.notes ? orderPayload.notes + ' | ' : '') +
           `Pago tarjeta: ${paymentDetails.cardBrand} ****${paymentDetails.cardLast4} (Auth: ${paymentDetails.authCode})`;
+        orderPayload.stripePaymentIntentId = paymentDetails.paymentIntentId;
+        orderPayload.paymentMethod = `Tarjeta (${paymentDetails.cardBrand} •••• ${paymentDetails.cardLast4})`;
       }
 
-      await createMerchOrder(orderPayload);
+      const createdOrder = await createMerchOrder(orderPayload);
 
       // Si es administrador, reducir stock directamente; para aficionados, el almacén lo gestiona en logística
       if (user.role === 'admin') {
@@ -219,7 +225,7 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
         } Puedes seguir el envío en la pestaña "Mis Pedidos".`
       );
       fetchProducts();
-      if (onOrderCompleted) onOrderCompleted();
+      setCompletedMerchOrder(createdOrder);
     } catch (err: any) {
       console.error('Error al procesar pedido:', err);
     } finally {
@@ -845,9 +851,11 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
             <div className="w-full flex items-center justify-between pb-3 mb-3 border-b border-slate-700/80">
               <div>
                 <span className="text-[10px] font-sports uppercase tracking-wider text-red-400 font-bold">
-                  {previewImage.category || 'Mercancía Oficial'}
+                  {previewImage?.category || 'Mercancía Oficial'}
                 </span>
-                <h4 className="text-white font-sports font-extrabold text-base sm:text-lg">{previewImage.title}</h4>
+                <h4 className="text-white font-sports font-extrabold text-base sm:text-lg">
+                  {previewImage?.title || 'Producto'}
+                </h4>
               </div>
               <button
                 onClick={() => setPreviewImage(null)}
@@ -860,8 +868,8 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
 
             <div className="w-full max-h-[70vh] flex items-center justify-center p-4 bg-[#060911] rounded-xl border border-slate-800">
               <img
-                src={previewImage.src}
-                alt={previewImage.title}
+                src={previewImage?.src}
+                alt={previewImage?.title || 'Producto'}
                 className="max-h-[60vh] max-w-full object-contain rounded-lg drop-shadow-2xl"
                 referrerPolicy="no-referrer"
               />
@@ -886,6 +894,24 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
         }}
         onSuccess={handleCardPaymentSuccess}
       />
+
+      {/* Modal Popup de Confirmación Oficial de Compra de Tienda */}
+      {completedMerchOrder && (
+        <PurchaseSuccessModal
+          isOpen={true}
+          type="merch"
+          merchOrder={completedMerchOrder}
+          storeName={`Tienda Oficial ${storeProfile.teamName}`}
+          onClose={() => {
+            setCompletedMerchOrder(null);
+            if (onOrderCompleted) onOrderCompleted();
+          }}
+          onNavigateToOrders={() => {
+            setCompletedMerchOrder(null);
+            if (onOrderCompleted) onOrderCompleted();
+          }}
+        />
+      )}
     </div>
   );
 };

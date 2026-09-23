@@ -546,9 +546,6 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
             setSelectedTicketId(null);
             setSelectedTicketSiblings([]);
           }}
-          onSelectTicket={(newId) => {
-            setSelectedTicketId(newId);
-          }}
         />
       );
     }

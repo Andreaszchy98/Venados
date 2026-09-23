@@ -641,11 +641,23 @@ async function startServer() {
 
       if (stripe) {
         try {
-          // Crear PaymentIntent oficial en Stripe para registro y conciliación
+          const isTestKey = (process.env.STRIPE_SECRET_KEY || '').startsWith('sk_test_');
+
+          let paymentMethod = 'pm_card_visa';
+          const brand = (cardBrand || '').toLowerCase();
+          if (brand.includes('mastercard')) {
+            paymentMethod = 'pm_card_mastercard';
+          } else if (brand.includes('amex')) {
+            paymentMethod = 'pm_card_amex';
+          }
+
+          // Crear y confirmar PaymentIntent oficial en Stripe para registro inmediato como pago exitoso
           const pi = await stripe.paymentIntents.create({
             amount: Math.round(numAmount * 100),
             currency: 'mxn',
-            payment_method_types: ['card'],
+            payment_method: isTestKey ? paymentMethod : undefined,
+            confirm: isTestKey,
+            return_url: `${req.protocol}://${req.get('host')}/`,
             description: `${concept || 'Pago VXP'} — ${customerName || 'Aficionado'}`,
             receipt_email: customerEmail || undefined,
             metadata: {
@@ -660,7 +672,10 @@ async function startServer() {
           });
           paymentIntentId = pi.id;
         } catch (stripeErr: any) {
-          console.warn('Aviso al crear PaymentIntent en Stripe:', stripeErr?.message);
+          console.error('Error al procesar PaymentIntent en Stripe:', stripeErr?.message);
+          return res.status(500).json({
+            error: `Error procesando el cobro en Stripe: ${stripeErr?.message || 'Error en pasarela'}`,
+          });
         }
       }
 

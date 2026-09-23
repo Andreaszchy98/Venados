@@ -33,10 +33,10 @@ export const TaquillaView: React.FC<TaquillaViewProps> = ({ user }) => {
     fetchTickets();
   }, []);
 
-  const handleValidateTicket = async (ticketId: string) => {
+  const handleValidateTicket = async (ticketId: string, purchaseId?: string) => {
     try {
-      await updateTicketStatus(ticketId, 'usado');
-      setStatusMessage('¡Boleto validado con éxito! El estado ahora es USADO.');
+      await updateTicketStatus(ticketId, 'usado', purchaseId);
+      setStatusMessage('¡Boleto(s) validado(s) con éxito! El acceso ha sido registrado.');
       fetchTickets();
     } catch (err: any) {
       setStatusMessage('Error al validar el boleto.');

@@ -1011,10 +1011,12 @@ export async function releaseSeatLockTransaction(seatId: string, userId: string)
 export interface PurchaseSeatsParams {
   userId: string;
   customerName: string;
+  customerEmail?: string;
   event: VenueEvent;
   stadiumName: string;
   selectedSeats: SeatPurchaseItem[];
   paymentMethod: string;
+  stripePaymentIntentId?: string;
 }
 
 export interface PurchaseResult {
@@ -1022,6 +1024,7 @@ export interface PurchaseResult {
   ticketIds: string[];
   totalAmount: number;
   count: number;
+  tickets?: Ticket[];
 }
 
 /**
@@ -1093,6 +1096,7 @@ export async function purchaseSeatsTransaction(params: PurchaseSeatsParams): Pro
 
     // 2. ESCRITURAS ATÓMICAS (Crear tickets y marcar status del asiento a 'vendido')
     const createdTicketIds: string[] = [];
+    const createdTickets: Ticket[] = [];
     const stadiumZones = getStadiumZones(event.venueId, stadiumName, event.type);
     const isEncanto = isEncantoVenue(event.venueId, stadiumName, event.type);
     const qrPrefix = isEncanto ? 'DOR-2026-TKT-' : 'VND-2026-TKT-';
@@ -1123,6 +1127,11 @@ export async function purchaseSeatsTransaction(params: PurchaseSeatsParams): Pro
         qrId,
         gate: gateResolved,
         createdAt: now,
+        stripePaymentIntentId: params.stripePaymentIntentId || undefined,
+        paymentStatus: 'paid',
+        paymentMethod: paymentMethod || 'Tarjeta en Línea',
+        customerName,
+        customerEmail: params.customerEmail || undefined,
       };
 
       transaction.set(ticketDocRef, ticketData);
@@ -1157,6 +1166,7 @@ export async function purchaseSeatsTransaction(params: PurchaseSeatsParams): Pro
       }
 
       createdTicketIds.push(ticketDocRef.id);
+      createdTickets.push(ticketData);
     }
 
     return {
@@ -1164,6 +1174,7 @@ export async function purchaseSeatsTransaction(params: PurchaseSeatsParams): Pro
       ticketIds: createdTicketIds,
       totalAmount,
       count: selectedSeats.length,
+      tickets: createdTickets,
     };
   });
 
@@ -1181,6 +1192,8 @@ export async function purchaseSeatsTransaction(params: PurchaseSeatsParams): Pro
         .join(', ')})`,
       amount: totalAmount,
       paymentMethod,
+      stripePaymentIntentId: params.stripePaymentIntentId || null,
+      customerEmail: params.customerEmail || null,
       date: now,
       status: 'completada',
     });

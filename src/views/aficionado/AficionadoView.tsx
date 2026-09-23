@@ -71,16 +71,17 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
     setLoadingVenues(true);
     const unsubscribe = subscribeVenues(
       (venuesList) => {
-        if (venuesList && venuesList.length > 0) {
-          setVenues(venuesList);
+        const safeList = venuesList || [];
+        setVenues(safeList);
+        if (safeList.length > 0) {
           setSelectedVenueId((prev) => {
-            if (prev && venuesList.some((v) => v.id === prev)) {
+            if (prev && safeList.some((v) => v.id === prev)) {
               return prev;
             }
             const preferred = user.browsingVenueId || user.venueId;
-            return preferred && venuesList.some((v) => v.id === preferred)
+            return preferred && safeList.some((v) => v.id === preferred)
               ? preferred
-              : venuesList[0].id;
+              : safeList[0].id;
           });
         }
         setLoadingVenues(false);

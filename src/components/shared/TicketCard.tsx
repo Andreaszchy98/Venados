@@ -6,7 +6,7 @@ import { QRCodeDisplay } from './QRCodeDisplay';
 
 interface TicketCardProps {
   ticket: Ticket;
-  onValidate?: (ticketId: string) => void;
+  onValidate?: (ticketId: string, purchaseId?: string) => void;
   showAdminActions?: boolean;
 }
 
@@ -252,7 +252,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
 
         {showAdminActions && onValidate && ticket.status === 'activo' && (
           <button
-            onClick={() => onValidate(ticket.id)}
+            onClick={() => onValidate(ticket.id, ticket.purchaseId)}
             className="w-full mt-2 py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition-all cursor-pointer font-sports"
           >
             Validar Ingreso

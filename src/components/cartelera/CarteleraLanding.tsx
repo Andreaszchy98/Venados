@@ -137,12 +137,10 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
     }
   }, []);
 
-  // Escuchar sedes en tiempo real
+  // Escuchar sedes en tiempo real (únicamente activas)
   useEffect(() => {
     const unsubscribe = subscribeVenues((loadedVenues) => {
-      if (loadedVenues && loadedVenues.length > 0) {
-        setVenues(loadedVenues);
-      }
+      setVenues(loadedVenues || []);
     });
     return () => unsubscribe();
   }, []);
@@ -202,14 +200,29 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
     } catch {}
   };
 
-  // Resumen compacto de ubicación (Ciudad · Recinto) para el selector combinado
+  // Resumen claro y sin truncar de ubicación para la pastilla selectora
   const locationSummaryLabel = useMemo(() => {
-    const cityName = selectedCity === 'todas' ? 'Todas las ciudades' : selectedCity;
     const venueObj = venues.find((v) => v.id === selectedVenueId);
-    const venueName =
-      selectedVenueId === 'todos' ? 'Todos los recintos' : venueObj?.name || 'Recinto';
-    return `${cityName} · ${venueName}`;
+    // 1. Si hay un recinto específico seleccionado, priorizar el nombre del recinto
+    if (selectedVenueId !== 'todos' && venueObj?.name) {
+      return venueObj.name;
+    }
+    // 2. Si está en "Todos los recintos" de una ciudad específica
+    if (selectedCity !== 'todas') {
+      return `${selectedCity} · Todos los recintos`;
+    }
+    // 3. Si está en "Todas las ciudades"
+    return 'Todas las ciudades';
   }, [selectedCity, selectedVenueId, venues]);
+
+  // Nombre descriptivo del recinto para el encabezado de selección
+  const selectedVenueHeaderLabel = useMemo(() => {
+    if (selectedVenueId === 'todos') {
+      return 'TODOS';
+    }
+    const venueObj = venues.find((v) => v.id === selectedVenueId);
+    return venueObj?.name || 'TODOS';
+  }, [selectedVenueId, venues]);
 
   // Escuchar todos los eventos activos en tiempo real
   useEffect(() => {
@@ -536,7 +549,7 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
               aria-haspopup="listbox"
             >
               <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0" />
-              <span className="truncate max-w-[130px] min-[390px]:max-w-[175px] sm:max-w-xs">
+              <span className="truncate max-w-[170px] min-[390px]:max-w-[220px] sm:max-w-sm">
                 {locationSummaryLabel}
               </span>
               <ChevronDown
@@ -607,7 +620,7 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
                     <span className={`text-[10px] font-extrabold uppercase tracking-wider px-1 block mb-1.5 ${
                       theme === 'light' ? 'text-slate-500' : 'text-slate-400'
                     }`}>
-                      2. Selecciona Recinto ({selectedCity === 'todas' ? 'Todos' : selectedCity})
+                      2. SELECCIONA RECINTO ({selectedVenueHeaderLabel})
                     </span>
                     <div className="space-y-1 max-h-52 overflow-y-auto pr-0.5">
                       <button
@@ -1316,7 +1329,7 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
           >
             <div className="w-full flex items-center justify-between pb-3 px-1 border-b border-slate-800">
               <h4 className="text-sm font-bold text-white truncate max-w-[80%]">
-                {previewImage.title}
+                {previewImage?.title || 'Imagen'}
               </h4>
               <button
                 type="button"
@@ -1329,7 +1342,7 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
             <div className="w-full flex-1 flex items-center justify-center overflow-hidden py-3">
               <img
                 src={previewImage.url}
-                alt={previewImage.title}
+                alt={previewImage?.title || 'Imagen'}
                 referrerPolicy="no-referrer"
                 className="max-h-[75vh] max-w-full object-contain rounded-xl shadow-2xl"
               />

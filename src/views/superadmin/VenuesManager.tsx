@@ -48,7 +48,7 @@ export const VenuesManager: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const venuesData = await getAllVenues();
+      const venuesData = await getAllVenues({ includeInactive: true });
       setVenues(venuesData);
     } catch (err) {
       console.error('Error cargando sedes:', err);

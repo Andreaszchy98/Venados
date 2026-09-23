@@ -258,6 +258,7 @@ export interface MerchOrder {
   status: MerchOrderStatus;
   paymentMethod: 'Tarjeta' | 'Transferencia SPEI' | 'MercadoPago' | 'Efectivo en Tienda' | 'Efectivo / Terminal física' | string;
   paymentStatus: 'pagado' | 'pendiente' | 'reembolsado';
+  stripePaymentIntentId?: string;
   notes?: string;
   createdAt: string;
   updatedAt: string;

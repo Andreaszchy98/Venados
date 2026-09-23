@@ -55,28 +55,40 @@ export function getAllowedEventTypesForVenue(venueOrIdOrName?: Venue | string | 
 
 /**
  * Escuchar todos los recintos (Venues) en tiempo real
+ * Por defecto filtra únicamente las sedes activas (active !== false).
+ * Si includeInactive es true (usado por Superadmin), incluye todas.
  */
 export function subscribeVenues(
   onUpdate: (venues: Venue[]) => void,
-  onError?: (err: Error) => void
+  onError?: (err: Error) => void,
+  options?: { includeInactive?: boolean }
 ): () => void {
+  const includeInactive = options?.includeInactive ?? false;
   const q = query(collection(db, VENUES_COLLECTION), limit(50));
   return onSnapshot(
     q,
     (snapshot) => {
+      let combined: Venue[];
       if (snapshot.empty) {
-        onUpdate(DEFAULT_VENUES);
-        return;
-      }
-      const venuesList = snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) as Venue[];
-      // Garantizar que DEFAULT_VENUES estén disponibles como opciones válidas
-      const merged = [...venuesList];
-      for (const defVenue of DEFAULT_VENUES) {
-        if (!merged.some((v) => v.id === defVenue.id)) {
-          merged.push(defVenue);
+        combined = [...DEFAULT_VENUES];
+      } else {
+        const venuesList = snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) as Venue[];
+        // Garantizar que DEFAULT_VENUES estén disponibles como opciones válidas si no existen en Firestore
+        const merged = [...venuesList];
+        for (const defVenue of DEFAULT_VENUES) {
+          if (!merged.some((v) => v.id === defVenue.id)) {
+            merged.push(defVenue);
+          }
         }
+        combined = merged;
       }
-      onUpdate(merged);
+
+      // Filtrar sedes inactivas si no se solicita explícitamente incluir inactivas
+      const finalVenues = includeInactive
+        ? combined
+        : combined.filter((v) => v.active !== false);
+
+      onUpdate(finalVenues);
     },
     (err) => {
       console.warn('Error al escuchar sedes en tiempo real:', err);
@@ -88,24 +100,31 @@ export function subscribeVenues(
 
 /**
  * Obtener todos los recintos (Venues)
+ * Por defecto filtra únicamente las sedes activas (active !== false).
+ * Si includeInactive es true (usado por Superadmin), retorna todas.
  */
-export async function getAllVenues(): Promise<Venue[]> {
+export async function getAllVenues(options?: { includeInactive?: boolean }): Promise<Venue[]> {
+  const includeInactive = options?.includeInactive ?? false;
   try {
     const snap = await getDocs(query(collection(db, VENUES_COLLECTION), limit(50)));
+    let combined: Venue[];
     if (snap.empty) {
-      return DEFAULT_VENUES;
-    }
-    const venuesList = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Venue[];
-    const merged = [...venuesList];
-    for (const defVenue of DEFAULT_VENUES) {
-      if (!merged.some((v) => v.id === defVenue.id)) {
-        merged.push(defVenue);
+      combined = [...DEFAULT_VENUES];
+    } else {
+      const venuesList = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Venue[];
+      const merged = [...venuesList];
+      for (const defVenue of DEFAULT_VENUES) {
+        if (!merged.some((v) => v.id === defVenue.id)) {
+          merged.push(defVenue);
+        }
       }
+      combined = merged;
     }
-    return merged;
+
+    return includeInactive ? combined : combined.filter((v) => v.active !== false);
   } catch (err) {
     handleFirestoreError(err, OperationType.LIST, VENUES_COLLECTION);
-    return DEFAULT_VENUES;
+    return includeInactive ? DEFAULT_VENUES : DEFAULT_VENUES.filter((v) => v.active !== false);
   }
 }
 
@@ -155,7 +174,13 @@ export async function createVenue(venueData: Omit<Venue, 'id' | 'createdAt'> & {
 export async function updateVenue(venueId: string, updates: Partial<Venue>): Promise<void> {
   try {
     const docRef = doc(db, VENUES_COLLECTION, venueId);
-    await updateDoc(docRef, sanitizeFirestoreData(updates));
+    // Usamos setDoc con { merge: true } para garantizar que si la sede era de DEFAULT_VENUES
+    // y aún no existía un documento explícito en Firestore, se cree e inicialice correctamente.
+    const sanitized = sanitizeFirestoreData({
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    });
+    await setDoc(docRef, sanitized, { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `${VENUES_COLLECTION}/${venueId}`);
     throw err;
