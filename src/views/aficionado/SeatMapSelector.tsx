@@ -14,6 +14,8 @@ import {
   purchaseSeatsTransaction,
   lockSeatSelectionTransaction,
   releaseSeatLockTransaction,
+  getClientLockToken,
+  isSeatLockedByOther,
   SEAT_LOCK_DURATION_MS,
   getZonePrice,
   MARISCAL_ZONES,
@@ -159,8 +161,9 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
       if (diff === 0) {
         // Expiraron los 8 minutos de reserva: liberar asientos automáticamente
         const userId = user?.uid || 'guest';
+        const clientToken = getClientLockToken();
         selectedSeats.forEach((s) => {
-          releaseSeatLockTransaction(s.seatId, userId).catch(() => {});
+          releaseSeatLockTransaction(s.seatId, userId, clientToken).catch(() => {});
         });
         setSelectedSeats([]);
         setLockExpiresAt(null);
@@ -178,6 +181,26 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
   }, [lockExpiresAt, selectedSeats, event.id, user?.uid]);
+
+  // Al autenticarse el aficionado, transferir de forma transparente los bloqueos de su carrito a su UID
+  useEffect(() => {
+    if (user?.uid && selectedSeats.length > 0) {
+      const clientToken = getClientLockToken();
+      selectedSeats.forEach((s) => {
+        lockSeatSelectionTransaction({
+          eventId: event.id,
+          seatId: s.seatId,
+          userId: user.uid,
+          sectionNumber: s.sectionNumber,
+          rowLabel: s.rowLabel,
+          seatNumber: s.seatNumber,
+          zoneName: s.zoneName,
+          sectionId: s.sectionId,
+          clientLockToken: clientToken,
+        }).catch(() => {});
+      });
+    }
+  }, [user?.uid, event.id]);
 
   // Guardar lockExpiresAt en sessionStorage
   useEffect(() => {
@@ -392,12 +415,13 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
     if (pendingSeatLocks.current.has(seat.id)) return;
 
     const userId = user?.uid || 'guest';
+    const clientToken = getClientLockToken();
     setPurchaseError(null);
     const isAlreadySelected = selectedSeats.some((s) => s.seatId === seat.id);
 
     if (isAlreadySelected) {
       // Liberar bloqueo atómico en Firestore
-      releaseSeatLockTransaction(seat.id, userId).catch(() => {});
+      releaseSeatLockTransaction(seat.id, userId, clientToken).catch(() => {});
       setSelectedSeats((prev) => {
         const remaining = prev.filter((s) => s.seatId !== seat.id);
         if (remaining.length === 0) {
@@ -417,6 +441,7 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
           seatNumber: seat.seatNumber,
           zoneName: section.zoneName,
           sectionId: section.id,
+          clientLockToken: clientToken,
         });
 
         // Registrar o actualizar expiración
@@ -455,7 +480,8 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
   // Quitar un asiento de la lista de compra y liberar el bloqueo
   const handleRemoveSeat = (seatId: string) => {
     const userId = user?.uid || 'guest';
-    releaseSeatLockTransaction(seatId, userId).catch(() => {});
+    const clientToken = getClientLockToken();
+    releaseSeatLockTransaction(seatId, userId, clientToken).catch(() => {});
     setSelectedSeats((prev) => {
       const remaining = prev.filter((s) => s.seatId !== seatId);
       if (remaining.length === 0) {
@@ -468,8 +494,9 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
   // Limpiar todos los asientos seleccionados y liberar sus bloqueos
   const handleClearSelectedSeats = () => {
     const userId = user?.uid || 'guest';
+    const clientToken = getClientLockToken();
     selectedSeats.forEach((s) => {
-      releaseSeatLockTransaction(s.seatId, userId).catch(() => {});
+      releaseSeatLockTransaction(s.seatId, userId, clientToken).catch(() => {});
     });
     setSelectedSeats([]);
     setLockExpiresAt(null);
@@ -545,6 +572,7 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
     setPurchaseError(null);
 
     try {
+      const clientToken = getClientLockToken();
       const result = await purchaseSeatsTransaction({
         userId: user.uid,
         customerName: user.displayName || user.email || 'Aficionado',
@@ -554,6 +582,7 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
         selectedSeats,
         paymentMethod: `Tarjeta (${paymentResult.cardBrand || 'Visa'} •••• ${paymentResult.cardLast4 || '4242'})`,
         stripePaymentIntentId: paymentResult.paymentIntentId,
+        clientLockToken: clientToken,
       });
 
       try {
@@ -998,12 +1027,10 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                             seat.status === 'vendido' &&
                             normalizeSec(seat.sectionNumber) === normalizeSec(currentSection.sectionNumber);
                           const now = Date.now();
+                          const clientToken = getClientLockToken();
                           const isLockedByOther =
                             !isSelected &&
-                            seat.status === 'reservado' &&
-                            seat.lockedUntil !== undefined &&
-                            seat.lockedUntil > now &&
-                            seat.lockedBy !== (user?.uid || 'guest') &&
+                            isSeatLockedByOther(seat, user?.uid, clientToken, now) &&
                             normalizeSec(seat.sectionNumber) === normalizeSec(currentSection.sectionNumber);
 
                           return (

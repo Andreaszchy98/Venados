@@ -25,6 +25,10 @@ interface InitialProductWithCost extends Omit<InventoryProduct, 'id' | 'createdA
   initialCost: number;
 }
 
+export const STANDARD_JERSEY_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
+export const YOUTH_JERSEY_SIZES = ['4-6', '8-10', '12-14', '16'];
+export const FITTED_CAP_SIZES = ['7', '7 1/8', '7 1/4', '7 3/8', '7 1/2', '7 5/8'];
+
 const INITIAL_VENADOS_PRODUCTS: InitialProductWithCost[] = [
   {
     sku: 'VEN-JER-ROJ-26',
@@ -34,7 +38,7 @@ const INITIAL_VENADOS_PRODUCTS: InitialProductWithCost[] = [
     initialCost: 850,
     stock: 45,
     minStockAlert: 10,
-    sizes: ['S', 'M', 'L', 'XL', '2XL'],
+    sizes: ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'],
     image: 'https://images.unsplash.com/photo-1577210897949-1f56f943502f?w=600&auto=format&fit=crop&q=80',
     description: 'Jersey oficial de juego con tecnología transpirable y escudo bordado de Venados de Mazatlán.',
     supplier: 'El Siglo Deportes / Venados Store',
@@ -48,7 +52,7 @@ const INITIAL_VENADOS_PRODUCTS: InitialProductWithCost[] = [
     initialCost: 900,
     stock: 28,
     minStockAlert: 8,
-    sizes: ['M', 'L', 'XL'],
+    sizes: ['XS', 'S', 'M', 'L', 'XL', '2XL'],
     image: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&auto=format&fit=crop&q=80',
     description: 'Edición conmemorativa nocturna en negro mate con detalles en rojo carmesí.',
     supplier: 'New Era / Venados Store',
@@ -135,7 +139,7 @@ const INITIAL_TOMATEROS_PRODUCTS: InitialProductWithCost[] = [
     initialCost: 850,
     stock: 40,
     minStockAlert: 10,
-    sizes: ['S', 'M', 'L', 'XL', '2XL'],
+    sizes: ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'],
     image: 'https://images.unsplash.com/photo-1577210897949-1f56f943502f?w=600&auto=format&fit=crop&q=80',
     description: 'Jersey oficial de juego con tecnología transpirable y escudo bordado de Tomateros Nación Guinda.',
     supplier: 'Tomateros BeisShop Oficial',
@@ -149,7 +153,7 @@ const INITIAL_TOMATEROS_PRODUCTS: InitialProductWithCost[] = [
     initialCost: 880,
     stock: 25,
     minStockAlert: 8,
-    sizes: ['M', 'L', 'XL'],
+    sizes: ['XS', 'S', 'M', 'L', 'XL', '2XL'],
     image: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&auto=format&fit=crop&q=80',
     description: 'Edición conmemorativa retro en blanco perla con vivos guinda y detalles dorados.',
     supplier: 'New Era / Tomateros Store',
@@ -236,7 +240,7 @@ const INITIAL_TOROS_PRODUCTS: InitialProductWithCost[] = [
     initialCost: 850,
     stock: 35,
     minStockAlert: 10,
-    sizes: ['S', 'M', 'L', 'XL', '2XL'],
+    sizes: ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'],
     image: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&auto=format&fit=crop&q=80',
     description: 'Jersey oficial de juego LMB en negro azabache con la tipografía Toros en relieve.',
     supplier: 'Toros Shop Oficial',
@@ -250,7 +254,7 @@ const INITIAL_TOROS_PRODUCTS: InitialProductWithCost[] = [
     initialCost: 880,
     stock: 22,
     minStockAlert: 8,
-    sizes: ['M', 'L', 'XL'],
+    sizes: ['XS', 'S', 'M', 'L', 'XL', '2XL'],
     image: 'https://images.unsplash.com/photo-1577210897949-1f56f943502f?w=600&auto=format&fit=crop&q=80',
     description: 'Jersey de gala en rojo carmesí con tecnología de absorción de sudor.',
     supplier: 'New Era / Toros Store',
@@ -433,9 +437,17 @@ export async function getInventoryProducts(venueId?: string): Promise<InventoryP
 
     const products = snap.docs.map((d) => {
       const data = d.data();
+      const category = data.category;
+      let sizes = data.sizes;
+      if ((!sizes || sizes.length === 0) && category === 'Jerseys') {
+        sizes = STANDARD_JERSEY_SIZES;
+      } else if ((!sizes || sizes.length === 0) && category === 'Sudaderas') {
+        sizes = ['S', 'M', 'L', 'XL', '2XL'];
+      }
       return {
         id: d.id,
         ...data,
+        sizes,
         image: normalizeGoogleDriveImageUrl(data.image) || getDefaultProductPlaceholder(data.category),
       };
     }) as InventoryProduct[];

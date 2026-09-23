@@ -890,6 +890,69 @@ export interface SeatPurchaseItem {
 
 export const SEAT_LOCK_DURATION_MS = 8 * 60 * 1000; // 8 minutos
 
+/**
+ * Helper para obtener o generar un identificador persistente de dispositivo/navegador.
+ * Evita desalineación de reservas si el aficionado selecciona asientos como invitado (guest)
+ * y posteriormente inicia sesión con Google para pagar con tarjeta.
+ */
+export function getClientLockToken(): string {
+  if (typeof window === 'undefined') return 'server_session';
+  try {
+    let token = localStorage.getItem('vxp_client_lock_token');
+    if (!token) {
+      token = `token_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+      localStorage.setItem('vxp_client_lock_token', token);
+    }
+    return token;
+  } catch {
+    return 'guest_fallback';
+  }
+}
+
+/**
+ * Determina de forma infalible si una butaca está bloqueada por OTRO aficionado.
+ * Nunca bloquea al mismo aficionado que la seleccionó, incluso si la seleccionó como 'guest',
+ * antes de iniciar sesión con Google o si su token de sesión coincide.
+ */
+export function isSeatLockedByOther(
+  seat: {
+    status?: SeatStatus;
+    lockedUntil?: number | null;
+    lockedBy?: string | null;
+    clientLockToken?: string | null;
+  },
+  currentUserId?: string | null,
+  clientLockToken?: string | null,
+  currentTimeMs: number = Date.now()
+): boolean {
+  if (seat.status !== 'reservado') return false;
+  if (!seat.lockedUntil || seat.lockedUntil <= currentTimeMs) return false;
+  if (!seat.lockedBy) return false;
+
+  // Si el usuario actual coincide con el titular del lock
+  if (currentUserId && currentUserId !== 'guest' && seat.lockedBy === currentUserId) {
+    return false;
+  }
+
+  // Si fue reservada bajo sesión de invitado ('guest' o 'guest_...'), pertenece al flujo
+  // de compra del comprador actual que está completando la transacción
+  if (
+    seat.lockedBy === 'guest' ||
+    seat.lockedBy.startsWith('guest_') ||
+    seat.lockedBy.startsWith('guest')
+  ) {
+    return false;
+  }
+
+  // Si coincide con el token persistente de este dispositivo/navegador
+  if (clientLockToken) {
+    if (seat.lockedBy === clientLockToken) return false;
+    if (seat.clientLockToken && seat.clientLockToken === clientLockToken) return false;
+  }
+
+  return true;
+}
+
 export interface LockSeatParams {
   eventId: string;
   seatId: string;
@@ -899,6 +962,7 @@ export interface LockSeatParams {
   seatNumber: number;
   zoneName: string;
   sectionId?: string;
+  clientLockToken?: string;
 }
 
 /**
@@ -909,10 +973,11 @@ export interface LockSeatParams {
 export async function lockSeatSelectionTransaction(
   params: LockSeatParams
 ): Promise<{ success: boolean; lockedUntil: number }> {
-  const { eventId, seatId, userId, sectionNumber, rowLabel, seatNumber, zoneName, sectionId } = params;
+  const { eventId, seatId, userId, sectionNumber, rowLabel, seatNumber, zoneName, sectionId, clientLockToken } = params;
   const seatRef = doc(db, 'eventSeats', seatId);
   const now = Date.now();
   const lockedUntil = now + SEAT_LOCK_DURATION_MS;
+  const effectiveLockUser = userId && userId !== 'guest' ? userId : (clientLockToken || 'guest');
 
   return await runTransaction(db, async (transaction) => {
     const snap = await transaction.get(seatRef);
@@ -926,14 +991,9 @@ export async function lockSeatSelectionTransaction(
       }
 
       // 2. Si está reservado por OTRO usuario y el bloqueo sigue activo
-      const isLockedByOther =
-        data.status === 'reservado' &&
-        data.lockedUntil &&
-        data.lockedUntil > now &&
-        data.lockedBy &&
-        data.lockedBy !== userId;
+      const lockedByOther = isSeatLockedByOther(data, userId, clientLockToken, now);
 
-      if (isLockedByOther) {
+      if (lockedByOther) {
         const remainingSeconds = Math.max(1, Math.ceil(((data.lockedUntil || now) - now) / 1000));
         const minutes = Math.floor(remainingSeconds / 60);
         const seconds = remainingSeconds % 60;
@@ -948,7 +1008,8 @@ export async function lockSeatSelectionTransaction(
       transaction.update(seatRef, {
         status: 'reservado',
         lockedUntil,
-        lockedBy: userId,
+        lockedBy: effectiveLockUser,
+        clientLockToken: clientLockToken || null,
         lockedAt: new Date(now).toISOString(),
         updatedAt: new Date(now).toISOString(),
       });
@@ -964,7 +1025,8 @@ export async function lockSeatSelectionTransaction(
         seatNumber,
         status: 'reservado',
         lockedUntil,
-        lockedBy: userId,
+        lockedBy: effectiveLockUser,
+        clientLockToken: clientLockToken || null,
         lockedAt: new Date(now).toISOString(),
         updatedAt: new Date(now).toISOString(),
       });
@@ -977,7 +1039,11 @@ export async function lockSeatSelectionTransaction(
 /**
  * Libera el bloqueo de un asiento cuando el usuario lo deselecciona o cancela su carrito
  */
-export async function releaseSeatLockTransaction(seatId: string, userId: string): Promise<boolean> {
+export async function releaseSeatLockTransaction(
+  seatId: string,
+  userId: string,
+  clientLockToken?: string
+): Promise<boolean> {
   const seatRef = doc(db, 'eventSeats', seatId);
   const now = Date.now();
 
@@ -987,18 +1053,19 @@ export async function releaseSeatLockTransaction(seatId: string, userId: string)
       if (!snap.exists()) return;
 
       const data = snap.data() as EventSeat;
-      // Solo liberamos si no está vendido y pertenece al usuario (o si el lock expiró)
-      if (
-        data.status === 'reservado' &&
-        (data.lockedBy === userId || (data.lockedUntil && data.lockedUntil <= now))
-      ) {
-        transaction.update(seatRef, {
-          status: 'disponible',
-          lockedUntil: null,
-          lockedBy: null,
-          lockedAt: null,
-          updatedAt: new Date(now).toISOString(),
-        });
+      // Solo liberamos si no está vendido y no está retenido por otro aficionado activo
+      if (data.status === 'reservado') {
+        const lockedByOther = isSeatLockedByOther(data, userId, clientLockToken, now);
+        if (!lockedByOther) {
+          transaction.update(seatRef, {
+            status: 'disponible',
+            lockedUntil: null,
+            lockedBy: null,
+            clientLockToken: null,
+            lockedAt: null,
+            updatedAt: new Date(now).toISOString(),
+          });
+        }
       }
     });
     return true;
@@ -1017,6 +1084,7 @@ export interface PurchaseSeatsParams {
   selectedSeats: SeatPurchaseItem[];
   paymentMethod: string;
   stripePaymentIntentId?: string;
+  clientLockToken?: string;
 }
 
 export interface PurchaseResult {
@@ -1036,7 +1104,7 @@ export interface PurchaseResult {
  * 4. Registra la auditoría en la colección sales.
  */
 export async function purchaseSeatsTransaction(params: PurchaseSeatsParams): Promise<PurchaseResult> {
-  const { userId, customerName, event, stadiumName, selectedSeats, paymentMethod } = params;
+  const { userId, customerName, event, stadiumName, selectedSeats, paymentMethod, clientLockToken } = params;
 
   // 0. Comprobación automática de fecha del evento
   if (isEventPassed(event)) {
@@ -1069,16 +1137,12 @@ export async function purchaseSeatsTransaction(params: PurchaseSeatsParams): Pro
 
       const data = snap.data() as EventSeat;
       const isSold = data.status === 'vendido';
-      const isLockedByOther =
-        data.status === 'reservado' &&
-        data.lockedUntil &&
-        data.lockedUntil > currentTimeMs &&
-        data.lockedBy !== userId;
+      const isLockedByOther = isSeatLockedByOther(data, userId, clientLockToken, currentTimeMs);
 
       if (isSold || isLockedByOther) {
         unavailableSeats.push(
           `Sec ${seat.sectionNumber} - Fila ${seat.rowLabel} Asiento ${seat.seatNumber} (${
-            isSold ? 'Vendido' : 'Reservado temporalmente por otro usuario'
+            isSold ? 'Vendido' : 'Reservado temporalmente por otro aficionado'
           })`
         );
         continue;
@@ -1152,6 +1216,7 @@ export async function purchaseSeatsTransaction(params: PurchaseSeatsParams): Pro
           userId,
           lockedUntil: null,
           lockedBy: null,
+          clientLockToken: null,
         });
       } else {
         transaction.update(seatRef, {
@@ -1162,6 +1227,7 @@ export async function purchaseSeatsTransaction(params: PurchaseSeatsParams): Pro
           userId,
           lockedUntil: null,
           lockedBy: null,
+          clientLockToken: null,
         });
       }
 

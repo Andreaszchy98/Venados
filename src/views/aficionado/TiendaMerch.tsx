@@ -25,6 +25,8 @@ import {
   ShieldCheck,
   Package,
   Maximize2,
+  Ruler,
+  Sparkles,
 } from 'lucide-react';
 
 interface TiendaMerchProps {
@@ -50,6 +52,12 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<{ src: string; title: string; category?: string } | null>(null);
+
+  // Estado para la talla seleccionada por producto y modal de guía de tallas
+  const [selectedSizes, setSelectedSizes] = useState<Record<string, string>>({});
+  const [isSizeGuideOpen, setIsSizeGuideOpen] = useState(false);
+  const [sizeGuideCategory, setSizeGuideCategory] = useState<'Jerseys' | 'Gorras'>('Jerseys');
+  const [sizeAddedFeedback, setSizeAddedFeedback] = useState<{ productId: string; size: string } | null>(null);
 
   // Popup de confirmación oficial de compra de tienda
   const [completedMerchOrder, setCompletedMerchOrder] = useState<MerchOrder | null>(null);
@@ -114,8 +122,21 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
     return p.category === selectedCategory;
   });
 
+  const getProductSelectedSize = (product: InventoryProduct): string => {
+    if (selectedSizes[product.id]) return selectedSizes[product.id];
+    if (product.sizes && product.sizes.length > 0) return product.sizes[0];
+    return 'Unitalla';
+  };
+
+  const handleSelectSize = (productId: string, size: string) => {
+    setSelectedSizes((prev) => ({
+      ...prev,
+      [productId]: size,
+    }));
+  };
+
   const addToCart = (product: InventoryProduct, size?: string) => {
-    const selectedSize = size || (product.sizes && product.sizes.length > 0 ? product.sizes[0] : 'Unitalla');
+    const selectedSize = size || getProductSelectedSize(product);
     setCart((prev) => {
       const existingIndex = prev.findIndex((item) => item.product.id === product.id && item.size === selectedSize);
       if (existingIndex > -1) {
@@ -125,7 +146,37 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
       }
       return [...prev, { product, size: selectedSize, quantity: 1 }];
     });
+
+    // Feedback temporal de talla agregada
+    setSizeAddedFeedback({ productId: product.id, size: selectedSize });
+    setTimeout(() => {
+      setSizeAddedFeedback((curr) => (curr?.productId === product.id ? null : curr));
+    }, 2500);
+
     setIsCartOpen(true);
+  };
+
+  const updateCartItemSize = (index: number, newSize: string) => {
+    setCart((prev) => {
+      const currentItem = prev[index];
+      if (!currentItem || currentItem.size === newSize) return prev;
+
+      // Verificar si ya existe otro ítem con el mismo producto y la nueva talla en el carrito
+      const existingIndex = prev.findIndex(
+        (item, i) => i !== index && item.product.id === currentItem.product.id && item.size === newSize
+      );
+
+      if (existingIndex > -1) {
+        const copy = [...prev];
+        copy[existingIndex].quantity += currentItem.quantity;
+        copy.splice(index, 1);
+        return copy;
+      } else {
+        const copy = [...prev];
+        copy[index] = { ...currentItem, size: newSize };
+        return copy;
+      }
+    });
   };
 
   const updateCartQty = (index: number, delta: number) => {
@@ -255,48 +306,40 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
   };
 
   return (
-    <div className="space-y-6">
-      {/* Banner de la Tienda Oficial */}
-      <div
-        data-theme-surface="dark"
-        className={`relative overflow-hidden rounded-2xl bg-gradient-to-r ${storeProfile.headerGradient} text-white p-6 sm:p-8 border shadow-lg`}
-      >
-        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-2">
-            <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border backdrop-blur-xs ${storeProfile.accentBadgeClass}`}>
-              <ShoppingBag className="w-3.5 h-3.5" /> {storeProfile.badgeLabel}
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-black tracking-tight !text-white text-white">
+    <div className="space-y-4">
+      {/* Header Compacto de Tienda (48px–56px): productos visibles de inmediato en el first fold */}
+      <div className={`p-3 sm:px-4 rounded-2xl border flex items-center justify-between gap-3 shadow-xs transition-colors ${
+        theme === 'light'
+          ? 'bg-white border-slate-200 text-slate-900'
+          : 'bg-[#0F1626] border-slate-800 text-white'
+      }`}>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-xl bg-red-600/20 text-red-500 border border-red-500/30 flex items-center justify-center shrink-0">
+            <ShoppingBag className="w-4 h-4" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-sm sm:text-base font-black font-sports uppercase tracking-wide truncate">
               {storeProfile.headline}
             </h2>
-            <p className="text-xs sm:text-sm !text-[#E2E8F0] text-slate-200 max-w-xl leading-relaxed">
-              {storeProfile.tagline}
-            </p>
-            <div className="pt-1 flex flex-wrap items-center gap-4 text-xs !text-[#E2E8F0] text-slate-200 font-sports">
-              <span className="flex items-center gap-1.5">
-                <Building className="w-4 h-4 text-amber-300" />
-                <span>Retiro en: <strong className="!text-white text-white font-bold">{storeProfile.pickupLocation}</strong></span>
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Truck className="w-4 h-4 text-emerald-300" />
-                <span>Envíos a todo México por paquetería</span>
-              </span>
+            <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+              <span className="truncate">Retiro en: {storeProfile.pickupLocation}</span>
+              <span className="hidden md:inline">• Envíos nacionales</span>
             </div>
           </div>
-
-          <button
-            onClick={() => setIsCartOpen(true)}
-            className={`relative px-5 py-3 rounded-xl ${storeProfile.buttonClass} font-bold text-xs sm:text-sm flex items-center gap-2.5 shadow-lg transition-all self-start sm:self-auto cursor-pointer`}
-          >
-            <ShoppingCart className="w-4 h-4" />
-            <span>Mi Carrito</span>
-            {totalItemsCount > 0 && (
-              <span className="w-5 h-5 rounded-full bg-white text-slate-900 text-xs font-extrabold flex items-center justify-center">
-                {totalItemsCount}
-              </span>
-            )}
-          </button>
         </div>
+
+        <button
+          onClick={() => setIsCartOpen(true)}
+          className={`px-3.5 py-2 rounded-xl ${storeProfile.buttonClass} font-bold text-xs flex items-center gap-2 shadow-md transition-all shrink-0 cursor-pointer`}
+        >
+          <ShoppingCart className="w-4 h-4" />
+          <span className="hidden sm:inline">Mi Carrito</span>
+          {totalItemsCount > 0 && (
+            <span className="w-5 h-5 rounded-full bg-white text-slate-900 text-xs font-extrabold flex items-center justify-center">
+              {totalItemsCount}
+            </span>
+          )}
+        </button>
       </div>
 
       {orderSuccess && (
@@ -425,22 +468,98 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                   </p>
 
                   {prod.sizes && prod.sizes.length > 0 && (
-                    <div className="pt-2 flex flex-wrap items-center gap-1.5 font-sports">
-                      <span className={`text-[11px] mr-1 uppercase ${
-                        theme === 'light' ? 'text-slate-500' : 'text-slate-400'
-                      }`}>Tallas:</span>
-                      {prod.sizes.map((s) => (
-                        <span
-                          key={s}
-                          className={`px-2 py-0.5 text-[10px] font-bold rounded border ${
+                    <div className="pt-2.5 pb-1 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-[11px] font-bold font-sports uppercase tracking-wider ${
+                            theme === 'light' ? 'text-slate-700' : 'text-slate-300'
+                          }`}>
+                            Talla:
+                          </span>
+                          <span className={`text-xs font-black font-sports px-2 py-0.5 rounded-md ${
                             theme === 'light'
-                              ? 'bg-slate-100 text-slate-800 border-slate-300'
-                              : 'bg-[#141C2E] text-slate-200 border-slate-700'
-                          }`}
-                        >
-                          {s}
-                        </span>
-                      ))}
+                              ? 'bg-red-50 text-red-700 border border-red-200'
+                              : 'bg-red-950/70 text-red-300 border border-red-800/60'
+                          }`}>
+                            {getProductSelectedSize(prod)}
+                          </span>
+                        </div>
+
+                        {/* Botón de Guía de Tallas para Jerseys */}
+                        {prod.category === 'Jerseys' && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSizeGuideCategory('Jerseys');
+                              setIsSizeGuideOpen(true);
+                            }}
+                            className={`text-[11px] font-bold font-sports uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-colors ${
+                              theme === 'light'
+                                ? 'text-red-700 hover:text-red-800 hover:underline'
+                                : 'text-red-400 hover:text-red-300 hover:underline'
+                            }`}
+                            title="Consultar medidas en centímetros y pulgadas"
+                          >
+                            <Ruler className="w-3.5 h-3.5 text-red-500" />
+                            <span>Guía de Tallas</span>
+                          </button>
+                        )}
+                        {prod.category === 'Gorras' && prod.sizes.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSizeGuideCategory('Gorras');
+                              setIsSizeGuideOpen(true);
+                            }}
+                            className={`text-[11px] font-bold font-sports uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-colors ${
+                              theme === 'light'
+                                ? 'text-red-700 hover:text-red-800 hover:underline'
+                                : 'text-red-400 hover:text-red-300 hover:underline'
+                            }`}
+                            title="Tabla de medidas New Era 59FIFTY"
+                          >
+                            <Ruler className="w-3.5 h-3.5 text-red-500" />
+                            <span>Medidas</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Selector de tallas interactivo */}
+                      <div className="flex flex-wrap items-center gap-1.5 font-sports">
+                        {prod.sizes.map((s) => {
+                          const isSelected = getProductSelectedSize(prod) === s;
+                          return (
+                            <button
+                              key={s}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSelectSize(prod.id, s);
+                              }}
+                              className={`px-2.5 py-1 text-xs font-black rounded-lg border transition-all cursor-pointer font-sports tracking-wider ${
+                                isSelected
+                                  ? 'bg-red-600 text-white border-red-500 shadow-md ring-2 ring-red-500/30 scale-105'
+                                  : theme === 'light'
+                                  ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300 hover:border-red-400'
+                                  : 'bg-[#141C2E] hover:bg-[#1E293B] text-slate-200 border-slate-700 hover:border-red-500'
+                              }`}
+                              title={`Elegir talla ${s}`}
+                            >
+                              {s}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Mensaje sutil si acaba de agregarse esta talla */}
+                      {sizeAddedFeedback?.productId === prod.id && (
+                        <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 animate-pulse">
+                          <CheckCircle2 className="w-3 h-3" />
+                          <span>¡Agregado al carrito en Talla {sizeAddedFeedback.size}!</span>
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -464,11 +583,15 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
 
                 <button
                   disabled={prod.stock <= 0}
-                  onClick={() => addToCart(prod)}
+                  onClick={() => addToCart(prod, getProductSelectedSize(prod))}
                   className="px-4 py-2.5 bg-red-600 hover:bg-red-500 active:bg-red-700 disabled:bg-slate-800 disabled:text-slate-500 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-1.5 font-sports uppercase tracking-wider cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  {prod.stock <= 0 ? 'Agotado' : 'Agregar'}
+                  {prod.stock <= 0
+                    ? 'Agotado'
+                    : prod.sizes && prod.sizes.length > 0
+                    ? `Agregar (${getProductSelectedSize(prod)})`
+                    : 'Agregar'}
                 </button>
               </div>
             </div>
@@ -724,9 +847,33 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                         <p className={`text-xs font-bold leading-snug line-clamp-1 ${
                           theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
                         }`}>{item.product.name}</p>
-                        <p className={`text-[11px] font-sans ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
-                          Talla: <strong className={theme === 'light' ? 'text-amber-800' : 'text-amber-400'}>{item.size}</strong>
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[11px] font-sans ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
+                            Talla:
+                          </span>
+                          {item.product.sizes && item.product.sizes.length > 1 ? (
+                            <select
+                              value={item.size}
+                              onChange={(e) => updateCartItemSize(idx, e.target.value)}
+                              className={`text-[11px] font-bold font-sports py-0.5 px-1.5 rounded-md border focus:outline-hidden cursor-pointer ${
+                                theme === 'light'
+                                  ? 'bg-white border-slate-300 text-red-700 hover:border-red-500'
+                                  : 'bg-[#141C2E] border-slate-700 text-red-400 hover:border-red-500'
+                              }`}
+                              title="Cambiar talla de este producto"
+                            >
+                              {item.product.sizes.map((s) => (
+                                <option key={s} value={s} className={theme === 'light' ? 'bg-white text-slate-900' : 'bg-[#0A0E17] text-white'}>
+                                  Talla {s}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <strong className={`text-[11px] font-bold ${theme === 'light' ? 'text-amber-800' : 'text-amber-400'}`}>
+                              {item.size}
+                            </strong>
+                          )}
+                        </div>
                         <p className={`text-xs font-black font-scoreboard ${
                           theme === 'light' ? 'text-emerald-700' : 'text-emerald-400'
                         }`}>
@@ -911,6 +1058,180 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
             if (onOrderCompleted) onOrderCompleted();
           }}
         />
+      )}
+
+      {/* Modal de Guía Oficial de Tallas */}
+      {isSizeGuideOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
+          onClick={() => setIsSizeGuideOpen(false)}
+        >
+          <div
+            className={`relative max-w-2xl w-full rounded-3xl p-5 sm:p-7 shadow-2xl border transition-all animate-in fade-in zoom-in duration-200 ${
+              theme === 'light' ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#0F1626] border-slate-700/80 text-white'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header del Modal */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-700/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-red-600/10 text-red-500 flex items-center justify-center border border-red-500/20">
+                  <Ruler className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base sm:text-lg font-sports uppercase tracking-wider">
+                    Guía de Tallas y Medidas Oficiales
+                  </h3>
+                  <p className={`text-xs ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
+                    Prendas oficiales y accesorios de juego LMP / LMB
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSizeGuideOpen(false)}
+                className={`p-2 rounded-xl transition-colors cursor-pointer ${
+                  theme === 'light' ? 'text-slate-400 hover:text-slate-800 hover:bg-slate-100' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                }`}
+                title="Cerrar guía de tallas"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Pestañas de Selección */}
+            <div className="flex items-center gap-2 mt-4">
+              <button
+                type="button"
+                onClick={() => setSizeGuideCategory('Jerseys')}
+                className={`px-4 py-1.5 rounded-xl text-xs font-bold font-sports uppercase tracking-wider transition-all cursor-pointer ${
+                  sizeGuideCategory === 'Jerseys'
+                    ? 'bg-red-600 text-white shadow-md'
+                    : theme === 'light'
+                    ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    : 'bg-[#141C2E] text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                Jerseys y Chamarras
+              </button>
+              <button
+                type="button"
+                onClick={() => setSizeGuideCategory('Gorras')}
+                className={`px-4 py-1.5 rounded-xl text-xs font-bold font-sports uppercase tracking-wider transition-all cursor-pointer ${
+                  sizeGuideCategory === 'Gorras'
+                    ? 'bg-red-600 text-white shadow-md'
+                    : theme === 'light'
+                    ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    : 'bg-[#141C2E] text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                Gorras Fitted 59FIFTY
+              </button>
+            </div>
+
+            {/* Tabla de Medidas para Jerseys */}
+            {sizeGuideCategory === 'Jerseys' ? (
+              <div className="mt-4 space-y-4">
+                <div className="overflow-x-auto rounded-2xl border border-slate-700/50">
+                  <table className="w-full text-left text-xs font-sports">
+                    <thead className={theme === 'light' ? 'bg-slate-100 text-slate-800' : 'bg-[#0A0E17] text-slate-300'}>
+                      <tr>
+                        <th className="py-2.5 px-3 uppercase tracking-wider">Talla</th>
+                        <th className="py-2.5 px-3 uppercase tracking-wider">Pecho (cm)</th>
+                        <th className="py-2.5 px-3 uppercase tracking-wider">Pecho (Pulgadas)</th>
+                        <th className="py-2.5 px-3 uppercase tracking-wider">Largo (cm)</th>
+                        <th className="py-2.5 px-3 uppercase tracking-wider">Ajuste Sugerido</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-700/40">
+                      {[
+                        { size: 'XS', chestCm: '90 - 95', chestIn: '35" - 37"', lengthCm: '71 cm', fit: 'Juvenil / Delgado' },
+                        { size: 'S', chestCm: '96 - 101', chestIn: '38" - 40"', lengthCm: '74 cm', fit: 'Ajuste Regular' },
+                        { size: 'M', chestCm: '102 - 107', chestIn: '40" - 42"', lengthCm: '76 cm', fit: 'Estándar Oficial' },
+                        { size: 'L', chestCm: '108 - 113', chestIn: '42" - 44"', lengthCm: '78 cm', fit: 'Confortable' },
+                        { size: 'XL', chestCm: '114 - 119', chestIn: '45" - 47"', lengthCm: '80 cm', fit: 'Holgado Clásico' },
+                        { size: '2XL', chestCm: '120 - 126', chestIn: '47" - 50"', lengthCm: '83 cm', fit: 'Extra Amplio' },
+                        { size: '3XL', chestCm: '127 - 134', chestIn: '50" - 53"', lengthCm: '86 cm', fit: 'Gran Confort' },
+                      ].map((row) => (
+                        <tr key={row.size} className={theme === 'light' ? 'hover:bg-slate-50' : 'hover:bg-[#141C2E]'}>
+                          <td className="py-2.5 px-3 font-black text-red-600 dark:text-red-400">{row.size}</td>
+                          <td className="py-2.5 px-3 font-mono">{row.chestCm} cm</td>
+                          <td className="py-2.5 px-3 font-mono text-slate-400">{row.chestIn}</td>
+                          <td className="py-2.5 px-3 font-mono">{row.lengthCm}</td>
+                          <td className={`py-2.5 px-3 ${theme === 'light' ? 'text-slate-600' : 'text-slate-300'}`}>{row.fit}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className={`p-3.5 rounded-2xl border text-xs leading-relaxed ${
+                  theme === 'light' ? 'bg-amber-50/80 border-amber-200 text-amber-900' : 'bg-amber-950/30 border-amber-500/30 text-amber-200'
+                }`}>
+                  <p className="font-bold flex items-center gap-1.5 font-sports uppercase tracking-wider mb-1">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                    Consejo de Calce para Aficionados
+                  </p>
+                  <p>
+                    Nuestros jerseys de juego tienen corte profesional semiholgado para máxima ventilación. Si piensas vestir el jersey sobre una sudadera o playera de manga larga durante las noches frescas en el estadio, te recomendamos ordenar una talla superior a tu habitual.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              /* Tabla de Medidas para Gorras Fitted */
+              <div className="mt-4 space-y-4">
+                <div className="overflow-x-auto rounded-2xl border border-slate-700/50">
+                  <table className="w-full text-left text-xs font-sports">
+                    <thead className={theme === 'light' ? 'bg-slate-100 text-slate-800' : 'bg-[#0A0E17] text-slate-300'}>
+                      <tr>
+                        <th className="py-2.5 px-3 uppercase tracking-wider">Talla Fitted</th>
+                        <th className="py-2.5 px-3 uppercase tracking-wider">Circunferencia (cm)</th>
+                        <th className="py-2.5 px-3 uppercase tracking-wider">Pulgadas</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-700/40">
+                      {[
+                        { size: '7', cm: '55.8 cm', in: '22"' },
+                        { size: '7 1/8', cm: '56.8 cm', in: '22 3/8"' },
+                        { size: '7 1/4', cm: '57.7 cm', in: '22 3/4"' },
+                        { size: '7 3/8', cm: '58.7 cm', in: '23 1/8"' },
+                        { size: '7 1/2', cm: '59.6 cm', in: '23 1/2"' },
+                        { size: '7 5/8', cm: '60.6 cm', in: '23 7/8"' },
+                      ].map((row) => (
+                        <tr key={row.size} className={theme === 'light' ? 'hover:bg-slate-50' : 'hover:bg-[#141C2E]'}>
+                          <td className="py-2.5 px-3 font-black text-red-600 dark:text-red-400">{row.size}</td>
+                          <td className="py-2.5 px-3 font-mono">{row.cm}</td>
+                          <td className="py-2.5 px-3 font-mono text-slate-400">{row.in}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className={`p-3.5 rounded-2xl border text-xs leading-relaxed ${
+                  theme === 'light' ? 'bg-slate-100 border-slate-200 text-slate-700' : 'bg-[#0A0E17] border-slate-700 text-slate-300'
+                }`}>
+                  <p className="font-bold font-sports uppercase tracking-wider mb-1">
+                    ¿Cómo medir tu cabeza?
+                  </p>
+                  <p>
+                    Usa una cinta métrica flexible alrededor de tu cabeza, aproximadamente 1 cm por encima de las orejas y cejas. Compara los centímetros con la tabla superior. Si estás entre dos tallas, elige la mayor.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-5 pt-3 border-t border-slate-700/50 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsSizeGuideOpen(false)}
+                className="px-5 py-2 bg-red-600 hover:bg-red-500 text-white font-bold font-sports uppercase tracking-wider text-xs rounded-xl shadow-md transition-all cursor-pointer"
+              >
+                Entendido, cerrar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

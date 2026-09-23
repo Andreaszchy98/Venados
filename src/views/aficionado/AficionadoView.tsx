@@ -4,7 +4,7 @@ import { MisBoletos } from './MisBoletos';
 import { MiMembresia } from './MiMembresia';
 import { TiendaMerch } from './TiendaMerch';
 import { MenuStand } from './MenuStand';
-import { MisPedidos } from './MisPedidos';
+import { MisCompras } from './MisCompras';
 import { CarteleraLanding } from '../../components/cartelera/CarteleraLanding';
 import { HistorialJuegos } from './HistorialJuegos';
 import { MarcadorEnVivo } from './MarcadorEnVivo';
@@ -140,66 +140,58 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
   }, [pendingEventId, initialTab]);
 
   return (
-    <div className={`space-y-6 pb-24 transition-colors ${
+    <div className={`space-y-4 pb-20 transition-colors ${
       theme === 'light' ? 'text-slate-900' : 'text-slate-100'
     }`}>
-      {/* Saludo con selector de sede integrado al lado del nombre (solo en vistas internas de sede) */}
+      {/* Header Único y Compacto (48px–56px): Usuario, sede y controles en una sola fila sin subtítulos pesados */}
       {activeTab !== 'cartelera' && (
-        <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b ${
-          theme === 'light' ? 'border-slate-200' : 'border-slate-800'
+        <div className={`h-12 sm:h-14 px-3 sm:px-4 rounded-2xl border flex items-center justify-between gap-3 shadow-xs transition-colors ${
+          theme === 'light' ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#0F1626] border-slate-800 text-white'
         }`}>
-          <div>
-            <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className={`text-xl sm:text-2xl font-black tracking-tight flex items-center gap-1.5 font-sports ${
-                theme === 'light' ? 'text-slate-900' : 'text-white'
-              }`}>
-                <span>{t('aficionado.hello', 'Hola,')}</span>
-                <span>{user.displayName || 'Aficionado'}</span>
-              </h1>
-
-              {/* Selector de Estadio integrado al lado del nombre del aficionado */}
-              <div className="relative inline-flex items-center">
-                <label htmlFor="client-venue-selector-header" className="sr-only">
-                  Seleccionar estadio o recinto
-                </label>
-                <div className={`flex items-center gap-1.5 pl-2.5 pr-2 py-1 border rounded-xl transition-all shadow-xs group cursor-pointer ${
-                  theme === 'light'
-                    ? 'bg-white hover:bg-slate-50 border-slate-300 text-slate-900 shadow-xs'
-                    : 'bg-[#101625] hover:bg-[#182032] border-slate-700 text-slate-200'
-                }`}>
-                  <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                  <select
-                    id="client-venue-selector-header"
-                    value={selectedVenueId}
-                    onChange={(e) => handleSelectVenue(e.target.value)}
-                    disabled={loadingVenues || venues.length === 0}
-                    className={`bg-transparent text-xs font-bold pr-5 focus:outline-none cursor-pointer appearance-none ${
-                      theme === 'light' ? 'text-slate-900' : 'text-slate-200'
-                    }`}
-                    title="Cambiar estadio visualizado"
-                  >
-                    {venues.map((venue) => (
-                      <option
-                        key={venue.id}
-                        value={venue.id}
-                        className={theme === 'light' ? 'bg-white text-slate-900' : 'bg-[#101625] text-white font-medium'}
-                      >
-                        {venue.name} ({venue.city})
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className={`w-3.5 h-3.5 absolute right-2 pointer-events-none transition-colors ${
-                    theme === 'light' ? 'text-slate-500 group-hover:text-slate-800' : 'text-slate-400 group-hover:text-slate-200'
-                  }`} />
-                </div>
-              </div>
-            </div>
-
-            <p className={`text-xs sm:text-sm mt-1 ${
-              theme === 'light' ? 'text-slate-600 font-medium' : 'text-slate-400'
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+            <span className={`text-xs sm:text-sm font-black truncate font-sports uppercase tracking-wider ${
+              theme === 'light' ? 'text-slate-900' : 'text-white'
             }`}>
-              {t('aficionado.tagline', 'Portal de Experiencia del Aficionado • Boletos, eventos, consumos y tienda en tu sede')}
-            </p>
+              {t('aficionado.hello', 'Hola,')} {user.displayName || 'Aficionado'}
+            </span>
+          </div>
+
+          {/* Selector de Estadio compacto */}
+          <div className="relative inline-flex items-center shrink-0">
+            <label htmlFor="client-venue-selector-header" className="sr-only">
+              Seleccionar estadio
+            </label>
+            <div className={`flex items-center gap-1.5 pl-2.5 pr-2 py-1 border rounded-xl transition-all group cursor-pointer ${
+              theme === 'light'
+                ? 'bg-slate-50 hover:bg-slate-100 border-slate-300 text-slate-900'
+                : 'bg-[#101625] hover:bg-[#182032] border-slate-700 text-slate-200'
+            }`}>
+              <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0" />
+              <select
+                id="client-venue-selector-header"
+                value={selectedVenueId}
+                onChange={(e) => handleSelectVenue(e.target.value)}
+                disabled={loadingVenues || venues.length === 0}
+                className={`bg-transparent text-[11px] sm:text-xs font-bold pr-4 focus:outline-none cursor-pointer appearance-none truncate max-w-[160px] sm:max-w-none ${
+                  theme === 'light' ? 'text-slate-900' : 'text-slate-200'
+                }`}
+                title="Cambiar estadio visualizado"
+              >
+                {venues.map((venue) => (
+                  <option
+                    key={venue.id}
+                    value={venue.id}
+                    className={theme === 'light' ? 'bg-white text-slate-900' : 'bg-[#101625] text-white font-medium'}
+                  >
+                    {venue.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className={`w-3.5 h-3.5 absolute right-2 pointer-events-none transition-colors ${
+                theme === 'light' ? 'text-slate-500 group-hover:text-slate-800' : 'text-slate-400 group-hover:text-slate-200'
+              }`} />
+            </div>
           </div>
         </div>
       )}
@@ -269,9 +261,12 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
             />
           )}
           {activeTab === 'pedidos' && (
-            <MisPedidos
+            <MisCompras
               user={effectiveUser}
               onOpenAuth={onRequireAuth}
+              onNavigateToBuyTickets={() => setActiveTab('boletos')}
+              onNavigateToFood={() => setActiveTab('comida')}
+              onNavigateToStore={() => setActiveTab('tienda')}
             />
           )}
           {activeTab === 'historial' && (
@@ -284,7 +279,7 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
         </>
       )}
 
-      {/* Menú de Navegación Inferior Fijo (5 Pestañas: Cartelera, Boletos, Tienda, Comida, Pedidos) */}
+      {/* Menú de Navegación Inferior Fijo (4 Pestañas: Cartelera, Tienda, Comida, Mis Compras) */}
       <nav
         id="aficionado-bottom-nav"
         aria-label="Navegación principal del aficionado"
@@ -294,8 +289,8 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
             : 'bg-[#0F172A]/98 border-red-600/80 shadow-[0_-10px_35px_rgba(0,0,0,0.85)]'
         }`}
       >
-        <div className="max-w-md mx-auto grid grid-cols-5 px-1 py-1.5 sm:py-2 text-center">
-          {/* 1. Cartelera */}
+        <div className="max-w-md mx-auto grid grid-cols-4 px-2 py-1.5 sm:py-2 text-center">
+          {/* 1. Cartelera (Explorar partidos y compra de boletos en mapa) */}
           <button
             id="bottom-nav-cartelera"
             type="button"
@@ -320,32 +315,7 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
             </span>
           </button>
 
-          {/* 2. Boletos */}
-          <button
-            id="bottom-nav-boletos"
-            type="button"
-            onClick={() => setActiveTab('boletos')}
-            className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer font-sports tracking-wider ${
-              activeTab === 'boletos'
-                ? theme === 'light' ? 'text-red-600 font-black' : 'text-red-400 font-bold'
-                : theme === 'light' ? 'text-slate-500 hover:text-slate-900 font-semibold' : 'text-slate-400 hover:text-white font-medium'
-            }`}
-          >
-            <div
-              className={`p-1.5 rounded-xl transition-all ${
-                activeTab === 'boletos'
-                  ? 'bg-red-600 text-white shadow-md shadow-red-950/20 ring-1 ring-red-500/50'
-                  : theme === 'light' ? 'text-slate-500 hover:text-slate-900' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Ticket className="w-5 h-5" />
-            </div>
-            <span className="text-[10px] leading-tight mt-1 uppercase">
-              {t('nav.tickets', 'Boletos')}
-            </span>
-          </button>
-
-          {/* 3. Tienda */}
+          {/* 2. Tienda */}
           <button
             id="bottom-nav-tienda"
             type="button"
@@ -370,7 +340,7 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
             </span>
           </button>
 
-          {/* 4. Comida */}
+          {/* 3. Comida */}
           <button
             id="bottom-nav-comida"
             type="button"
@@ -395,7 +365,7 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
             </span>
           </button>
 
-          {/* 5. Pedidos */}
+          {/* 4. Mis Compras (Historial consolidado con QR, pedidos y compras) */}
           <button
             id="bottom-nav-pedidos"
             type="button"
@@ -416,7 +386,7 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
               <Package className="w-5 h-5" />
             </div>
             <span className="text-[10px] leading-tight mt-1 uppercase">
-              {t('nav.orders', 'Pedidos')}
+              {t('nav.purchases', 'Mis Compras')}
             </span>
           </button>
         </div>

@@ -102,6 +102,37 @@ export async function getUserFoodOrders(userId: string): Promise<FoodOrder[]> {
   }
 }
 
+export function subscribeUserFoodOrders(
+  userId: string,
+  onUpdate: (orders: FoodOrder[]) => void,
+  onError?: (err: any) => void
+): () => void {
+  try {
+    const q = query(
+      collection(db, COLLECTION_NAME),
+      where('userId', '==', userId)
+    );
+    return onSnapshot(
+      q,
+      (snap) => {
+        const orders = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as FoodOrder[];
+        orders.sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        onUpdate(orders);
+      },
+      (error) => {
+        console.warn('Error en snapshot de órdenes de comida de usuario:', error);
+        if (onError) onError(error);
+      }
+    );
+  } catch (err) {
+    console.warn('Error al iniciar listener de órdenes de comida:', err);
+    if (onError) onError(err);
+    return () => {};
+  }
+}
+
 export function listenToStandFoodOrders(
   standId: string | null,
   onUpdate: (orders: FoodOrder[]) => void,

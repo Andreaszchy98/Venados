@@ -150,7 +150,8 @@ const translations: Record<Language, Record<string, string>> = {
     'nav.tickets': 'Boletos',
     'nav.store': 'Tienda',
     'nav.food': 'Comida',
-    'nav.orders': 'Pedidos',
+    'nav.orders': 'Mis Compras',
+    'nav.purchases': 'Mis Compras',
 
     // Roles
     'role.superadmin': 'Superadmin',
@@ -336,7 +337,8 @@ const translations: Record<Language, Record<string, string>> = {
     'nav.tickets': 'Tickets',
     'nav.store': 'Store',
     'nav.food': 'Food',
-    'nav.orders': 'Orders',
+    'nav.orders': 'My Purchases',
+    'nav.purchases': 'My Purchases',
 
     // Roles
     'role.superadmin': 'Superadmin',
@@ -509,8 +511,8 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           };
         });
       }
-    } catch (err) {
-      console.warn('Error al traducir dinámicamente con IA:', err);
+    } catch {
+      // Fallback transparente sin saturar la consola
     } finally {
       setIsTranslating(false);
     }

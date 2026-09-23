@@ -508,45 +508,44 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
   }
 
   return (
-    <div className="space-y-6">
-      {/* Banner de Modo Catálogo si no hay evento en vivo pero sí un evento futuro */}
-      {!activeOrderingEvent && upcomingEvent && (
-        <div className={`p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs border ${
-          theme === 'light'
-            ? 'bg-amber-50 border-amber-300 text-amber-950'
-            : 'bg-amber-950/40 border-amber-500/40 text-amber-200'
-        }`}>
-          <div className="flex items-center gap-2.5">
-            <Utensils className={`w-5 h-5 shrink-0 ${theme === 'light' ? 'text-amber-800' : 'text-amber-400'}`} />
-            <div>
-              <span className={`font-bold block ${theme === 'light' ? 'text-amber-950' : 'text-white'}`}>Catálogo y Menús de Concesiones</span>
-              <span className={`text-[11px] ${theme === 'light' ? 'text-amber-900' : '!text-[#E2E8F0] text-slate-200'}`}>
-                Explora los puestos y precios de alimentos del estadio. Los envíos de runners a butaca operan durante los horarios de partidos.
-              </span>
-            </div>
+    <div className="space-y-4">
+      {/* Header Compacto de Alimentos (48px–56px): platillos y concesiones visibles de inmediato en el first fold */}
+      <div className={`p-3 sm:px-4 rounded-2xl border flex items-center justify-between gap-3 shadow-xs transition-colors ${
+        theme === 'light'
+          ? 'bg-white border-slate-200 text-slate-900'
+          : 'bg-[#0F1626] border-slate-800 text-white'
+      }`}>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-500 border border-amber-500/30 flex items-center justify-center shrink-0">
+            <Utensils className="w-4 h-4" />
           </div>
-          <span className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border shrink-0 ${
-            theme === 'light'
-              ? 'text-amber-950 bg-amber-100 border-amber-300'
-              : 'text-amber-200 bg-amber-900/60 border-amber-500/40'
-          }`}>
-            Próximo evento: {upcomingEvent.name}
-          </span>
+          <div className="min-w-0">
+            <h2 className="text-sm sm:text-base font-black font-sports uppercase tracking-wide truncate">
+              Alimentos & Bebidas • {currentVenueName}
+            </h2>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+              {activeOrderingEvent
+                ? `Evento en curso: ${activeOrderingEvent.name} • Entrega a butaca y pickup`
+                : upcomingEvent
+                ? `Menú oficial • Próximo: ${upcomingEvent.name}`
+                : 'Pide a tu butaca o recoge con Pickup Express'}
+            </p>
+          </div>
         </div>
-      )}
 
-      {/* Banner Principal */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-red-900 via-red-800 to-amber-900 text-white p-6 sm:p-8 border border-red-700/50 shadow-lg">
-        <div className="relative z-10 space-y-2">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white/10 backdrop-blur-xs border border-white/20 text-amber-200">
-            <Sparkles className="w-3.5 h-3.5" /> Entrega a Butaca & Pickup Express • {currentVenueName}
-          </div>
-          <h2 className="text-2xl sm:text-3xl font-black tracking-tight !text-white text-white">
-            Pide Alimentos y Bebidas Directo a tu Asiento
-          </h2>
-          <p className="text-xs sm:text-sm !text-[#E2E8F0] text-slate-200 max-w-2xl leading-relaxed font-medium">
-            Ordena mariscos, tacos de asada, hamburguesas, botanas o cerveza de barril. Elige recibirlo con un <strong className="!text-white text-white font-bold">Runner en tu butaca</strong> o recogerlo con tu <strong className="!text-white text-white font-bold">Código Express</strong> sin hacer filas.
-          </p>
+        <div className="shrink-0 flex items-center gap-2">
+          <span className={`text-[11px] font-bold px-2.5 py-1 rounded-xl border font-sports uppercase tracking-wider hidden sm:inline-flex items-center gap-1 ${
+            activeOrderingEvent
+              ? theme === 'light'
+                ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                : 'bg-emerald-950/60 text-emerald-300 border-emerald-500/40'
+              : theme === 'light'
+              ? 'bg-amber-100 text-amber-900 border-amber-300'
+              : 'bg-amber-950/50 text-amber-300 border-amber-500/40'
+          }`}>
+            <span className={`w-2 h-2 rounded-full ${activeOrderingEvent ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+            {activeOrderingEvent ? 'Cocina Abierta' : 'Catálogo'}
+          </span>
         </div>
       </div>
 

@@ -118,6 +118,33 @@ const FAST_TERMS: Record<string, string> = {
   'Teléfono': 'Phone number',
   'Nombre completo': 'Full name',
 
+  // Mis Compras y Estados Unificados
+  'Mis Compras': 'My Purchases',
+  'MIS COMPRAS': 'MY PURCHASES',
+  'Activas': 'Active',
+  'ACTIVAS': 'ACTIVE',
+  'Pasadas': 'Past',
+  'PASADAS': 'PAST',
+  'Boleto Digital': 'Digital Ticket',
+  'Recibido': 'Received',
+  'Preparando': 'Preparing',
+  'Runner Asignado': 'Runner Assigned',
+  '¡Listo para recoger!': 'Ready for pickup!',
+  'Pendiente Empaque': 'Packaging Pending',
+  'En Tránsito': 'In Transit',
+  'Envío a Domicilio': 'Home Delivery',
+  'Retiro en Tienda Estadio': 'Pickup at Stadium Store',
+  'Pickup Express en mostrador': 'Express Pickup at Counter',
+  'Entrega a Butaca': 'In-Seat Delivery',
+  'Entrega a Butaca:': 'In-Seat Delivery:',
+  'artículos': 'items',
+  'No tienes compras ni boletos activos': 'You have no active purchases or tickets',
+  'No tienes compras pasadas': 'You have no past purchases',
+  'Historial unificado de boletos, comida en estadio y mercancía oficial': 'Unified history of tickets, stadium food, and official merchandise',
+  'Cocina Abierta': 'Kitchen Open',
+  'Catálogo': 'Catalog',
+  'Volver a Cartelera': 'Back to Schedule',
+
   // Fechas y Días
   'Hoy': 'Today',
   'Mañana': 'Tomorrow',
@@ -242,6 +269,9 @@ const FAST_TERMS: Record<string, string> = {
 // Expresión para saber si un texto amerita traducción
 const SPANISH_LETTER_REGEX = /[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ]/;
 
+// Cooldown en cliente para respetar límites de cuota de la API
+let clientCooldownUntil = 0;
+
 export const AutoDOMTranslator: React.FC = () => {
   const { language } = useLanguage();
   const trackedTextNodesRef = useRef<Set<Node>>(new Set());
@@ -351,12 +381,11 @@ export const AutoDOMTranslator: React.FC = () => {
       // Aplicar las que ya teníamos inmediatamente
       applyTranslations(resolvedTranslations);
 
-      // Si hay textos nuevos, llamar a Gemini en lotes
-      if (uncachedTexts.length > 0) {
-        // Enviar en bloques de hasta 35 textos
-        const chunkSize = 35;
-        for (let i = 0; i < uncachedTexts.length; i += chunkSize) {
-          const chunk = uncachedTexts.slice(i, i + chunkSize);
+      // Si hay textos nuevos y no estamos en cooldown de cuota, llamar a Gemini en un único lote agrupado
+      if (uncachedTexts.length > 0 && Date.now() >= clientCooldownUntil) {
+        // Enviar hasta 80 textos en una sola solicitud para no agotar la cuota por minuto
+        const chunk = uncachedTexts.slice(0, 80);
+        try {
           const res = await fetch('/api/translate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -377,15 +406,21 @@ export const AutoDOMTranslator: React.FC = () => {
               });
               applyTranslations(newMap);
             }
+          } else {
+            // Si el backend responde con saturación o cooldown, pausar 30 segundos
+            clientCooldownUntil = Date.now() + 30000;
           }
+        } catch {
+          // Error de red temporal: pausar 30 segundos
+          clientCooldownUntil = Date.now() + 30000;
         }
 
         try {
           localStorage.setItem('vxp_dom_trans_cache', JSON.stringify(localCache));
         } catch {}
       }
-    } catch (e) {
-      console.warn('Aviso en traducción DOM automática:', e);
+    } catch {
+      // Manejo silencioso de errores de parseo local
     }
   };
 

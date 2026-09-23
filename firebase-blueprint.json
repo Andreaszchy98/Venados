@@ -237,6 +237,7 @@
         "status": { "type": "string", "enum": ["disponible", "reservado", "vendido"] },
         "lockedUntil": { "type": "number" },
         "lockedBy": { "type": "string" },
+        "clientLockToken": { "type": "string" },
         "lockedAt": { "type": "string" },
         "ticketId": { "type": "string" },
         "purchaseId": { "type": "string" },

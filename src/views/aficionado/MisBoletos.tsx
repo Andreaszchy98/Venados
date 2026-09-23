@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Ticket, UserProfile, VenueEvent, EventPriceTier, Venue } from '../../types';
-import { subscribeUserTickets, purchaseTicketWithSaleRecord } from '../../lib/tickets';
+import { Ticket, UserProfile, VenueEvent, Venue } from '../../types';
+import { subscribeUserTickets } from '../../lib/tickets';
 import {
   getActiveEventsForVenue,
   subscribeVenueEvents,
@@ -10,7 +10,6 @@ import {
 import { normalizeGoogleDriveImageUrl } from '../../lib/imageUtils';
 import { subscribeVenues, getAllVenues } from '../../lib/venues';
 import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
-import { getOfficialPriceTiersForEvent } from '../../lib/seatMap';
 import { TicketCard } from '../../components/shared/TicketCard';
 import { BoletoDetalle } from './BoletoDetalle';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
@@ -109,14 +108,10 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
     }
   }, [selectedTicketId, tickets, activeEvents]);
 
-  // Selección de compra (Exclusivo Tarjeta en Línea)
+  // Selección de compra en mapa
   const [selectedEvent, setSelectedEvent] = useState<VenueEvent | null>(null);
-  const [selectedTier, setSelectedTier] = useState<EventPriceTier | null>(null);
-  const [paymentMethod] = useState<'Tarjeta en Línea'>('Tarjeta en Línea');
-  const [purchasing, setPurchasing] = useState(false);
   const [purchaseSuccessMsg, setPurchaseSuccessMsg] = useState<string | null>(null);
   const [showSeatMap, setShowSeatMap] = useState<boolean>(false);
-  const [quickBuyEvent, setQuickBuyEvent] = useState<VenueEvent | null>(null);
 
   // Escuchar boletos del aficionado
   useEffect(() => {
@@ -207,7 +202,6 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
           });
         } else {
           setSelectedEvent(null);
-          setSelectedTier(null);
         }
       },
       (err) => {
@@ -219,7 +213,6 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
             setSelectedEvent(evs[0]);
           } else {
             setSelectedEvent(null);
-            setSelectedTier(null);
           }
         });
       }
@@ -227,18 +220,6 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
 
     return () => unsubscribe();
   }, [selectedVenueId]);
-
-  // Sincronizar tiers al cambiar evento seleccionado
-  useEffect(() => {
-    if (selectedEvent && selectedEvent.priceTiers && selectedEvent.priceTiers.length > 0) {
-      if (selectedTier && selectedEvent.priceTiers.some((t) => t.section === selectedTier.section)) {
-        return;
-      }
-      setSelectedTier(selectedEvent.priceTiers[0]);
-    } else {
-      setSelectedTier(null);
-    }
-  }, [selectedEvent]);
 
   // Redirección directa al evento seleccionado antes de iniciar sesión (saltando cartelera interna)
   useEffect(() => {
@@ -252,9 +233,6 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
       if (inActive) {
         setSelectedVenueId(inActive.venueId);
         setSelectedEvent(inActive);
-        if (inActive.priceTiers && inActive.priceTiers.length > 0) {
-          setSelectedTier(inActive.priceTiers[0]);
-        }
         setActiveTab('comprar');
         setShowSeatMap(true);
         onClearInitialEvent?.();
@@ -267,9 +245,6 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
         if (ev && isMounted) {
           setSelectedVenueId(ev.venueId);
           setSelectedEvent(ev);
-          if (ev.priceTiers && ev.priceTiers.length > 0) {
-            setSelectedTier(ev.priceTiers[0]);
-          }
           setActiveTab('comprar');
           setShowSeatMap(true);
           onClearInitialEvent?.();
@@ -291,58 +266,6 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
 
   const handleSelectEvent = (event: VenueEvent) => {
     setSelectedEvent(event);
-    if (event.priceTiers && event.priceTiers.length > 0) {
-      setSelectedTier(event.priceTiers[0]);
-    } else {
-      setSelectedTier(null);
-    }
-  };
-
-  const handleConfirmPurchase = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!selectedEvent || !selectedTier) return;
-
-    if (!user || !user.uid) {
-      if (onRequireAuth) {
-        onRequireAuth();
-      }
-      return;
-    }
-
-    setPurchasing(true);
-    try {
-      // Snapshot de los datos del evento al momento de la compra
-      // NO queda como referencia viva para que no cambie si el admin edita el evento después
-      await purchaseTicketWithSaleRecord(
-        {
-          userId: user.uid,
-          venueId: selectedVenueId,
-          eventId: selectedEvent.id,
-          matchTitle: selectedEvent.name,
-          opponent: selectedEvent.opponent || '',
-          matchDate: selectedEvent.date,
-          matchTime: selectedEvent.time || '20:00 hrs',
-          stadium: stadiumName,
-          section: selectedTier.section,
-          row: 'Sección General',
-          seat: `Asiento ${Math.floor(Math.random() * 80) + 1}`,
-          price: selectedTier.price,
-          gate: selectedEvent.gate || 'Puertas 1, 2, 4 y 8',
-        },
-        paymentMethod,
-        user.displayName || user.email || 'Aficionado'
-      );
-
-      setPurchaseSuccessMsg(
-        `¡Entrada adquirida con éxito para "${selectedEvent.name}" en sección "${selectedTier.section}" (${stadiumName})!`
-      );
-      setActiveTab('mis-boletos');
-      setTimeout(() => setPurchaseSuccessMsg(null), 6000);
-    } catch (err: any) {
-      console.error('Error al comprar boleto:', err);
-    } finally {
-      setPurchasing(false);
-    }
   };
 
   // Sedes dinámicas donde el usuario realmente tiene boletos registrados
@@ -1071,7 +994,7 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
                       </div>
 
                       {/* Botón principal: Ver Boletos (Abre Mapa de Asientos) */}
-                      <div className="p-4 pt-0 space-y-2">
+                      <div className="p-4 pt-0">
                         <button
                           type="button"
                           onClick={() => {
@@ -1081,189 +1004,13 @@ export const MisBoletos: React.FC<MisBoletosProps> = ({
                           className="w-full py-2.5 px-4 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-sports font-bold tracking-wider uppercase shadow-lg shadow-red-950/50 transition-colors flex items-center justify-center gap-2 cursor-pointer"
                         >
                           <TicketIcon className="w-4 h-4" />
-                          <span>Ver Boletos</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedEvent(ev);
-                            const sanitizedTiers = getOfficialPriceTiersForEvent(ev, stadiumName);
-                            const sanitizedEv = { ...ev, priceTiers: sanitizedTiers };
-                            setSelectedTier(sanitizedTiers[0] || null);
-                            setQuickBuyEvent(sanitizedEv);
-                          }}
-                          className={`w-full py-1 text-center text-[11px] font-sports font-bold uppercase tracking-wider transition-colors cursor-pointer ${
-                            theme === 'light'
-                              ? 'text-slate-600 hover:text-slate-900'
-                              : 'text-slate-400 hover:text-white'
-                          }`}
-                        >
-                          O comprar rápido sin mapa
+                          <span>Ver Boletos y Elegir Asientos</span>
                         </button>
                       </div>
                     </div>
                   );
                 })}
               </div>
-
-              {/* Modal de Compra Rápida sin mapa (opcional para usuarios rápidos) */}
-              {quickBuyEvent && (
-                <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-                  <div className={`w-full max-w-md rounded-3xl p-6 shadow-2xl border space-y-4 animate-in fade-in zoom-in-95 duration-150 ${
-                    theme === 'light'
-                      ? 'bg-white border-slate-200 text-slate-900'
-                      : 'bg-[#0F1626] border-slate-700/80 text-white'
-                  }`}>
-                    <div className={`flex items-center justify-between pb-3 border-b ${
-                      theme === 'light' ? 'border-slate-200' : 'border-slate-800'
-                    }`}>
-                      <div>
-                        <span className="text-[10px] font-black uppercase tracking-wider text-red-500 block font-sports">
-                          Compra Rápida
-                        </span>
-                        <h3 className={`text-base font-black leading-tight font-sports tracking-wide ${
-                          theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
-                        }`}>
-                          {quickBuyEvent.name}
-                        </h3>
-                      </div>
-                      <button
-                        onClick={() => setQuickBuyEvent(null)}
-                        className={`p-1.5 rounded-xl cursor-pointer ${
-                          theme === 'light'
-                            ? 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
-                            : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                        }`}
-                      >
-                        <X className="w-5 h-5" />
-                      </button>
-                    </div>
-
-                    <div className="space-y-3">
-                      <div>
-                        <label className={`text-xs font-bold block mb-1.5 font-sports uppercase tracking-wider ${
-                          theme === 'light' ? 'text-slate-800' : 'text-slate-300'
-                        }`}>
-                          Selecciona la sección
-                        </label>
-                        <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                          {(() => {
-                            const tiers = getOfficialPriceTiersForEvent(quickBuyEvent, stadiumName);
-                            if (tiers.length === 0) {
-                              return (
-                                <p className={`text-xs ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
-                                  Sin secciones disponibles
-                                </p>
-                              );
-                            }
-                            return tiers.map((tier, idx) => {
-                              const isTierSelected = selectedTier?.section === tier.section;
-                              return (
-                                <button
-                                  key={idx}
-                                  type="button"
-                                  onClick={() => setSelectedTier(tier)}
-                                  className={`w-full p-2.5 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer text-xs font-sports ${
-                                    isTierSelected
-                                      ? 'border-red-500 bg-red-500/10 text-red-700 dark:text-red-300 font-bold ring-1 ring-red-500'
-                                      : theme === 'light'
-                                      ? 'border-slate-200 hover:border-slate-300 bg-slate-50 text-slate-800'
-                                      : 'border-slate-700 hover:border-slate-600 bg-[#0A0E17] text-slate-300'
-                                  }`}
-                                >
-                                  <span>{tier.section}</span>
-                                  <span className={`font-scoreboard font-bold ${
-                                    theme === 'light' ? 'text-emerald-700' : 'text-emerald-400'
-                                  }`}>${tier.price} MXN</span>
-                                </button>
-                              );
-                            });
-                          })()}
-                        </div>
-                      </div>
-
-                      {/* Método de pago (Exclusivo Tarjeta en Línea) */}
-                      <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <label className={`text-xs font-bold font-sports uppercase tracking-wider ${
-                            theme === 'light' ? 'text-slate-800' : 'text-slate-300'
-                          }`}>
-                            Método de pago
-                          </label>
-                          <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 font-sports">
-                            SSL Seguro
-                          </span>
-                        </div>
-                        <div className={`p-2.5 rounded-xl border flex items-center justify-between font-sports ${
-                          theme === 'light'
-                            ? 'border-red-500 bg-red-50/70 text-red-900'
-                            : 'border-red-500/50 bg-red-950/40 text-red-200'
-                        }`}>
-                          <div className="flex items-center gap-2">
-                            <span className="text-base">💳</span>
-                            <div>
-                              <p className="text-xs font-black uppercase">Tarjeta en Línea</p>
-                              <p className={`text-[10px] font-sans ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
-                                Visa, Mastercard, Amex
-                              </p>
-                            </div>
-                          </div>
-                          <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30">
-                            Exclusivo
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Total */}
-                      <div className={`p-3 rounded-2xl border flex items-center justify-between ${
-                        theme === 'light'
-                          ? 'bg-slate-50 border-slate-200'
-                          : 'bg-[#0A0E17] border-slate-800'
-                      }`}>
-                        <span className={`text-xs font-bold font-sports uppercase tracking-wider ${
-                          theme === 'light' ? 'text-slate-700' : 'text-slate-400'
-                        }`}>
-                          Total:
-                        </span>
-                        <span className={`text-base font-scoreboard font-bold ${
-                          theme === 'light' ? 'text-emerald-700' : 'text-emerald-400'
-                        }`}>
-                          ${selectedTier?.price || 0} MXN
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 pt-2 font-sports uppercase tracking-wider">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setQuickBuyEvent(null);
-                          setShowSeatMap(true);
-                        }}
-                        className={`flex-1 py-2.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer text-center ${
-                          theme === 'light'
-                            ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300'
-                            : 'bg-[#141C2E] hover:bg-[#1A253D] text-slate-200 border-slate-700'
-                        }`}
-                      >
-                        Ver Mapa
-                      </button>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          await handleConfirmPurchase();
-                          setQuickBuyEvent(null);
-                        }}
-                        disabled={purchasing || !selectedTier}
-                        className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-lg shadow-red-950/50 transition-colors cursor-pointer text-center"
-                      >
-                        {purchasing ? 'Emitiendo...' : 'Confirmar'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           )}
         </div>

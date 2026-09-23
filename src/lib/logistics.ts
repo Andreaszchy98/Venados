@@ -8,6 +8,7 @@ import {
   query,
   where,
   orderBy,
+  onSnapshot,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { MerchOrder, MerchOrderStatus, CarrierCompany } from '../types';
@@ -70,6 +71,40 @@ export async function getUserMerchOrders(userId: string): Promise<MerchOrder[]> 
   } catch (err) {
     handleFirestoreError(err, OperationType.LIST, COLLECTION_NAME);
     return [];
+  }
+}
+
+export function subscribeUserMerchOrders(
+  userId: string,
+  onUpdate: (orders: MerchOrder[]) => void,
+  onError?: (err: any) => void
+): () => void {
+  try {
+    const q = query(
+      collection(db, COLLECTION_NAME),
+      where('userId', '==', userId)
+    );
+    return onSnapshot(
+      q,
+      (snap) => {
+        const orders = snap.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        })) as MerchOrder[];
+        orders.sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        onUpdate(orders);
+      },
+      (error) => {
+        console.warn('Error en snapshot de órdenes de mercancía de usuario:', error);
+        if (onError) onError(error);
+      }
+    );
+  } catch (err) {
+    console.warn('Error al iniciar listener de órdenes de mercancía:', err);
+    if (onError) onError(err);
+    return () => {};
   }
 }
 

@@ -7,6 +7,9 @@ import {
   deleteInventoryProduct,
   getProductCost,
   setProductCost,
+  STANDARD_JERSEY_SIZES,
+  YOUTH_JERSEY_SIZES,
+  FITTED_CAP_SIZES,
 } from '../../lib/inventory';
 import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
@@ -31,6 +34,7 @@ import {
   ShoppingBag,
   Eye,
   Store,
+  Ruler,
 } from 'lucide-react';
 import {
   normalizeGoogleDriveImageUrl,
@@ -55,6 +59,7 @@ export const InventarioAdmin: React.FC<InventarioAdminProps> = ({ user }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Partial<InventoryProduct> | null>(null);
   const [editingCostPrice, setEditingCostPrice] = useState<number>(0);
+  const [newCustomSize, setNewCustomSize] = useState('');
   const [saving, setSaving] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [productToDelete, setProductToDelete] = useState<InventoryProduct | null>(null);
@@ -201,6 +206,35 @@ export const InventarioAdmin: React.FC<InventarioAdminProps> = ({ user }) => {
   const handleResetPlaceholder = () => {
     const defaultImg = getDefaultProductPlaceholder(editingProduct?.category);
     setEditingProduct((prev) => (prev ? { ...prev, image: defaultImg } : null));
+  };
+
+  const handleAddSize = (sizeToAdd: string) => {
+    const trimmed = sizeToAdd.trim();
+    if (!trimmed || !editingProduct) return;
+    const current = editingProduct.sizes || [];
+    if (!current.includes(trimmed)) {
+      setEditingProduct({
+        ...editingProduct,
+        sizes: [...current, trimmed],
+      });
+    }
+    setNewCustomSize('');
+  };
+
+  const handleRemoveSize = (sizeToRemove: string) => {
+    if (!editingProduct) return;
+    setEditingProduct({
+      ...editingProduct,
+      sizes: (editingProduct.sizes || []).filter((s) => s !== sizeToRemove),
+    });
+  };
+
+  const handleApplyPresetSizes = (preset: string[]) => {
+    if (!editingProduct) return;
+    setEditingProduct({
+      ...editingProduct,
+      sizes: [...preset],
+    });
   };
 
   const handleSaveProduct = async (e: React.FormEvent) => {
@@ -436,7 +470,14 @@ export const InventarioAdmin: React.FC<InventarioAdminProps> = ({ user }) => {
                           />
                           <div>
                             <p className="font-bold text-white leading-snug">{prod.name}</p>
-                            <p className="text-[10px] text-slate-400 font-sports uppercase tracking-wider">{prod.supplier || 'Venados Store'}</p>
+                            <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                              <p className="text-[10px] text-slate-400 font-sports uppercase tracking-wider">{prod.supplier || 'Venados Store'}</p>
+                              {prod.sizes && prod.sizes.length > 0 && (
+                                <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-800/90 text-slate-300 border border-slate-700">
+                                  Tallas: {prod.sizes.join(', ')}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -620,6 +661,112 @@ export const InventarioAdmin: React.FC<InventarioAdminProps> = ({ user }) => {
                     placeholder="New Era / El Siglo"
                     className="w-full p-2 bg-[#0A0E17] border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-hidden focus:border-red-500"
                   />
+                </div>
+              </div>
+
+              {/* Sección de Tallas del Producto */}
+              <div className="p-3.5 bg-[#0A0E17] rounded-2xl border border-slate-700/80 space-y-2.5">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <label className="block font-sports uppercase tracking-wider font-bold text-white text-xs flex items-center gap-1.5">
+                    <Ruler className="w-4 h-4 text-red-500" />
+                    <span>Tallas Disponibles para el Catálogo</span>
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-sports uppercase">
+                    {editingProduct.sizes && editingProduct.sizes.length > 0
+                      ? `${editingProduct.sizes.length} tallas activas`
+                      : 'Sin tallas asignadas'}
+                  </span>
+                </div>
+
+                {/* Botones de Presets Rápidos */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10px] uppercase font-bold text-slate-500">Plantillas:</span>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPresetSizes(STANDARD_JERSEY_SIZES)}
+                    className="px-2 py-0.5 rounded text-[10px] font-bold font-sports uppercase bg-red-950/60 hover:bg-red-900/60 text-red-300 border border-red-800/60 transition-colors cursor-pointer"
+                  >
+                    Jerseys Adulto (XS-3XL)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPresetSizes(YOUTH_JERSEY_SIZES)}
+                    className="px-2 py-0.5 rounded text-[10px] font-bold font-sports uppercase bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
+                  >
+                    Jerseys Juvenil (4-16)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPresetSizes(FITTED_CAP_SIZES)}
+                    className="px-2 py-0.5 rounded text-[10px] font-bold font-sports uppercase bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
+                  >
+                    Gorras Fitted 59FIFTY
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPresetSizes(['Unitalla'])}
+                    className="px-2 py-0.5 rounded text-[10px] font-bold font-sports uppercase bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
+                  >
+                    Unitalla
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPresetSizes([])}
+                    className="px-2 py-0.5 rounded text-[10px] font-bold font-sports uppercase text-slate-400 hover:text-red-400 underline transition-colors cursor-pointer"
+                  >
+                    Limpiar
+                  </button>
+                </div>
+
+                {/* Chips de tallas actuales con botón de eliminar */}
+                <div className="flex flex-wrap items-center gap-1.5 min-h-[36px] p-2 bg-[#0F1626] rounded-xl border border-slate-800">
+                  {editingProduct.sizes && editingProduct.sizes.length > 0 ? (
+                    editingProduct.sizes.map((sz) => (
+                      <span
+                        key={sz}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-sports font-black bg-red-600/20 text-red-300 border border-red-500/40"
+                      >
+                        <span>{sz}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveSize(sz)}
+                          className="text-red-400 hover:text-white cursor-pointer ml-0.5"
+                          title={`Eliminar talla ${sz}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-[11px] text-slate-500 italic">
+                      No hay tallas configuradas. Agrega una talla personalizada o usa una plantilla.
+                    </span>
+                  )}
+                </div>
+
+                {/* Input para agregar talla personalizada */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newCustomSize}
+                    onChange={(e) => setNewCustomSize(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddSize(newCustomSize);
+                      }
+                    }}
+                    placeholder="Ej. 4XL, Dama M, 32, etc."
+                    className="flex-1 p-2 bg-[#0F1626] border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-hidden focus:border-red-500 font-sports uppercase"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleAddSize(newCustomSize)}
+                    className="px-3 py-2 bg-slate-800 hover:bg-red-600 text-white font-bold font-sports uppercase tracking-wider rounded-xl transition-colors cursor-pointer flex items-center gap-1 text-xs"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Añadir</span>
+                  </button>
                 </div>
               </div>
 

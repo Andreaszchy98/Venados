@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   color-scheme: dark;
   --font-sports: 'Barlow Condensed', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -172,6 +174,8 @@ body.theme-light {
 .theme-light [class*="bg-[#1C283E]"],
 .theme-light [class*="bg-[#1C2842]"],
 .theme-light [class*="bg-[#1E293B]"],
+.theme-light [class*="bg-[#060A13]"],
+.theme-light [class*="bg-[#0B111E]"],
 .theme-light [class*="bg-[#202B42]"] {
   background-color: #F1F5F9 !important;
 }
@@ -203,7 +207,8 @@ body.theme-light {
 .theme-light p.text-white:not([class*="bg-red"]):not([class*="from-red"]):not([class*="bg-black"]):not([class*="bg-emerald"]):not(button[class*="bg-red"] *):not([class*="from-red"] *):not([class*="bg-red-"] *):not([class*="bg-emerald-"] *):not([class*="bg-amber-900"] *):not([class*="bg-slate-900"] *):not([class*="bg-black"] *):not(.keep-white),
 .theme-light td.text-white,
 .theme-light div.text-white:not([class*="bg-red"]):not([class*="from-red"]):not([class*="bg-black"]):not([class*="bg-emerald"]):not(button[class*="bg-red"] *):not([class*="from-red"] *):not([class*="bg-red-"] *):not([class*="bg-emerald-"] *):not(.keep-white),
-.theme-light strong.text-white {
+.theme-light strong.text-white,
+.theme-light [class*="dark:text-white"]:not([class*="bg-red-"]):not([class*="from-red-"]):not(button[class*="bg-red"] *):not([data-theme-surface="dark"] *):not([class*="bg-black"] *) {
   color: #0F172A !important;
 }
 
@@ -240,28 +245,55 @@ body.theme-light {
 }
 
 /* Escalas de texto slate en modo claro sobre fondos estándar */
-.theme-light .text-slate-100:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *) {
+.theme-light .text-slate-100:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *),
+.theme-light [class*="text-slate-100"]:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *):not([class*="bg-red"] *) {
   color: #0F172A !important;
 }
 
-.theme-light .text-slate-200:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *) {
+.theme-light .text-slate-200:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *),
+.theme-light [class*="text-slate-200"]:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *):not([class*="bg-red"] *) {
+  color: #0F172A !important;
+}
+
+.theme-light .text-slate-300:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *),
+.theme-light [class*="text-slate-300"]:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *):not([class*="bg-red"] *) {
   color: #1E293B !important;
 }
 
-.theme-light .text-slate-300:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *) {
+.theme-light .text-slate-400:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *),
+.theme-light [class*="text-slate-400"]:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *):not([class*="bg-red"] *) {
   color: #334155 !important;
 }
 
-.theme-light .text-slate-400:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *) {
+.theme-light .text-slate-500:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *),
+.theme-light [class*="text-slate-500"]:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *):not([class*="bg-red"] *) {
   color: #475569 !important;
 }
 
-.theme-light .text-slate-500:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *) {
-  color: #64748B !important;
+.theme-light .text-slate-600:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *),
+.theme-light [class*="text-slate-600"]:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *):not([class*="bg-red"] *) {
+  color: #334155 !important;
 }
 
-.theme-light .text-slate-600:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *) {
-  color: #475569 !important;
+/* Colores de acento en modo claro con alto contraste WCAG */
+.theme-light [class*="text-emerald-400"]:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *) {
+  color: #065F46 !important;
+}
+
+.theme-light [class*="text-amber-300"]:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *) {
+  color: #78350F !important;
+}
+
+.theme-light [class*="text-blue-300"]:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *) {
+  color: #1E3A8A !important;
+}
+
+.theme-light [class*="text-purple-300"]:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *) {
+  color: #581C87 !important;
+}
+
+.theme-light [class*="text-sky-300"]:not([data-theme-surface="dark"] *):not(button[class*="bg-red"] *) {
+  color: #0369A1 !important;
 }
 
 /* Tipografía de números y scoreboard en modo claro */
@@ -293,46 +325,53 @@ body.theme-light {
 }
 
 /* Badges con fondos oscuros convertidos a pasteles nítidos en modo claro */
-.theme-light [class*="bg-emerald-950"] {
+.theme-light [class*="bg-emerald-950"],
+.theme-light [class*="bg-emerald-100"] {
   background-color: #ECFDF5 !important;
-  color: #065F46 !important;
-  border-color: #A7F3D0 !important;
+  color: #064E3B !important;
+  border-color: #6EE7B7 !important;
 }
 
-.theme-light [class*="bg-amber-950"] {
-  background-color: #FFFBEB !important;
-  color: #92400E !important;
-  border-color: #FDE68A !important;
+.theme-light [class*="bg-amber-950"],
+.theme-light [class*="bg-amber-100"] {
+  background-color: #FEF3C7 !important;
+  color: #451A03 !important;
+  border-color: #F59E0B !important;
 }
 
-.theme-light [class*="bg-purple-950"] {
+.theme-light [class*="bg-purple-950"],
+.theme-light [class*="bg-purple-100"] {
   background-color: #FAF5FF !important;
-  color: #6B21A8 !important;
-  border-color: #E9D5FF !important;
+  color: #581C87 !important;
+  border-color: #D8B4FE !important;
 }
 
-.theme-light [class*="bg-blue-950"] {
+.theme-light [class*="bg-blue-950"],
+.theme-light [class*="bg-blue-100"] {
   background-color: #EFF6FF !important;
-  color: #1E40AF !important;
-  border-color: #BFDBFE !important;
+  color: #172554 !important;
+  border-color: #93C5FD !important;
 }
 
-.theme-light [class*="bg-sky-950"] {
+.theme-light [class*="bg-sky-950"],
+.theme-light [class*="bg-sky-100"] {
   background-color: #F0F9FF !important;
-  color: #0369A1 !important;
-  border-color: #BAE6FD !important;
+  color: #082F49 !important;
+  border-color: #7DD3FC !important;
 }
 
-.theme-light [class*="bg-rose-950"] {
+.theme-light [class*="bg-rose-950"],
+.theme-light [class*="bg-rose-100"] {
   background-color: #FFF1F2 !important;
-  color: #9F1239 !important;
-  border-color: #FECDD3 !important;
+  color: #881337 !important;
+  border-color: #FDA4AF !important;
 }
 
-.theme-light [class*="bg-red-950"] {
+.theme-light [class*="bg-red-950"],
+.theme-light [class*="bg-red-100"] {
   background-color: #FEF2F2 !important;
-  color: #991B1B !important;
-  border-color: #FECACA !important;
+  color: #7F1D1D !important;
+  border-color: #FCA5A5 !important;
 }
 
 /* Cajas de Alerta Ámbar en Modo Claro */

@@ -78,6 +78,7 @@ function getServerDb() {
 
 // Caché en memoria para evitar llamadas redundantes a Gemini
 const translationMemoryCache = new Map<string, string>();
+let translationCooldownUntil = 0;
 
 let aiClient: GoogleGenAI | null = null;
 function getAI(): GoogleGenAI | null {
@@ -90,13 +91,19 @@ function getAI(): GoogleGenAI | null {
   return aiClient;
 }
 
-// Función robusta de traducción con Gemini 2.5 Flash y fallback a Gemini 2.5 Flash Lite
+// Función robusta de traducción con Gemini usando modelos oficiales soportados y control de cuota
 async function translateWithGemini(
   ai: GoogleGenAI,
   texts: string[],
   targetLanguageName: string
 ): Promise<string[]> {
-  const models = ['gemini-3.6-flash', 'gemini-3.8-flash'];
+  // Si estamos en período de enfriamiento por cuota temporal de free tier (429/503), usar fallback sin saturar la API
+  if (Date.now() < translationCooldownUntil) {
+    return texts;
+  }
+
+  // Modelos oficiales recomendados por la especificación gemini-api
+  const models = ['gemini-flash-latest', 'gemini-3.1-flash-lite'];
 
   const prompt = `You are a professional multilingual translator for "VXP" (Venue Experience Platform), a stadium sports, e-commerce, concessions food & beverage, and logistics management system.
 Translate the following JSON array of strings into ${targetLanguageName}.
@@ -110,46 +117,40 @@ Guidelines:
 Input strings to translate:
 ${JSON.stringify(texts)}`;
 
-  let lastError: any = null;
-
   for (const model of models) {
-    for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          temperature: 0.1,
+        },
+      });
+
+      const responseText = response.text?.trim() || '[]';
+      let parsed: string[] = [];
       try {
-        const response = await ai.models.generateContent({
-          model,
-          contents: prompt,
-          config: {
-            responseMimeType: 'application/json',
-            temperature: 0.1,
-          },
-        });
+        parsed = JSON.parse(responseText);
+      } catch {
+        const cleaned = responseText.replace(/```json\n?|\n?```/g, '').trim();
+        parsed = JSON.parse(cleaned);
+      }
 
-        const responseText = response.text?.trim() || '[]';
-        let parsed: string[] = [];
-        try {
-          parsed = JSON.parse(responseText);
-        } catch {
-          const cleaned = responseText.replace(/```json\n?|\n?```/g, '').trim();
-          parsed = JSON.parse(cleaned);
-        }
-
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      } catch (err: any) {
-        lastError = err;
-        const msg = String(err?.message || '');
-        const isUnavailable = msg.includes('503') || msg.includes('429') || msg.includes('high demand') || err?.status === 503;
-        if (isUnavailable) {
-          await new Promise((resolve) => setTimeout(resolve, 600 * (attempt + 1)));
-          continue;
-        }
-        break;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    } catch (err: any) {
+      const msg = String(err?.message || '');
+      const isQuotaOrBusy = msg.includes('429') || msg.includes('503') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('high demand') || err?.status === 429 || err?.status === 503;
+      if (isQuotaOrBusy) {
+        // Pausar peticiones remotas durante 45s para permitir la recuperación de cuota del free tier
+        translationCooldownUntil = Date.now() + 45000;
+        return texts;
       }
     }
   }
 
-  console.warn('Aviso en traducción con Gemini (usando fallback original):', lastError?.message || 'Error de modelo');
   return texts;
 }
 

@@ -158,6 +158,7 @@ export interface EventSeat {
   updatedAt?: string;
   lockedUntil?: number; // Timestamp en ms del bloqueo temporal (8 min) para compras simultáneas
   lockedBy?: string; // UID del usuario que retiene la butaca
+  clientLockToken?: string; // Token único del dispositivo/sesión para evitar desalineación entre guest y login
   lockedAt?: string; // ISO string de cuándo se bloqueó
 }
 
