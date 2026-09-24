@@ -180,9 +180,11 @@ export const TaquillaView: React.FC<TaquillaViewProps> = ({ user }) => {
         console.warn('Torch detection not available', e);
       }
     }).catch((err) => {
-      console.error('Error starting camera scanner:', err);
+      if (err?.name !== 'NotAllowedError' && !err?.message?.includes('Permission denied') && !err?.message?.includes('NotAllowedError')) {
+        console.error('Error starting camera scanner:', err);
+      }
       if (isMounted) {
-        setCameraError(err?.message || 'Permiso de cámara denegado o no disponible.');
+        setCameraError(err?.message || 'Permiso de cámara denegado (bloqueado por el navegador o iframe).');
       }
     });
 
