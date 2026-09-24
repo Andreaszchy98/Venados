@@ -688,7 +688,7 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto px-4 py-6">
             {filteredEvents.map((ev) => {
               const rating = getEventRatingBadge(ev.type);
               const minPrice = getMinPrice(ev);
@@ -699,7 +699,7 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
               return (
                 <div
                   key={ev.id}
-                  className={`group flex flex-col justify-between rounded-2xl sm:rounded-3xl border overflow-hidden transition-all duration-300 ${
+                  className={`group flex flex-col justify-between h-full rounded-2xl sm:rounded-3xl border overflow-hidden transition-all duration-300 ${
                     theme === 'light'
                       ? 'bg-white border-slate-200 shadow-xs hover:border-red-500/80 hover:shadow-lg'
                       : 'bg-[#101625] border-slate-800/80 shadow-lg hover:border-red-500/80 hover:shadow-xl hover:shadow-red-950/20'
@@ -723,10 +723,10 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
                     </span>
                   </div>
 
-                  {/* Contenedor de Imagen Promocional Completa (100% íntegra, sin recortes) */}
+                  {/* Contenedor de Imagen Promocional */}
                   <div
                     onClick={() => setSelectedMapEvent(ev)}
-                    className="relative aspect-[16/10] sm:aspect-[16/10] w-full bg-[#060911] overflow-hidden cursor-pointer flex items-center justify-center group/poster"
+                    className="relative w-full bg-[#060911] overflow-hidden cursor-pointer flex items-center justify-center group/poster"
                   >
                     {/* Fondo difuminado adaptativo con los colores del flyer */}
                     <img
@@ -737,12 +737,12 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
                       className="absolute inset-0 w-full h-full object-cover blur-md opacity-35 scale-110 pointer-events-none"
                     />
 
-                    {/* Imagen promocional completa sin ningún recorte */}
+                    {/* Imagen del evento con object-cover h-40 w-full rounded-t-lg */}
                     <img
                       src={posterSrc}
                       alt={ev.name}
                       referrerPolicy="no-referrer"
-                      className="relative z-10 max-h-full max-w-full object-contain p-1 group-hover/poster:scale-105 transition-transform duration-300 drop-shadow-md"
+                      className="relative z-10 object-cover h-40 w-full rounded-t-lg group-hover/poster:scale-105 transition-transform duration-300 drop-shadow-md"
                     />
 
                     {/* Botón flotante para ver imagen en tamaño completo */}

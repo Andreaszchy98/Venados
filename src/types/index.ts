@@ -122,6 +122,9 @@ export interface Ticket {
   qrId: string;
   gate?: string;
   specialType?: 'ninos' | 'insen' | 'prensa' | string;
+  secretSeed?: string;
+  claimToken?: string;
+  isTransferred?: boolean;
   usedAt?: string;
   usedGate?: string;
   usedBy?: string;

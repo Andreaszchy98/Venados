@@ -11,6 +11,7 @@ import { TaquillaView } from './views/taquilla/TaquillaView';
 import { ConcesionarioView } from './views/concesionario/ConcesionarioView';
 import { RunnerView } from './views/runner/RunnerView';
 import { SuperAdminView } from './views/superadmin/SuperAdminView';
+import { ReclamoBoletoView } from './views/aficionado/ReclamoBoletoView';
 import { LoadingSpinner } from './components/shared/LoadingSpinner';
 import { CarteleraLanding } from './components/cartelera/CarteleraLanding';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
@@ -29,6 +30,35 @@ function MainLayout() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const { t, language, setLanguage } = useLanguage();
   const { theme } = useTheme();
+
+  // Detectar token de reclamo en URL (/reclamo/[token] o ?reclamo=...)
+  const [claimToken] = useState<string | null>(() => {
+    try {
+      const path = window.location.pathname;
+      if (path.includes('/reclamo/')) {
+        const parts = path.split('/reclamo/');
+        if (parts[1]) return parts[1].trim();
+      }
+      const params = new URLSearchParams(window.location.search);
+      return params.get('reclamo') || null;
+    } catch {
+      return null;
+    }
+  });
+
+  if (claimToken) {
+    return (
+      <ReclamoBoletoView
+        claimToken={claimToken}
+        onNavigateHome={() => {
+          try {
+            window.history.replaceState({}, '', window.location.pathname.split('/reclamo/')[0] || '/');
+          } catch {}
+          window.location.reload();
+        }}
+      />
+    );
+  }
 
   // Evento o pestaña preseleccionada antes de iniciar sesión
   const [pendingEventId, setPendingEventId] = useState<string | null>(() => {

@@ -279,11 +279,74 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
         </>
       )}
 
-      {/* Menú de Navegación Inferior Fijo (4 Pestañas: Cartelera, Tienda, Comida, Mis Compras) */}
+      {/* Barra de Pestañas Superior para Tablet / Escritorio (>= md) */}
+      <div className="hidden md:flex items-center justify-center gap-3 max-w-2xl mx-auto mb-6 px-4">
+        <button
+          type="button"
+          onClick={() => setActiveTab('cartelera')}
+          className={`px-5 py-2.5 rounded-2xl text-xs font-sports uppercase tracking-wider font-bold transition-all cursor-pointer flex items-center gap-2 shadow-xs ${
+            activeTab === 'cartelera'
+              ? 'bg-red-600 text-white shadow-md shadow-red-950/30'
+              : theme === 'light'
+              ? 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+              : 'bg-[#101625] hover:bg-[#182032] text-slate-300 border border-slate-800'
+          }`}
+        >
+          <Film className="w-4 h-4" />
+          <span>{t('nav.billboard', 'Cartelera')}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('tienda')}
+          className={`px-5 py-2.5 rounded-2xl text-xs font-sports uppercase tracking-wider font-bold transition-all cursor-pointer flex items-center gap-2 shadow-xs ${
+            activeTab === 'tienda'
+              ? 'bg-red-600 text-white shadow-md shadow-red-950/30'
+              : theme === 'light'
+              ? 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+              : 'bg-[#101625] hover:bg-[#182032] text-slate-300 border border-slate-800'
+          }`}
+        >
+          <ShoppingBag className="w-4 h-4" />
+          <span>{t('nav.store', 'Tienda')}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('comida')}
+          className={`px-5 py-2.5 rounded-2xl text-xs font-sports uppercase tracking-wider font-bold transition-all cursor-pointer flex items-center gap-2 shadow-xs ${
+            activeTab === 'comida'
+              ? 'bg-red-600 text-white shadow-md shadow-red-950/30'
+              : theme === 'light'
+              ? 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+              : 'bg-[#101625] hover:bg-[#182032] text-slate-300 border border-slate-800'
+          }`}
+        >
+          <Utensils className="w-4 h-4" />
+          <span>{t('nav.food', 'Comida')}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('pedidos')}
+          className={`px-5 py-2.5 rounded-2xl text-xs font-sports uppercase tracking-wider font-bold transition-all cursor-pointer flex items-center gap-2 shadow-xs ${
+            activeTab === 'pedidos'
+              ? 'bg-red-600 text-white shadow-md shadow-red-950/30'
+              : theme === 'light'
+              ? 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+              : 'bg-[#101625] hover:bg-[#182032] text-slate-300 border border-slate-800'
+          }`}
+        >
+          <Package className="w-4 h-4" />
+          <span>{t('nav.purchases', 'Mis Compras')}</span>
+        </button>
+      </div>
+
+      {/* Menú de Navegación Inferior Fijo para Móvil (< md) */}
       <nav
         id="aficionado-bottom-nav"
         aria-label="Navegación principal del aficionado"
-        className={`fixed bottom-0 left-0 right-0 z-40 backdrop-blur-xl border-t-2 transition-colors ${
+        className={`block md:hidden fixed bottom-0 left-0 right-0 z-50 backdrop-blur-xl border-t-2 transition-colors ${
           theme === 'light'
             ? 'bg-white/95 border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]'
             : 'bg-[#0F172A]/98 border-red-600/80 shadow-[0_-10px_35px_rgba(0,0,0,0.85)]'

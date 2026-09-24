@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Ticket, VenueEvent } from '../../types';
 import { QRCodeDisplay } from '../../components/shared/QRCodeDisplay';
+import { generateTicketClaimLink } from '../../lib/tickets';
 import {
   cleanRowValue,
   cleanSeatValue,
@@ -40,6 +41,7 @@ export const BoletoDetalle: React.FC<BoletoDetalleProps> = ({
   const { theme } = useTheme();
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isWalletAdded, setIsWalletAdded] = useState(false);
+  const [sharingSeatId, setSharingSeatId] = useState<string | null>(null);
 
   // Determinar lista total de boletos de esta compra
   const allTickets = siblingTickets.length > 0 ? siblingTickets : [ticket];
@@ -61,6 +63,20 @@ export const BoletoDetalle: React.FC<BoletoDetalleProps> = ({
     setTimeout(() => {
       setToastMessage(null);
     }, 3500);
+  };
+
+  const handleShareIndividualSeat = async (t: Ticket) => {
+    setSharingSeatId(t.id);
+    try {
+      const waLink = await generateTicketClaimLink(t.id);
+      showToast(`¡Boleto Butaca ${cleanSeatValue(t.seat)} desvinculado y listo para compartir!`);
+      window.open(waLink, '_blank');
+    } catch (e) {
+      console.error('Error sharing individual seat:', e);
+      showToast('Error al desvincular el boleto.');
+    } finally {
+      setSharingSeatId(null);
+    }
   };
 
   // Manejo de teclado (Escape para volver)
@@ -462,26 +478,32 @@ Presenta este código en los molinetes del estadio.
                       : 'bg-[#0A0E17] border-slate-700/70'
                   }`}
                 >
-                  <span
-                    className={`block text-[9px] uppercase font-bold tracking-wider font-sports mb-1.5 text-center ${
-                      theme === 'light' ? 'text-slate-500' : 'text-slate-400'
-                    }`}
-                  >
-                    Butacas Asignadas
-                  </span>
-                  <div className="flex flex-wrap items-center justify-center gap-1.5">
+                  <div className="flex items-center justify-between mb-2">
+                    <span
+                      className={`text-[9px] uppercase font-bold tracking-wider font-sports ${
+                        theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                      }`}
+                    >
+                      Butacas Asignadas (Haz clic para compartir / desvincular)
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-center gap-2">
                     {allTickets.map((t, idx) => (
-                      <span
+                      <button
                         key={t.id || idx}
-                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg border font-mono text-xs font-black shadow-2xs ${
+                        type="button"
+                        onClick={() => handleShareIndividualSeat(t)}
+                        disabled={sharingSeatId === t.id}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-mono text-xs font-black shadow-xs transition-all cursor-pointer hover:border-emerald-500 hover:scale-105 ${
                           theme === 'light'
-                            ? 'bg-white border-slate-300 text-slate-900'
-                            : 'bg-[#141C2E] border-slate-700 text-slate-100'
+                            ? 'bg-white border-slate-300 text-slate-900 hover:bg-emerald-50'
+                            : 'bg-[#141C2E] border-slate-700 text-slate-100 hover:bg-emerald-950/40'
                         }`}
                       >
-                        <TicketIcon className="w-3 h-3 text-red-500" />
+                        <TicketIcon className="w-3.5 h-3.5 text-red-500" />
                         <span>Butaca {cleanSeatValue(t.seat)}</span>
-                      </span>
+                        <Share2 className="w-3 h-3 text-emerald-500 ml-0.5" />
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -496,24 +518,35 @@ Presenta este código en los molinetes del estadio.
                 }`}
               >
                 {allTickets.map((t, idx) => (
-                  <div key={t.id || idx} className="py-1.5 first:pt-0.5 last:pb-0.5 flex items-center justify-between text-xs font-medium">
+                  <div key={t.id || idx} className="py-2 first:pt-1 last:pb-1 flex items-center justify-between text-xs font-medium">
                     <div className="flex items-center gap-2">
-                      <span className="w-4 h-4 rounded-full bg-red-100 text-red-700 font-mono font-bold text-[10px] flex items-center justify-center shrink-0">
+                      <span className="w-5 h-5 rounded-full bg-red-100 text-red-700 font-mono font-bold text-[10px] flex items-center justify-center shrink-0">
                         {idx + 1}
                       </span>
                       <span>
                         <strong>{cleanSectionValue(t.section)}</strong> • {formatRowLabel(t.row)}
                       </span>
                     </div>
-                    <span
-                      className={`font-mono font-black text-red-500 px-2 py-0.5 rounded border shadow-2xs ${
-                        theme === 'light'
-                          ? 'bg-white border-slate-200'
-                          : 'bg-[#141C2E] border-slate-700'
-                      }`}
-                    >
-                      B{cleanSeatValue(t.seat)}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`font-mono font-black text-red-500 px-2.5 py-1 rounded-md border shadow-2xs ${
+                          theme === 'light'
+                            ? 'bg-white border-slate-200'
+                            : 'bg-[#141C2E] border-slate-700'
+                        }`}
+                      >
+                        B{cleanSeatValue(t.seat)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleShareIndividualSeat(t)}
+                        disabled={sharingSeatId === t.id}
+                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[10px] font-bold uppercase font-sports flex items-center gap-1 shadow-xs cursor-pointer transition-all"
+                      >
+                        <Share2 className="w-3 h-3" />
+                        <span>{sharingSeatId === t.id ? 'Compartiendo...' : 'Compartir'}</span>
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -542,59 +575,20 @@ Presenta este código en los molinetes del estadio.
             </span>
           </div>
 
-          {/* Botones de Compartir, Descargar y Google Wallet */}
+          {/* Botón de Compartir */}
           <div className="space-y-2 pt-1">
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={handleShare}
-                className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer font-sports uppercase tracking-wider active:scale-98 ${
-                  theme === 'light'
-                    ? 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-800'
-                    : 'bg-[#141C2E] hover:bg-[#1C273E] border-slate-700 text-slate-200'
-                }`}
-              >
-                <Share2 className="w-3.5 h-3.5 text-red-500" />
-                <span>Compartir</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleDownload}
-                className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer font-sports uppercase tracking-wider active:scale-98 ${
-                  theme === 'light'
-                    ? 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-800'
-                    : 'bg-[#141C2E] hover:bg-[#1C273E] border-slate-700 text-slate-200'
-                }`}
-              >
-                <Download className="w-3.5 h-3.5 text-amber-500" />
-                <span>Descargar</span>
-              </button>
-            </div>
-
-            {/* Google Wallet */}
             <button
               type="button"
-              onClick={handleAddToGoogleWallet}
-              className={`w-full py-2 px-4 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 border font-sports text-xs uppercase tracking-wider font-bold ${
-                isWalletAdded
-                  ? 'bg-emerald-500/10 border-emerald-500 text-emerald-500'
-                  : theme === 'light'
-                  ? 'bg-slate-900 hover:bg-black active:scale-98 border-slate-800 text-white shadow-md'
-                  : 'bg-black hover:bg-zinc-900 active:scale-98 border-zinc-800 text-white shadow-md'
+              onClick={() => handleShareIndividualSeat(allTickets[0])}
+              disabled={sharingSeatId === allTickets[0]?.id}
+              className={`w-full py-2.5 px-4 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer font-sports uppercase tracking-wider active:scale-98 shadow-sm ${
+                theme === 'light'
+                  ? 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-800'
+                  : 'bg-[#141C2E] hover:bg-[#1C273E] border-slate-700 text-slate-200'
               }`}
             >
-              {isWalletAdded ? (
-                <>
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  <span>Vinculado a Google Wallet</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Agregar a Google Wallet</span>
-                </>
-              )}
+              <Share2 className="w-4 h-4 text-red-500" />
+              <span>{sharingSeatId === allTickets[0]?.id ? 'Generando enlace...' : 'Compartir'}</span>
             </button>
           </div>
         </div>

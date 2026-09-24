@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Ticket } from '../../types';
-import { Calendar, MapPin, CheckCircle2, Clock, XCircle, ShieldCheck } from 'lucide-react';
+import { Calendar, MapPin, CheckCircle2, Clock, XCircle, ShieldCheck, Share2, Sparkles } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { QRCodeDisplay } from './QRCodeDisplay';
+import { generateTotpCode, generateTicketClaimLink } from '../../lib/tickets';
 
 interface TicketCardProps {
   ticket: Ticket;
@@ -16,6 +17,33 @@ export const TicketCard: React.FC<TicketCardProps> = ({
   showAdminActions = false,
 }) => {
   const { theme } = useTheme();
+  const [currentTime, setCurrentTime] = useState<string>(new Date().toLocaleTimeString());
+  const [totpCode, setTotpCode] = useState<string>(ticket.qrId);
+  const [sharing, setSharing] = useState(false);
+
+  // Live clock and TOTP dynamic refresh
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date();
+      setCurrentTime(now.toLocaleTimeString());
+      if (ticket.secretSeed) {
+        setTotpCode(`${ticket.qrId}-${generateTotpCode(ticket.secretSeed)}`);
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [ticket.secretSeed, ticket.qrId]);
+
+  const handleShareWhatsApp = async () => {
+    setSharing(true);
+    try {
+      const waLink = await generateTicketClaimLink(ticket.id);
+      window.open(waLink, '_blank');
+    } catch (e) {
+      console.error('Error sharing ticket:', e);
+    } finally {
+      setSharing(false);
+    }
+  };
 
   const getStatusBadge = () => {
     switch (ticket.status) {
@@ -29,7 +57,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
             }`}
           >
             <CheckCircle2 className={`w-3.5 h-3.5 ${theme === 'light' ? 'text-emerald-800' : 'text-emerald-400'}`} />
-            Acceso Válido
+            Acceso Válido (Dinámico)
           </span>
         );
       case 'usado':
@@ -78,22 +106,18 @@ export const TicketCard: React.FC<TicketCardProps> = ({
         <div>
           <div className="flex items-start justify-between gap-3 mb-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-black tracking-wider uppercase bg-red-700 text-white shadow-xs font-sports">
-                <span>Pase Oficial Estadio</span>
-              </div>
-              {ticket.purchaseId && (
-                <span
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold border ${
-                    theme === 'light'
-                      ? 'bg-slate-100 text-slate-900 border-slate-300'
-                      : 'bg-slate-800 text-white border-slate-600'
-                  }`}
-                >
-                  Ref: #{ticket.purchaseId.slice(-7)}
-                </span>
-              )}
+              {getStatusBadge()}
+              <span className="text-[10px] font-mono px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full font-bold">
+                {ticket.purchaseId ? 'Pase Grupal 🎟️' : 'Pase Individual'}
+              </span>
             </div>
-            {getStatusBadge()}
+            <span
+              className={`text-xs font-mono font-bold ${
+                theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+              }`}
+            >
+              Ref: #{ticket.purchaseId ? ticket.purchaseId.slice(-7) : ticket.id.slice(-7)}
+            </span>
           </div>
 
           <h3
@@ -124,7 +148,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
           </div>
         </div>
 
-        {/* Bloque Deportivo de Butaca - Estilo Marcador / Roster */}
+        {/* Bloque Deportivo de Butaca */}
         <div
           className={`grid grid-cols-3 gap-2 p-3 rounded-xl border text-center ${
             theme === 'light'
@@ -148,7 +172,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
               {ticket.section}
             </span>
           </div>
-          <div className={`border-x ${theme === 'light' ? 'border-slate-200' : 'border-slate-700'}`}>
+          <div>
             <span
               className={`block text-[10px] uppercase font-bold tracking-wider font-sports ${
                 theme === 'light' ? 'text-slate-600' : 'text-slate-400'
@@ -157,8 +181,8 @@ export const TicketCard: React.FC<TicketCardProps> = ({
               Fila
             </span>
             <span
-              className={`text-xs sm:text-sm font-black font-mono ${
-                theme === 'light' ? 'text-amber-700' : 'text-amber-400'
+              className={`text-xs sm:text-sm font-black ${
+                theme === 'light' ? 'text-slate-900' : 'text-white'
               }`}
             >
               {ticket.row}
@@ -170,11 +194,11 @@ export const TicketCard: React.FC<TicketCardProps> = ({
                 theme === 'light' ? 'text-slate-600' : 'text-slate-400'
               }`}
             >
-              Butaca
+              Asiento
             </span>
             <span
-              className={`text-xs sm:text-sm font-black font-mono ${
-                theme === 'light' ? 'text-red-700' : 'text-red-400'
+              className={`text-xs sm:text-sm font-black text-amber-500 ${
+                theme === 'light' ? 'text-amber-600 font-bold' : ''
               }`}
             >
               {ticket.seat}
@@ -195,7 +219,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
               </strong>
             </span>
             <span>
-              Total:{' '}
+              Precio:{' '}
               <strong
                 className={
                   theme === 'light'
@@ -210,9 +234,9 @@ export const TicketCard: React.FC<TicketCardProps> = ({
         )}
       </div>
 
-      {/* Franja de corte perforada estilo boleto físico deportivo */}
+      {/* Franja de corte perforada y QR Dinámico Anti-Fraude */}
       <div
-        className={`relative border-t md:border-t-0 md:border-l border-dashed p-4 md:p-6 flex md:flex-col items-center justify-between md:justify-center gap-3 shrink-0 md:w-52 text-center ${
+        className={`relative border-t md:border-t-0 md:border-l border-dashed p-4 md:p-6 flex md:flex-col items-center justify-between md:justify-center gap-3 shrink-0 md:w-56 text-center ${
           theme === 'light'
             ? 'border-slate-300 bg-slate-100/90'
             : 'border-slate-700 bg-[#0C1220]'
@@ -230,30 +254,54 @@ export const TicketCard: React.FC<TicketCardProps> = ({
           }`}
         ></div>
 
-        <div className="p-2 bg-white rounded-xl shadow-md inline-flex items-center justify-center border border-slate-200 overflow-hidden">
-          <QRCodeDisplay value={ticket.qrId} size={80} alt={`Código QR para boleto ${ticket.qrId}`} />
+        {/* Marcador anti-captura: Marco brillante animado alrededor del QR */}
+        <div className="relative p-1 rounded-2xl bg-gradient-to-r from-red-500 via-amber-400 to-red-500 animate-pulse shadow-md">
+          <div className="p-2 bg-white rounded-xl inline-flex items-center justify-center overflow-hidden">
+            <QRCodeDisplay value={totpCode} size={84} alt={`Código QR Dinámico para boleto ${ticket.qrId}`} />
+          </div>
         </div>
+
+        {/* Reloj digital animado en tiempo real (anti-captura) */}
+        <div className="w-full bg-[#141C2E] border border-slate-700 rounded-lg px-2 py-1 text-center shadow-inner">
+          <div className="flex items-center justify-center gap-1.5 text-[10px] font-mono font-bold text-amber-400">
+            <Sparkles className="w-3 h-3 text-amber-400 animate-spin" />
+            <span>EN VIVO: {currentTime}</span>
+          </div>
+        </div>
+
         <div>
           <span
-            className={`text-[10px] block font-mono font-bold tracking-wider ${
-              theme === 'light' ? 'text-slate-900' : 'text-white'
+            className={`text-[9px] block font-mono font-bold tracking-tight ${
+              theme === 'light' ? 'text-slate-700' : 'text-slate-300'
             }`}
           >
-            {ticket.qrId}
+            {totpCode}
           </span>
           <span
-            className={`text-[10px] uppercase tracking-wider font-semibold block mt-0.5 ${
-              theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+            className={`text-[9px] uppercase tracking-wider font-semibold block mt-0.5 ${
+              theme === 'light' ? 'text-slate-500' : 'text-slate-400'
             }`}
           >
-            Escanear en Molinete
+            TOTP Dinámico (Se actualiza c/30s)
           </span>
         </div>
+
+        {/* Botón de compartir / desglosar por WhatsApp */}
+        {ticket.status === 'activo' && !showAdminActions && (
+          <button
+            onClick={handleShareWhatsApp}
+            disabled={sharing}
+            className="w-full py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[11px] font-black uppercase tracking-wider shadow-md transition-all cursor-pointer font-sports flex items-center justify-center gap-1.5"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            <span>{sharing ? 'Generando...' : 'Desglosar / WhatsApp'}</span>
+          </button>
+        )}
 
         {showAdminActions && onValidate && ticket.status === 'activo' && (
           <button
             onClick={() => onValidate(ticket.id, ticket.purchaseId)}
-            className="w-full mt-2 py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition-all cursor-pointer font-sports"
+            className="w-full mt-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition-all cursor-pointer font-sports"
           >
             Validar Ingreso
           </button>

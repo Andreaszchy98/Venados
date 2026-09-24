@@ -24,6 +24,18 @@ export function subscribeUserTickets(
   onUpdate: (tickets: Ticket[]) => void,
   onError?: (error: Error) => void
 ) {
+  const cacheKey = `vxp_offline_tickets_${userId}`;
+  // Cargar caché local de inmediato para soporte offline-first
+  try {
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        onUpdate(parsed);
+      }
+    }
+  } catch (e) {}
+
   const q = query(
     collection(db, 'tickets'),
     where('userId', '==', userId)
@@ -36,10 +48,19 @@ export function subscribeUserTickets(
         id: docSnap.id,
         ...(docSnap.data() as Omit<Ticket, 'id'>),
       }));
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify(tickets));
+      } catch (e) {}
       onUpdate(tickets);
     },
     (err) => {
-      console.error('Error fetching tickets:', err);
+      console.warn('Modo offline detectado, utilizando caché local:', err);
+      try {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          onUpdate(JSON.parse(cached));
+        }
+      } catch (e) {}
       if (onError) onError(err);
     }
   );
@@ -216,6 +237,7 @@ export async function purchaseTicketWithSaleRecord(
   customerName: string
 ): Promise<string> {
   const qrId = `VND-2026-TKT-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+  const secretSeed = `SEED-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
   const now = new Date().toISOString();
 
   const newTicket: Omit<Ticket, 'id'> = {
@@ -223,6 +245,7 @@ export async function purchaseTicketWithSaleRecord(
     eventId: (ticketData as any).eventId || DEFAULT_EVENT_ID,
     status: 'activo',
     qrId,
+    secretSeed,
     createdAt: now,
   };
 
@@ -261,6 +284,57 @@ export interface ValidationScanResult {
 }
 
 /**
+ * Generar código TOTP dinámico basado en secretSeed y ventana de tiempo (30s)
+ */
+export function generateTotpCode(secretSeed: string, timeStepSeconds: number = 30, offsetSteps: number = 0): string {
+  const now = Math.floor(Date.now() / 1000);
+  const counter = Math.floor(now / timeStepSeconds) + offsetSteps;
+  let hash = 0;
+  const str = `${secretSeed}-${counter}`;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
+  const absHash = Math.abs(hash);
+  return (absHash % 1000000).toString().padStart(6, '0');
+}
+
+/**
+ * Verificar si un código escaneado coincide con el TOTP actual (con tolerancia ±1 intervalo) o qrId/purchaseId/claimToken
+ */
+export function verifyTotpOrCode(scannedCode: string, ticket: Ticket): boolean {
+  if (scannedCode === ticket.qrId || scannedCode === ticket.purchaseId || scannedCode === ticket.claimToken || scannedCode === ticket.id) {
+    return true;
+  }
+  if (!ticket.secretSeed) return false;
+
+  // Tolerancia de ±1 intervalo de tiempo (30s)
+  for (let offset = -1; offset <= 1; offset++) {
+    const validTotp = generateTotpCode(ticket.secretSeed, 30, offset);
+    if (scannedCode === validTotp || scannedCode === `${ticket.qrId}-${validTotp}` || scannedCode.endsWith(validTotp)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Desglosar y generar enlace de reclamo por WhatsApp para un boleto individual
+ */
+export async function generateTicketClaimLink(ticketId: string): Promise<string> {
+  const ticketRef = doc(db, 'tickets', ticketId);
+  const claimToken = `CLAIM-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+  await updateDoc(ticketRef, {
+    claimToken,
+    purchaseId: '', // Desvincula del grupo principal si era parte de una compra grupal
+  });
+  
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://venados-vxp.web.app';
+  const text = encodeURIComponent(`¡Hola! Te comparto mi entrada para el partido de Venados de Mazatlán. Reclámala y descárgala con este enlace seguro: ${baseUrl}/reclamo/${claimToken}`);
+  return `https://wa.me/?text=${text}`;
+}
+
+/**
  * Validar y consumir boleto(s) de forma atómica con runTransaction de Firestore.
  * Si el código pertenece a una compra conjunta (purchaseId), valida y consume TODOS los boletos de la compra.
  */
@@ -292,7 +366,13 @@ export async function validateAndConsumeTicketByCode(
       matchingDocs = qSnap.docs;
     }
 
-    // 3. Si no hay, buscar por ID de documento directo
+    // 3. Si no hay, buscar por claimToken
+    if (matchingDocs.length === 0) {
+      qSnap = await getDocs(query(ticketsCol, where('claimToken', '==', cleanCode), limit(5)));
+      matchingDocs = qSnap.docs;
+    }
+
+    // 4. Si no hay, buscar por ID de documento directo
     if (matchingDocs.length === 0) {
       try {
         const docRef = doc(db, 'tickets', cleanCode);
@@ -302,6 +382,18 @@ export async function validateAndConsumeTicketByCode(
         }
       } catch (e) {
         // Ignorar
+      }
+    }
+
+    // 5. Si aún no hay, verificar si es un código TOTP dinámico entre boletos activos
+    if (matchingDocs.length === 0) {
+      const activeSnap = await getDocs(query(ticketsCol, where('status', '==', 'activo'), limit(150)));
+      for (const d of activeSnap.docs) {
+        const tktData = { id: d.id, ...(d.data() as Omit<Ticket, 'id'>) };
+        if (verifyTotpOrCode(cleanCode, tktData)) {
+          matchingDocs = [d as any];
+          break;
+        }
       }
     }
 
