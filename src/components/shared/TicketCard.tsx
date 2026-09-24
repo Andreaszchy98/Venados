@@ -3,7 +3,8 @@ import { Ticket } from '../../types';
 import { Calendar, MapPin, CheckCircle2, Clock, XCircle, ShieldCheck, Share2, Sparkles } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { QRCodeDisplay } from './QRCodeDisplay';
-import { generateTotpCode, generateTicketClaimLink } from '../../lib/tickets';
+import { generateTotpCode } from '../../lib/tickets';
+import { ShareTicketModal } from './ShareTicketModal';
 
 interface TicketCardProps {
   ticket: Ticket;
@@ -19,7 +20,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
   const { theme } = useTheme();
   const [currentTime, setCurrentTime] = useState<string>(new Date().toLocaleTimeString());
   const [totpCode, setTotpCode] = useState<string>(ticket.qrId);
-  const [sharing, setSharing] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
   // Live clock and TOTP dynamic refresh
   useEffect(() => {
@@ -33,16 +34,8 @@ export const TicketCard: React.FC<TicketCardProps> = ({
     return () => clearInterval(timer);
   }, [ticket.secretSeed, ticket.qrId]);
 
-  const handleShareWhatsApp = async () => {
-    setSharing(true);
-    try {
-      const waLink = await generateTicketClaimLink(ticket.id);
-      window.open(waLink, '_blank');
-    } catch (e) {
-      console.error('Error sharing ticket:', e);
-    } finally {
-      setSharing(false);
-    }
+  const handleOpenShare = () => {
+    setIsShareModalOpen(true);
   };
 
   const getStatusBadge = () => {
@@ -286,15 +279,14 @@ export const TicketCard: React.FC<TicketCardProps> = ({
           </span>
         </div>
 
-        {/* Botón de compartir / desglosar por WhatsApp */}
+        {/* Botón de compartir / desglosar */}
         {ticket.status === 'activo' && !showAdminActions && (
           <button
-            onClick={handleShareWhatsApp}
-            disabled={sharing}
+            onClick={handleOpenShare}
             className="w-full py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[11px] font-black uppercase tracking-wider shadow-md transition-all cursor-pointer font-sports flex items-center justify-center gap-1.5"
           >
             <Share2 className="w-3.5 h-3.5" />
-            <span>{sharing ? 'Generando...' : 'Desglosar / WhatsApp'}</span>
+            <span>Compartir Butaca</span>
           </button>
         )}
 
@@ -307,6 +299,13 @@ export const TicketCard: React.FC<TicketCardProps> = ({
           </button>
         )}
       </div>
+
+      {/* Modal de Compartir Butaca / Entrada */}
+      <ShareTicketModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        ticket={ticket}
+      />
     </div>
   );
 };

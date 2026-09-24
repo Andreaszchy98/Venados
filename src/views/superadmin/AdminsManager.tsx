@@ -93,6 +93,37 @@ export const AdminsManager: React.FC = () => {
       })
     : [];
 
+  // Administradores asignados a sedes que no existen en el catálogo de venues
+  const adminsWithInvalidVenues = adminsList.filter(
+    (a) => a.venueId && !venues.some((v) => v.id === a.venueId)
+  );
+
+  const handleFixAllInvalidVenues = async () => {
+    if (venues.length === 0) return;
+    const defaultV = venues.find((v) => v.id === 'venue-teodoro-mariscal') || venues[0];
+    setSavingEdit(true);
+    try {
+      for (const a of adminsWithInvalidVenues) {
+        await assignAdminRole(a.uid, defaultV.id, defaultV.name);
+      }
+      setUsers((prev) =>
+        prev.map((u) =>
+          adminsWithInvalidVenues.some((inv) => inv.uid === u.uid)
+            ? { ...u, venueId: defaultV.id, venueName: defaultV.name }
+            : u
+        )
+      );
+      showNotification(
+        'success',
+        `Se reasignaron ${adminsWithInvalidVenues.length} administradores a "${defaultV.name}".`
+      );
+    } catch (err: any) {
+      showNotification('error', `Error al reasignar sedes: ${err.message}`);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   const handleAssignAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUserToPromote || !selectedVenueId) return;
@@ -349,6 +380,26 @@ export const AdminsManager: React.FC = () => {
           </div>
         </div>
 
+        {/* Banner de alerta si hay administradores asignados a sedes inexistentes como Estadio Chevron */}
+        {adminsWithInvalidVenues.length > 0 && (
+          <div className="p-3.5 bg-amber-500/15 border border-amber-500/40 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-200 font-sans">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>
+                <strong>Atención:</strong> Se detectaron {adminsWithInvalidVenues.length} administrador(es) asignados a sedes no registradas en Superadmin (ej. Estadio Chevron).
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleFixAllInvalidVenues}
+              disabled={savingEdit}
+              className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-black font-sports uppercase tracking-wider rounded-xl transition-all cursor-pointer text-xs shrink-0 shadow-md"
+            >
+              {savingEdit ? 'Reasignando...' : 'Reasignar a Estadio Teodoro Mariscal'}
+            </button>
+          </div>
+        )}
+
         {loading ? (
           <div className="py-12 flex justify-center">
             <LoadingSpinner />
@@ -390,10 +441,17 @@ export const AdminsManager: React.FC = () => {
                       {admin.email || '—'}
                     </td>
                     <td className="px-4 py-3.5">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#0A0E17] text-white border border-slate-700">
-                        <Building2 className="w-3 h-3 text-red-400" />
-                        {admin.venueName || 'Estadio Teodoro Mariscal'}
-                      </span>
+                      {venues.some((v) => v.id === admin.venueId) ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#0A0E17] text-white border border-slate-700">
+                          <Building2 className="w-3 h-3 text-red-400" />
+                          {admin.venueName || 'Estadio Teodoro Mariscal'}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40" title="Esta sede no está registrada en el catálogo de Superadmin">
+                          <AlertCircle className="w-3 h-3 text-amber-400" />
+                          {admin.venueName || admin.venueId || 'Estadio Chevron'} (No Registrada)
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3.5 font-mono text-[11px] text-slate-500">
                       {admin.venueId || 'venue-teodoro-mariscal'}

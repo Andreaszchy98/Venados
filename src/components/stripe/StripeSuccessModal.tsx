@@ -65,7 +65,7 @@ export const StripeSuccessModal: React.FC<StripeSuccessModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fadeIn overflow-y-auto">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fadeIn overflow-y-auto">
       <div className="w-full max-w-lg bg-[#0F1626] rounded-3xl border border-slate-700/80 shadow-2xl overflow-hidden text-white relative my-auto max-h-[94vh] flex flex-col">
         {/* Barra superior decorativa */}
         <div className="h-1.5 bg-gradient-to-r from-red-600 via-amber-500 to-emerald-500 shrink-0" />

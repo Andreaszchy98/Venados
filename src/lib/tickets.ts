@@ -319,19 +319,155 @@ export function verifyTotpOrCode(scannedCode: string, ticket: Ticket): boolean {
 }
 
 /**
+ * Extraer token o identificador de reclamo/boleto desde la URL actual
+ * Soporta /reclamo/:id, /boleto/:id, /ticket/:id, /butaca/:id, query params y hashes
+ */
+export function extractClaimTokenFromUrl(): string | null {
+  try {
+    if (typeof window === 'undefined') return null;
+
+    // 1. Revisar query parameters en window.location.search
+    const params = new URLSearchParams(window.location.search);
+    const queryCandidates = ['reclamo', 'claim', 'claimToken', 'ticket', 'boleto', 'token', 't', 'pass'];
+    for (const key of queryCandidates) {
+      const val = params.get(key);
+      if (val && val.trim().length > 0) {
+        return cleanTokenString(val);
+      }
+    }
+
+    // 2. Revisar hash (#/reclamo/TOKEN o #reclamo=...)
+    const hash = window.location.hash;
+    if (hash) {
+      if (hash.includes('reclamo=') || hash.includes('claim=')) {
+        const hashParams = new URLSearchParams(hash.replace(/^#\/?\??/, ''));
+        for (const key of queryCandidates) {
+          const val = hashParams.get(key);
+          if (val && val.trim().length > 0) {
+            return cleanTokenString(val);
+          }
+        }
+      }
+      const hashPathMatches = hash.match(/#(?:!|\/)?(?:reclamo|boleto|ticket|pase|butaca|asiento)\/([^\/?#]+)/i);
+      if (hashPathMatches && hashPathMatches[1]) {
+        return cleanTokenString(hashPathMatches[1]);
+      }
+    }
+
+    // 3. Revisar pathname (/reclamo/TOKEN, /boleto/TOKEN, etc.)
+    const pathname = window.location.pathname;
+    const pathMatches = pathname.match(/\/(?:reclamo|reclamos|boleto|boletos|ticket|tickets|pase|pases|butaca|butacas|asiento|asientos)\/([^\/?#]+)/i);
+    if (pathMatches && pathMatches[1]) {
+      return cleanTokenString(pathMatches[1]);
+    }
+
+    return null;
+  } catch (err) {
+    console.warn('Error al extraer claim token de la URL:', err);
+    return null;
+  }
+}
+
+function cleanTokenString(token: string): string {
+  try {
+    const decoded = decodeURIComponent(token);
+    return decoded.trim().replace(/\/+$/, '');
+  } catch {
+    return token.trim().replace(/\/+$/, '');
+  }
+}
+
+/**
+ * Obtener la URL base pública adecuada para compartir con invitados
+ * Si se genera desde el entorno de desarrollo de AI Studio (ais-dev-),
+ * se reemplaza automáticamente por el entorno público (ais-pre-) para evitar que Google
+ * solicite inicio de sesión en Google Cloud al invitado.
+ */
+export function getPublicAppBaseUrl(overrideDomain?: string): string {
+  if (overrideDomain && overrideDomain.trim()) {
+    return overrideDomain.trim().replace(/\/+$/, '');
+  }
+
+  if (typeof window === 'undefined') return 'https://venados-vxp.web.app';
+
+  try {
+    const savedDomain = localStorage.getItem('vxp_public_domain');
+    if (savedDomain && savedDomain.trim()) {
+      return savedDomain.trim().replace(/\/+$/, '');
+    }
+  } catch {}
+
+  const origin = window.location.origin;
+
+  // Si estamos en el entorno de desarrollo privado de AI Studio (ais-dev-),
+  // convertirlo automáticamente al entorno público compartido (ais-pre-)
+  if (origin.includes('ais-dev-')) {
+    return origin.replace('ais-dev-', 'ais-pre-');
+  }
+
+  return origin;
+}
+
+export interface ClaimLinkDetails {
+  claimToken: string;
+  claimUrl: string;
+  whatsappUrl: string;
+  shareTitle: string;
+  shareText: string;
+  baseUrl: string;
+}
+
+/**
+ * Desglosar y generar enlace completo de reclamo (URL directa, WhatsApp, texto)
+ */
+export async function generateTicketClaimData(ticketId: string, customDomain?: string): Promise<ClaimLinkDetails> {
+  const ticketRef = doc(db, 'tickets', ticketId);
+  const ticketSnap = await getDoc(ticketRef);
+  
+  let claimToken = '';
+  let matchTitle = 'Partido Oficial';
+  let seatDesc = '';
+
+  if (ticketSnap.exists()) {
+    const data = ticketSnap.data() as Ticket;
+    matchTitle = data.matchTitle || 'Partido Oficial';
+    seatDesc = `${data.section || ''} - ${data.row || ''} - ${data.seat || ''}`.trim();
+    // Si ya tenía un claimToken asignado, reutilizarlo para no invalidar enlaces previos
+    if (data.claimToken) {
+      claimToken = data.claimToken;
+    }
+  }
+
+  if (!claimToken) {
+    claimToken = `CLAIM-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    await updateDoc(ticketRef, {
+      claimToken,
+      purchaseId: '', // Desvincula del grupo principal si era parte de una compra grupal
+    });
+  }
+
+  const baseUrl = getPublicAppBaseUrl(customDomain);
+  const claimUrl = `${baseUrl}/reclamo/${claimToken}`;
+  const shareTitle = `🎟️ Tu Boleto Oficial: ${matchTitle}`;
+  const shareText = `¡Hola! Te comparto tu boleto oficial para ${matchTitle} (${seatDesc}). Puedes abrirlo y mostrar tu código QR de acceso en los torniquetes sin necesidad de registrarte aquí: ${claimUrl}`;
+  const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
+
+  return {
+    claimToken,
+    claimUrl,
+    whatsappUrl,
+    shareTitle,
+    shareText,
+    baseUrl,
+  };
+}
+
+/**
  * Desglosar y generar enlace de reclamo por WhatsApp para un boleto individual
  */
 export async function generateTicketClaimLink(ticketId: string): Promise<string> {
-  const ticketRef = doc(db, 'tickets', ticketId);
-  const claimToken = `CLAIM-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
-  await updateDoc(ticketRef, {
-    claimToken,
-    purchaseId: '', // Desvincula del grupo principal si era parte de una compra grupal
-  });
-  
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://venados-vxp.web.app';
-  const text = encodeURIComponent(`¡Hola! Te comparto mi entrada para el partido de Venados de Mazatlán. Reclámala y descárgala con este enlace seguro: ${baseUrl}/reclamo/${claimToken}`);
-  return `https://wa.me/?text=${text}`;
+  const details = await generateTicketClaimData(ticketId);
+  return details.whatsappUrl;
 }
 
 /**

@@ -8,6 +8,9 @@ import { SeatMapSelector } from '../../views/aficionado/SeatMapSelector';
 import { MarcadorEnVivo } from '../../views/aficionado/MarcadorEnVivo';
 import { HistorialJuegos } from '../../views/aficionado/HistorialJuegos';
 import { subscribeAllScoreboards } from '../../lib/scoreboard';
+import { HeroAdBanner } from '../ads/HeroAdBanner';
+import { InlineAdGrid } from '../ads/InlineAdGrid';
+import { PopupAdModal } from '../ads/PopupAdModal';
 import { collection, query, limit, onSnapshot, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useTheme } from '../../context/ThemeContext';
@@ -569,6 +572,9 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
 
       {/* 2. FILA DE SELECCIÓN DE VISTA (CARTELERA VS MARCADORES FINALIZADOS) Y FILTROS */}
       <div className="max-w-6xl mx-auto mb-4 space-y-3">
+        {/* Banner Publicitario Hero de Patrocinador Oficial */}
+        <HeroAdBanner venueId={selectedVenueId} />
+
         {/* Switcher de Vista: Cartelera vs Marcadores de Juegos Finalizados */}
         <div className="flex flex-wrap items-center justify-between gap-2.5">
           <div className={`p-1 rounded-2xl border flex items-center gap-1 shadow-xs ${
@@ -983,10 +989,16 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Banners Inline Grid de Patrocinadores Oficiales */}
+        <InlineAdGrid venueId={selectedVenueId} />
       </main>
       )}
     </>
   )}
+
+      {/* Modal Emergente Popup de Patrocinio */}
+      <PopupAdModal venueId={selectedVenueId} />
 
       {/* 4. MODAL FLOTANTE DE SINOPSIS DEL EVENTO */}
       {synopsisEvent && (

@@ -66,10 +66,36 @@ export async function syncUserProfile(
   if (userSnapshot.exists()) {
     const data = userSnapshot.data();
     const currentRole: UserRole = data.role || 'aficionado';
-    const venueId = data.venueId || undefined;
-    const venueName = data.venueName || undefined;
-    const browsingVenueId = data.browsingVenueId || undefined;
-    const browsingVenueName = data.browsingVenueName || undefined;
+    let venueId = data.venueId || undefined;
+    let venueName = data.venueName || undefined;
+    let browsingVenueId = data.browsingVenueId || undefined;
+    let browsingVenueName = data.browsingVenueName || undefined;
+
+    // Sanitización activa: Si el perfil tiene asignada la sede inexistente 'venue-chevron' o 'Estadio Chevron'
+    // (no registrada en Superadmin), reasignar de inmediato a la sede oficial 'Estadio Teodoro Mariscal'
+    if (
+      venueId === 'venue-chevron' ||
+      venueName === 'Estadio Chevron' ||
+      browsingVenueId === 'venue-chevron' ||
+      browsingVenueName === 'Estadio Chevron'
+    ) {
+      venueId = 'venue-teodoro-mariscal';
+      venueName = 'Estadio Teodoro Mariscal';
+      browsingVenueId = 'venue-teodoro-mariscal';
+      browsingVenueName = 'Estadio Teodoro Mariscal';
+
+      try {
+        await updateDoc(userDocRef, {
+          venueId: 'venue-teodoro-mariscal',
+          venueName: 'Estadio Teodoro Mariscal',
+          browsingVenueId: 'venue-teodoro-mariscal',
+          browsingVenueName: 'Estadio Teodoro Mariscal',
+          updatedAt: new Date().toISOString(),
+        });
+      } catch (err) {
+        console.warn('Auto-corrección de sede Chevron en perfil de usuario:', err);
+      }
+    }
 
     return {
       uid: fbUser.uid,
@@ -326,12 +352,17 @@ export async function updateUserRole(
     updatedAt: new Date().toISOString(),
   };
 
-  if ((newRole === 'admin' || newRole === 'superadmin') && !venueId) {
+  const isInvalidVenue = !venueId || venueId === 'venue-chevron' || venueName === 'Estadio Chevron';
+
+  if ((newRole === 'admin' || newRole === 'superadmin') && isInvalidVenue) {
     updates.venueId = 'venue-teodoro-mariscal';
     updates.venueName = 'Estadio Teodoro Mariscal';
-  } else if (venueId) {
+  } else if (!isInvalidVenue) {
     updates.venueId = venueId;
     updates.venueName = venueName || 'Estadio Teodoro Mariscal';
+  } else {
+    updates.venueId = 'venue-teodoro-mariscal';
+    updates.venueName = 'Estadio Teodoro Mariscal';
   }
 
   await updateDoc(userDocRef, updates);

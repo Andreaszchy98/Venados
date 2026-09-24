@@ -16,11 +16,12 @@ import { LoadingSpinner } from './components/shared/LoadingSpinner';
 import { CarteleraLanding } from './components/cartelera/CarteleraLanding';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { ensureDefaultVenueExists } from './lib/defaultVenue';
 import { AutoDOMTranslator } from './components/shared/AutoDOMTranslator';
 import { StripeSuccessModal } from './components/stripe/StripeSuccessModal';
 import { StripeDemoCheckoutModal } from './components/stripe/StripeDemoCheckoutModal';
+import { extractClaimTokenFromUrl } from './lib/tickets';
 import { AlertCircle, X } from 'lucide-react';
 
 function MainLayout() {
@@ -31,20 +32,8 @@ function MainLayout() {
   const { t, language, setLanguage } = useLanguage();
   const { theme } = useTheme();
 
-  // Detectar token de reclamo en URL (/reclamo/[token] o ?reclamo=...)
-  const [claimToken] = useState<string | null>(() => {
-    try {
-      const path = window.location.pathname;
-      if (path.includes('/reclamo/')) {
-        const parts = path.split('/reclamo/');
-        if (parts[1]) return parts[1].trim();
-      }
-      const params = new URLSearchParams(window.location.search);
-      return params.get('reclamo') || null;
-    } catch {
-      return null;
-    }
-  });
+  // Detectar token de reclamo/boleto en URL (/reclamo/[token], ?reclamo=..., /boleto/..., hash, etc.)
+  const [claimToken] = useState<string | null>(() => extractClaimTokenFromUrl());
 
   if (claimToken) {
     return (
@@ -52,9 +41,10 @@ function MainLayout() {
         claimToken={claimToken}
         onNavigateHome={() => {
           try {
-            window.history.replaceState({}, '', window.location.pathname.split('/reclamo/')[0] || '/');
+            const cleanOrigin = window.location.origin;
+            window.history.replaceState({}, '', cleanOrigin + '/');
           } catch {}
-          window.location.reload();
+          window.location.href = '/';
         }}
       />
     );
@@ -102,17 +92,26 @@ function MainLayout() {
   }, []);
 
   // Perfil de invitado para navegación abierta sin login
-  const guestUser: UserProfile = useMemo(() => ({
-    uid: '',
-    email: '',
-    displayName: '',
-    role: 'aficionado',
-    browsingVenueId: localStorage.getItem('vxp_selected_venue_id') || 'venue-teodoro-mariscal',
-    browsingVenueName: 'Estadio Teodoro Mariscal',
-    venueId: 'venue-teodoro-mariscal',
-    venueName: 'Estadio Teodoro Mariscal',
-    createdAt: new Date().toISOString(),
-  }), []);
+  const guestUser: UserProfile = useMemo(() => {
+    let localVenue = localStorage.getItem('vxp_selected_venue_id');
+    if (localVenue === 'venue-chevron') {
+      localVenue = 'venue-teodoro-mariscal';
+      try {
+        localStorage.setItem('vxp_selected_venue_id', 'venue-teodoro-mariscal');
+      } catch {}
+    }
+    return {
+      uid: '',
+      email: '',
+      displayName: '',
+      role: 'aficionado',
+      browsingVenueId: localVenue || 'venue-teodoro-mariscal',
+      browsingVenueName: 'Estadio Teodoro Mariscal',
+      venueId: 'venue-teodoro-mariscal',
+      venueName: 'Estadio Teodoro Mariscal',
+      createdAt: new Date().toISOString(),
+    };
+  }, []);
 
   // Si el usuario autenticado tiene un rol distinto a aficionado, descartar pendingEventId y pendingView
   useEffect(() => {
@@ -175,6 +174,22 @@ function MainLayout() {
                 if (data.language && data.language !== language) {
                   setLanguage(data.language);
                 }
+                let safeVenueId = data.venueId;
+                let safeVenueName = data.venueName;
+
+                // Si Firestore aún tuviese la sede inexistente Estadio Chevron, auto-sanitizar inmediatamente
+                if (data.venueId === 'venue-chevron' || data.venueName === 'Estadio Chevron' || data.browsingVenueId === 'venue-chevron') {
+                  safeVenueId = 'venue-teodoro-mariscal';
+                  safeVenueName = 'Estadio Teodoro Mariscal';
+                  updateDoc(userDocRef, {
+                    venueId: 'venue-teodoro-mariscal',
+                    venueName: 'Estadio Teodoro Mariscal',
+                    browsingVenueId: 'venue-teodoro-mariscal',
+                    browsingVenueName: 'Estadio Teodoro Mariscal',
+                    updatedAt: new Date().toISOString(),
+                  }).catch(() => {});
+                }
+
                 setUserProfile({
                   uid: currentUser.uid,
                   email: data.email || currentUser.email,
@@ -187,8 +202,8 @@ function MainLayout() {
                   standName: data.standName,
                   assignedZone: data.assignedZone,
                   runnerStatus: data.runnerStatus,
-                  venueId: data.venueId,
-                  venueName: data.venueName,
+                  venueId: safeVenueId,
+                  venueName: safeVenueName,
                   createdAt: data.createdAt || new Date().toISOString(),
                   updatedAt: data.updatedAt,
                 });

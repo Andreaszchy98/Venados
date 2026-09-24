@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Ticket, VenueEvent } from '../../types';
 import { QRCodeDisplay } from '../../components/shared/QRCodeDisplay';
-import { generateTicketClaimLink } from '../../lib/tickets';
+import { generateTicketClaimLink, generateTicketClaimData } from '../../lib/tickets';
+import { ShareTicketModal } from '../../components/shared/ShareTicketModal';
 import {
   cleanRowValue,
   cleanSeatValue,
@@ -42,6 +43,8 @@ export const BoletoDetalle: React.FC<BoletoDetalleProps> = ({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isWalletAdded, setIsWalletAdded] = useState(false);
   const [sharingSeatId, setSharingSeatId] = useState<string | null>(null);
+  const [ticketToShare, setTicketToShare] = useState<Ticket | null>(null);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
   // Determinar lista total de boletos de esta compra
   const allTickets = siblingTickets.length > 0 ? siblingTickets : [ticket];
@@ -65,18 +68,13 @@ export const BoletoDetalle: React.FC<BoletoDetalleProps> = ({
     }, 3500);
   };
 
-  const handleShareIndividualSeat = async (t: Ticket) => {
-    setSharingSeatId(t.id);
-    try {
-      const waLink = await generateTicketClaimLink(t.id);
-      showToast(`¡Boleto Butaca ${cleanSeatValue(t.seat)} desvinculado y listo para compartir!`);
-      window.open(waLink, '_blank');
-    } catch (e) {
-      console.error('Error sharing individual seat:', e);
-      showToast('Error al desvincular el boleto.');
-    } finally {
-      setSharingSeatId(null);
-    }
+  const handleOpenShareModal = (t: Ticket) => {
+    setTicketToShare(t);
+    setIsShareModalOpen(true);
+  };
+
+  const handleShareIndividualSeat = (t: Ticket) => {
+    handleOpenShareModal(t);
   };
 
   // Manejo de teclado (Escape para volver)
@@ -579,8 +577,7 @@ Presenta este código en los molinetes del estadio.
           <div className="space-y-2 pt-1">
             <button
               type="button"
-              onClick={() => handleShareIndividualSeat(allTickets[0])}
-              disabled={sharingSeatId === allTickets[0]?.id}
+              onClick={() => handleOpenShareModal(allTickets[0])}
               className={`w-full py-2.5 px-4 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer font-sports uppercase tracking-wider active:scale-98 shadow-sm ${
                 theme === 'light'
                   ? 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-800'
@@ -588,11 +585,21 @@ Presenta este código en los molinetes del estadio.
               }`}
             >
               <Share2 className="w-4 h-4 text-red-500" />
-              <span>{sharingSeatId === allTickets[0]?.id ? 'Generando enlace...' : 'Compartir'}</span>
+              <span>Compartir Entrada Oficial (WhatsApp / Enlace)</span>
             </button>
           </div>
         </div>
       </div>
+
+      {/* Modal de Compartir Butaca / Entrada */}
+      <ShareTicketModal
+        isOpen={isShareModalOpen}
+        onClose={() => {
+          setIsShareModalOpen(false);
+          setTicketToShare(null);
+        }}
+        ticket={ticketToShare}
+      />
     </div>
   );
 };

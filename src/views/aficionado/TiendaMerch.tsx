@@ -140,9 +140,9 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
     setCart((prev) => {
       const existingIndex = prev.findIndex((item) => item.product.id === product.id && item.size === selectedSize);
       if (existingIndex > -1) {
-        const copy = [...prev];
-        copy[existingIndex].quantity += 1;
-        return copy;
+        return prev.map((item, i) =>
+          i === existingIndex ? { ...item, quantity: item.quantity + 1 } : item
+        );
       }
       return [...prev, { product, size: selectedSize, quantity: 1 }];
     });
@@ -167,26 +167,30 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
       );
 
       if (existingIndex > -1) {
-        const copy = [...prev];
-        copy[existingIndex].quantity += currentItem.quantity;
-        copy.splice(index, 1);
-        return copy;
+        return prev
+          .map((item, i) =>
+            i === existingIndex ? { ...item, quantity: item.quantity + currentItem.quantity } : item
+          )
+          .filter((_, i) => i !== index);
       } else {
-        const copy = [...prev];
-        copy[index] = { ...currentItem, size: newSize };
-        return copy;
+        return prev.map((item, i) =>
+          i === index ? { ...item, size: newSize } : item
+        );
       }
     });
   };
 
   const updateCartQty = (index: number, delta: number) => {
     setCart((prev) => {
-      const copy = [...prev];
-      copy[index].quantity += delta;
-      if (copy[index].quantity <= 0) {
-        copy.splice(index, 1);
+      const item = prev[index];
+      if (!item) return prev;
+      const nextQty = item.quantity + delta;
+      if (nextQty <= 0) {
+        return prev.filter((_, i) => i !== index);
       }
-      return copy;
+      return prev.map((it, i) =>
+        i === index ? { ...it, quantity: nextQty } : it
+      );
     });
   };
 
@@ -599,35 +603,45 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
         </div>
       )}
 
-      {/* Carrito Lateral / Modal */}
+      {/* Carrito Pop-up Modal */}
       {isCartOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/80 backdrop-blur-sm">
-          <div className={`w-full max-w-md h-full border-l shadow-2xl flex flex-col justify-between overflow-hidden ${
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-150 font-sports"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsCartOpen(false);
+              setIsCheckingOut(false);
+            }
+          }}
+        >
+          <div className={`w-full max-w-lg my-auto rounded-2xl sm:rounded-3xl border shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-150 max-h-[88vh] ${
             theme === 'light' ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#0F1626] border-slate-700/80 text-white'
           }`}>
             {/* Header del Carrito */}
-            <div className={`p-5 border-b flex items-center justify-between ${
+            <div className={`p-4 sm:p-5 border-b shrink-0 flex items-center justify-between ${
               theme === 'light' ? 'bg-slate-50 border-slate-200 text-slate-900' : 'bg-[#0A0E17] border-slate-700/80 text-white'
             }`}>
               <div className="flex items-center gap-2">
                 <ShoppingCart className="w-5 h-5 text-red-500" />
-                <h3 className="font-bold text-sm font-sports tracking-wide uppercase">Tu Carrito ({totalItemsCount} artículos)</h3>
+                <h3 className="font-bold text-sm sm:text-base font-sports tracking-wide uppercase">Tu Carrito ({totalItemsCount} artículos)</h3>
               </div>
               <button
+                type="button"
                 onClick={() => {
                   setIsCartOpen(false);
                   setIsCheckingOut(false);
                 }}
-                className={`p-1 rounded-lg cursor-pointer ${
-                  theme === 'light' ? 'text-slate-500 hover:text-slate-900' : 'text-slate-400 hover:text-white'
+                className={`p-1.5 rounded-xl cursor-pointer transition-colors ${
+                  theme === 'light' ? 'text-slate-500 hover:text-slate-900 hover:bg-slate-100' : 'text-slate-400 hover:text-white hover:bg-[#141C2E]'
                 }`}
+                title="Cerrar carrito"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Contenido del Carrito o Checkout */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            {/* Contenido del Carrito o Checkout (se adapta al contenido sin espacios vacíos gigantes) */}
+            <div className="overflow-y-auto p-4 sm:p-5 space-y-4 max-h-[55vh]">
               {cart.length === 0 ? (
                 <div className="text-center py-16 space-y-3 font-sports">
                   <ShoppingCart className={`w-12 h-12 mx-auto ${theme === 'light' ? 'text-slate-400' : 'text-slate-600'}`} />
@@ -828,14 +842,14 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                   {cart.map((item, idx) => (
                     <div
                       key={`${item.product.id}-${item.size}`}
-                      className={`flex gap-3 p-3 rounded-xl border ${
+                      className={`flex items-center gap-2.5 sm:gap-3 p-2.5 sm:p-3 rounded-xl border ${
                         theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-[#0A0E17] border-slate-700/80'
                       }`}
                     >
                       <img
                         src={normalizeGoogleDriveImageUrl(item.product.image) || getDefaultProductPlaceholder(item.product.category)}
                         alt={item.product.name}
-                        className={`w-16 h-16 object-contain p-1 rounded-lg border shrink-0 ${
+                        className={`w-14 h-14 sm:w-16 sm:h-16 object-contain p-1 rounded-lg border shrink-0 ${
                           theme === 'light' ? 'bg-white border-slate-200' : 'bg-[#060911] border-slate-700/80'
                         }`}
                         referrerPolicy="no-referrer"
@@ -843,11 +857,11 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                           (e.currentTarget as HTMLImageElement).src = getDefaultProductPlaceholder(item.product.category);
                         }}
                       />
-                      <div className="flex-1 space-y-1">
-                        <p className={`text-xs font-bold leading-snug line-clamp-1 ${
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <p className={`text-xs font-bold leading-snug truncate ${
                           theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
                         }`}>{item.product.name}</p>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className={`text-[11px] font-sans ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
                             Talla:
                           </span>
@@ -855,7 +869,7 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                             <select
                               value={item.size}
                               onChange={(e) => updateCartItemSize(idx, e.target.value)}
-                              className={`text-[11px] font-bold font-sports py-0.5 px-1.5 rounded-md border focus:outline-hidden cursor-pointer ${
+                              className={`text-[11px] font-bold font-sports py-0.5 px-1.5 rounded-md border focus:outline-hidden cursor-pointer max-w-[110px] truncate ${
                                 theme === 'light'
                                   ? 'bg-white border-slate-300 text-red-700 hover:border-red-500'
                                   : 'bg-[#141C2E] border-slate-700 text-red-400 hover:border-red-500'
@@ -880,28 +894,40 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
                           ${(item.product.price * item.quantity).toLocaleString('es-MX')} MXN
                         </p>
                       </div>
-                      <div className="flex flex-col items-center justify-between">
-                        <div className={`flex items-center gap-1.5 border rounded-lg p-0.5 ${
+                      <div className="shrink-0">
+                        <div className={`flex items-center gap-1 border rounded-lg p-0.5 shrink-0 ${
                           theme === 'light' ? 'bg-white border-slate-300 text-slate-900' : 'bg-[#141C2E] border-slate-700 text-white'
                         }`}>
                           <button
-                            onClick={() => updateCartQty(idx, -1)}
-                            className={`p-1 cursor-pointer ${
-                              theme === 'light' ? 'text-slate-500 hover:text-red-600' : 'text-slate-400 hover:text-red-400'
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              updateCartQty(idx, -1);
+                            }}
+                            className={`p-1 rounded-md cursor-pointer transition-colors ${
+                              theme === 'light' ? 'text-slate-500 hover:text-red-600 hover:bg-red-50' : 'text-slate-400 hover:text-red-400 hover:bg-red-950/30'
                             }`}
+                            title="Disminuir cantidad"
                           >
-                            <Minus className="w-3 h-3" />
+                            <Minus className="w-3.5 h-3.5" />
                           </button>
-                          <span className={`text-xs font-bold px-1.5 font-mono ${
+                          <span className={`text-xs font-bold px-1.5 font-mono text-center min-w-[20px] ${
                             theme === 'light' ? 'text-slate-900' : 'text-white'
                           }`}>{item.quantity}</span>
                           <button
-                            onClick={() => updateCartQty(idx, 1)}
-                            className={`p-1 cursor-pointer ${
-                              theme === 'light' ? 'text-slate-500 hover:text-emerald-600' : 'text-slate-400 hover:text-emerald-400'
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              updateCartQty(idx, 1);
+                            }}
+                            className={`p-1 rounded-md cursor-pointer transition-colors ${
+                              theme === 'light' ? 'text-slate-500 hover:text-emerald-600 hover:bg-emerald-50' : 'text-slate-400 hover:text-emerald-400 hover:bg-emerald-950/30'
                             }`}
+                            title="Aumentar cantidad"
                           >
-                            <Plus className="w-3 h-3" />
+                            <Plus className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>

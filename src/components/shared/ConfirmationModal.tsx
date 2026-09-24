@@ -30,7 +30,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 bg-black/80 backdrop-blur-md overflow-y-auto animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 md:p-6 bg-black/80 backdrop-blur-md overflow-y-auto animate-in fade-in duration-150">
       <div className="bg-[#0F1626] w-full max-w-sm sm:max-w-md rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-700/80 overflow-hidden transform transition-all animate-in zoom-in-95 duration-150 my-auto flex flex-col max-h-[92vh]">
         {/* Cabecera con botón de cerrar */}
         <div className="p-4 sm:p-5 pb-0 flex items-start justify-between shrink-0">

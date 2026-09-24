@@ -166,6 +166,37 @@ export async function ensureDefaultVenueExists(): Promise<void> {
     } catch (cleanStandsErr) {
       console.warn('ensureDefaultVenueExists: Nota al consolidar puestos:', cleanStandsErr);
     }
+
+    // Limpieza activa: Detectar y corregir usuarios asignados a la sede inexistente Estadio Chevron / venue-chevron
+    try {
+      const usersSnap = await getDocs(collection(db, 'users'));
+      for (const uDoc of usersSnap.docs) {
+        const uData = uDoc.data();
+        if (
+          uData.venueId === 'venue-chevron' ||
+          uData.venueName === 'Estadio Chevron' ||
+          uData.browsingVenueId === 'venue-chevron' ||
+          uData.browsingVenueName === 'Estadio Chevron'
+        ) {
+          await updateDoc(uDoc.ref, {
+            venueId: DEFAULT_VENUE_ID,
+            venueName: 'Estadio Teodoro Mariscal',
+            browsingVenueId: DEFAULT_VENUE_ID,
+            browsingVenueName: 'Estadio Teodoro Mariscal',
+            updatedAt: new Date().toISOString(),
+          }).catch(() => {});
+        }
+      }
+
+      // Si existe un documento residual en venues con id 'venue-chevron', eliminarlo
+      const chevronVenueRef = doc(db, 'venues', 'venue-chevron');
+      const chevronVenueSnap = await getDoc(chevronVenueRef);
+      if (chevronVenueSnap.exists()) {
+        await deleteDoc(chevronVenueRef).catch(() => {});
+      }
+    } catch (cleanUsersErr) {
+      console.warn('ensureDefaultVenueExists: Nota al sanitizar usuarios asignados a Chevron:', cleanUsersErr);
+    }
   } catch (err) {
     // Se captura la advertencia en caso de que el usuario no autenticado o no-admin
     // no tenga permisos de escritura en rules aún.

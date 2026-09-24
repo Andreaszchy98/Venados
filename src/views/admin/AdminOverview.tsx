@@ -20,11 +20,12 @@ import {
   Users,
   Calendar,
   Radio,
+  Megaphone,
 } from 'lucide-react';
 
 interface AdminOverviewProps {
   user?: UserProfile;
-  onNavigateTab: (tab: 'ventas' | 'inventario' | 'logistica' | 'personal' | 'negocios' | 'eventos' | 'marcador') => void;
+  onNavigateTab: (tab: 'ventas' | 'inventario' | 'logistica' | 'personal' | 'negocios' | 'eventos' | 'marcador' | 'anuncios') => void;
 }
 
 export const AdminOverview: React.FC<AdminOverviewProps> = ({ user, onNavigateTab }) => {
@@ -331,6 +332,38 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ user, onNavigateTa
               className="px-3.5 py-2 bg-gradient-to-r from-amber-600 to-red-600 hover:from-amber-500 hover:to-red-500 text-white text-xs font-bold font-sports uppercase tracking-wider rounded-xl flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
             >
               <span>Operar Marcador</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+        {/* Módulo Banners & Publicidad (isVenueAdmin) */}
+        <div className="bg-[#0F1626] rounded-2xl border border-rose-500/30 p-5 shadow-lg flex flex-col justify-between space-y-4 hover:border-rose-500/60 transition-colors">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="p-2.5 rounded-xl bg-rose-950/60 text-rose-400 border border-rose-500/30">
+                <Megaphone className="w-5 h-5" />
+              </div>
+              <span className="text-xs font-bold text-rose-300 bg-rose-950/80 border border-rose-500/40 px-2.5 py-0.5 rounded-full font-sports uppercase tracking-wider">
+                Patrocinios
+              </span>
+            </div>
+            <h3 className="font-bold text-lg text-white font-sports uppercase tracking-wider">Banners & Patrocinios</h3>
+            <p className="text-xs text-slate-400 leading-relaxed font-body">
+              Gestión centralizada de banners Hero, Inline Grid y Popups con conteo de impresiones y clics en vivo.
+            </p>
+          </div>
+
+          <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
+            <div>
+              <span className="text-[11px] text-slate-400 block font-sports uppercase tracking-wider">Publicidad Sede</span>
+              <span className="text-lg font-scoreboard font-bold text-rose-400 tracking-wider">Métricas en Vivo</span>
+            </div>
+            <button
+              id="overview-goto-anuncios"
+              onClick={() => onNavigateTab('anuncios')}
+              className="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold font-sports uppercase tracking-wider rounded-xl flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
+            >
+              <span>Gestionar</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>

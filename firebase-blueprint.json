@@ -289,6 +289,27 @@
         "team": { "type": "string", "enum": ["home", "away"] }
       },
       "required": ["eventId", "playerName", "team"]
+    },
+    "sponsorAds": {
+      "title": "sponsorAds",
+      "description": "Gestión centralizada de banners publicitarios y patrocinios (Hero, Inline Grid, Popup) con conteo en tiempo real de impresiones y clics",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "venueId": { "type": "string" },
+        "sponsorName": { "type": "string" },
+        "type": { "type": "string", "enum": ["hero", "inline", "popup"] },
+        "imageUrl": { "type": "string" },
+        "targetUrl": { "type": "string" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "active": { "type": "boolean" },
+        "impressions": { "type": "number" },
+        "clicks": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["venueId", "sponsorName", "type", "imageUrl", "startDate", "endDate", "active"]
     }
   }
 }

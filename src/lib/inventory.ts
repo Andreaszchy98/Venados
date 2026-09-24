@@ -339,9 +339,6 @@ export function getCuratedProductsForVenue(venueId: string): InventoryProduct[] 
   if (venueId === 'venue-tomateros') {
     sourceList = INITIAL_TOMATEROS_PRODUCTS;
     prefix = 'tom';
-  } else if (venueId === 'venue-chevron') {
-    sourceList = INITIAL_TOROS_PRODUCTS;
-    prefix = 'tor';
   } else if (venueId !== DEFAULT_VENUE_ID) {
     // Sede personalizada
     prefix = venueId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4);

@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
 import { UserProfile } from '../../types';
 import { AdminOverview } from './AdminOverview';
 import { VentasAdmin } from './VentasAdmin';
@@ -8,6 +10,7 @@ import { PersonalAdmin } from './PersonalAdmin';
 import { NegociosAdmin } from './NegociosAdmin';
 import { EventsManager } from './EventsManager';
 import { MarcadorControl } from './MarcadorControl';
+import { AnunciosAdmin } from './AnunciosAdmin';
 import { MarcadorEnVivo } from '../aficionado/MarcadorEnVivo';
 import { useLanguage } from '../../context/LanguageContext';
 import {
@@ -23,13 +26,14 @@ import {
   Check,
   Layers,
   Radio,
+  Megaphone,
 } from 'lucide-react';
 
 interface AdminViewProps {
   user: UserProfile;
 }
 
-export type AdminTab = 'resumen' | 'eventos' | 'marcador' | 'ventas' | 'inventario' | 'logistica' | 'personal' | 'negocios';
+export type AdminTab = 'resumen' | 'eventos' | 'marcador' | 'anuncios' | 'ventas' | 'inventario' | 'logistica' | 'personal' | 'negocios';
 
 interface SectionConfig {
   id: AdminTab;
@@ -72,6 +76,16 @@ const ADMIN_SECTIONS: SectionConfig[] = [
     defaultDesc: 'Partidos, conciertos y boletaje',
     iconColor: 'text-indigo-700',
     badgeBg: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  },
+  {
+    id: 'anuncios',
+    icon: Megaphone,
+    labelKey: 'admin.tabs.ads',
+    defaultLabel: 'Banners & Patrocinios',
+    descKey: 'admin.sections.ads_desc',
+    defaultDesc: 'Gestión de publicidad Hero, Inline y Popups con métricas en vivo',
+    iconColor: 'text-rose-500',
+    badgeBg: 'bg-rose-500/10 text-rose-500 border-rose-500/20',
   },
   {
     id: 'negocios',
@@ -163,6 +177,31 @@ export const AdminView: React.FC<AdminViewProps> = ({ user }) => {
   const activeSection = ADMIN_SECTIONS.find((s) => s.id === activeTab) || ADMIN_SECTIONS[0];
   const ActiveIcon = activeSection.icon;
 
+  // Sanitización de sede: Si el usuario tiene asignada la sede inexistente 'venue-chevron' o 'Estadio Chevron',
+  // o si no tiene sede asignada, reasignar a la sede principal registrada (Estadio Teodoro Mariscal)
+  const isInvalidVenue = !user.venueId || user.venueId === 'venue-chevron' || user.venueName === 'Estadio Chevron';
+
+  useEffect(() => {
+    if (isInvalidVenue && user.uid) {
+      updateDoc(doc(db, 'users', user.uid), {
+        venueId: 'venue-teodoro-mariscal',
+        venueName: 'Estadio Teodoro Mariscal',
+        updatedAt: new Date().toISOString(),
+      }).catch((e) => console.warn('Error al auto-corregir sede en Firestore:', e));
+    }
+  }, [isInvalidVenue, user.uid]);
+
+  const effectiveUser = React.useMemo(() => {
+    if (isInvalidVenue) {
+      return {
+        ...user,
+        venueId: 'venue-teodoro-mariscal',
+        venueName: 'Estadio Teodoro Mariscal',
+      };
+    }
+    return user;
+  }, [user, isInvalidVenue]);
+
   // El superadmin NO debe tener acceso a esta vista ni a la gestión de eventos
   if (user.role === 'superadmin') {
     return (
@@ -188,10 +227,15 @@ export const AdminView: React.FC<AdminViewProps> = ({ user }) => {
             </span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-400 mt-0.5 flex flex-wrap items-center gap-1.5">
-            <span>Sede asignada: <strong className="text-white font-semibold">{user.venueName || 'Estadio Teodoro Mariscal'}</strong></span>
+            <span>Sede asignada: <strong className="text-white font-semibold">{effectiveUser.venueName}</strong></span>
             <span className="text-slate-600">•</span>
             <span>Control de negocio, inventario, logística, ventas y personal</span>
           </p>
+          {isInvalidVenue && (
+            <p className="text-[11px] text-amber-400 font-semibold mt-1 flex items-center gap-1">
+              <span>⚠️ La sede previa ("{user.venueName || 'Estadio Chevron'}") no está registrada en Superadmin. Se ha reasignado automáticamente a Estadio Teodoro Mariscal.</span>
+            </p>
+          )}
         </div>
 
         {/* Selector Desplegable de Sección Administrativa */}
@@ -302,29 +346,30 @@ export const AdminView: React.FC<AdminViewProps> = ({ user }) => {
       ) : null}
 
       {activeTab === 'resumen' && (
-        <AdminOverview user={user} onNavigateTab={(tab) => setActiveTab(tab as any)} />
+        <AdminOverview user={effectiveUser} onNavigateTab={(tab) => setActiveTab(tab as any)} />
       )}
       {activeTab === 'marcador' && (
         <MarcadorControl
-          user={user}
+          user={effectiveUser}
           initialEventId={selectedEventIdForScoreboard}
           onViewFanScoreboard={(eventId) => setPreviewScoreboardEventId(eventId)}
         />
       )}
       {activeTab === 'eventos' && (
         <EventsManager
-          user={user}
+          user={effectiveUser}
           onOpenScoreboard={(eventId) => {
             setSelectedEventIdForScoreboard(eventId);
             setActiveTab('marcador');
           }}
         />
       )}
-      {activeTab === 'negocios' && <NegociosAdmin user={user} />}
-      {activeTab === 'personal' && <PersonalAdmin user={user} />}
-      {activeTab === 'ventas' && <VentasAdmin user={user} />}
-      {activeTab === 'inventario' && <InventarioAdmin user={user} />}
-      {activeTab === 'logistica' && <LogisticaAdmin user={user} />}
+      {activeTab === 'anuncios' && <AnunciosAdmin user={effectiveUser} />}
+      {activeTab === 'negocios' && <NegociosAdmin user={effectiveUser} />}
+      {activeTab === 'personal' && <PersonalAdmin user={effectiveUser} />}
+      {activeTab === 'ventas' && <VentasAdmin user={effectiveUser} />}
+      {activeTab === 'inventario' && <InventarioAdmin user={effectiveUser} />}
+      {activeTab === 'logistica' && <LogisticaAdmin user={effectiveUser} />}
     </div>
   );
 };

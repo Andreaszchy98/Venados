@@ -507,3 +507,42 @@ export interface HistoricalGame {
   footballState?: FootballGameState;
   summaryNote?: string;
 }
+
+// ==========================================
+// 10. GESTIÓN CENTRALIZADA DE BANNERS Y PUBLICIDAD (ISVENUEADMIN)
+// ==========================================
+export type AdType = 'hero' | 'inline' | 'popup';
+
+export interface Advertisement {
+  id: string;
+  sponsorName: string;
+  type: 'hero' | 'inline_grid' | 'inline' | 'popup' | string;
+  imageUrl: string;
+  targetUrl?: string;
+  active: boolean;
+  priority?: number;
+  startDate?: string;
+  endDate?: string;
+  impressionsCount?: number;
+  clicksCount?: number;
+  createdBy?: string;
+  createdAt?: string;
+  venueId?: string;
+}
+
+export interface SponsorAd {
+  id: string;
+  venueId: string;
+  sponsorName: string;
+  type: AdType; // 'hero' | 'inline' | 'popup'
+  imageUrl: string;
+  targetUrl?: string; // URL opcional de redirección
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  active: boolean;
+  impressions: number;
+  clicks: number;
+  createdAt: string;
+  updatedAt: string;
+}
+

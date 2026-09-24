@@ -299,9 +299,7 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
     setCart((prev) => {
       const idx = prev.findIndex((c) => c.item.id === item.id);
       if (idx > -1) {
-        const copy = [...prev];
-        copy[idx].quantity += 1;
-        return copy;
+        return prev.map((c, i) => (i === idx ? { ...c, quantity: c.quantity + 1 } : c));
       }
       return [...prev, { item, quantity: 1 }];
     });
@@ -942,8 +940,8 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
 
       {/* MODAL: Selección de Método de Entrega (Pickup vs In-Seat) & Método de Pago */}
       {isCheckoutModalOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto animate-in fade-in duration-150 font-sports">
-          <div className={`rounded-2xl sm:rounded-3xl max-w-lg w-full max-h-[92vh] sm:max-h-[88vh] flex flex-col shadow-2xl border overflow-hidden my-auto animate-in zoom-in-95 duration-150 ${
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto animate-in fade-in duration-150 font-sports">
+          <div className={`rounded-2xl sm:rounded-3xl max-w-lg w-full max-h-[88vh] flex flex-col shadow-2xl border overflow-hidden my-auto animate-in zoom-in-95 duration-150 ${
             theme === 'light'
               ? 'bg-white border-slate-200 text-slate-900'
               : 'bg-[#0F1626] border-slate-700/80 text-white'

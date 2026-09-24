@@ -13,6 +13,7 @@ import {
 } from '../../lib/stands';
 import { getVenueStaff } from '../../lib/auth';
 import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
+import { normalizeGoogleDriveImageUrl, isGoogleDriveUrl } from '../../lib/imageUtils';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { ConfirmationModal } from '../../components/shared/ConfirmationModal';
 import {
@@ -225,7 +226,7 @@ export const NegociosAdmin: React.FC<NegociosAdminProps> = ({ user }) => {
         commissionRate: Number(standForm.commissionRate) || 0,
         monthlyRent: Number(standForm.monthlyRent) || 0,
         estimatedWaitMinutes: Number(standForm.estimatedWaitMinutes) || 5,
-        image: standForm.image || PRESET_IMAGES[0].url,
+        image: normalizeGoogleDriveImageUrl(standForm.image) || PRESET_IMAGES[0].url,
         active: standForm.active,
       };
 
@@ -355,7 +356,7 @@ export const NegociosAdmin: React.FC<NegociosAdminProps> = ({ user }) => {
         price: Number(itemForm.price),
         category: itemForm.category,
         prepTimeMinutes: Number(itemForm.prepTimeMinutes),
-        image: itemForm.image,
+        image: normalizeGoogleDriveImageUrl(itemForm.image),
         available: itemForm.available,
       });
 

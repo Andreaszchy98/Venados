@@ -3,15 +3,17 @@
  */
 
 /**
- * Detecta enlaces compartidos de Google Drive y los convierte a URLs directas de imagen (CDN de Google)
- * para que las etiquetas <img> del navegador puedan renderizarlas sin restricciones ni páginas intermedias HTML.
+ * Detecta enlaces compartidos de Google Drive, Dropbox u otros servicios y los convierte
+ * a URLs directas de imagen (CDN de Google / direct raw stream) para que las etiquetas <img>
+ * del navegador puedan renderizarlas sin restricciones ni páginas intermedias HTML.
  *
- * Enlaces soportados:
- * - https://drive.google.com/file/d/{FILE_ID}/view?usp=...
+ * Enlaces de Google Drive soportados:
+ * - https://drive.google.com/file/d/{FILE_ID}/view?usp=sharing
+ * - https://drive.google.com/file/d/{FILE_ID}/view
  * - https://drive.google.com/open?id={FILE_ID}
  * - https://drive.google.com/uc?id={FILE_ID} o uc?export=view&id={FILE_ID}
  * - https://drive.google.com/thumbnail?id={FILE_ID}
- * - https://docs.google.com/...
+ * - https://docs.google.com/file/d/{FILE_ID}
  *
  * Retorna:
  * - https://lh3.googleusercontent.com/d/{FILE_ID}
@@ -44,7 +46,19 @@ export function normalizeGoogleDriveImageUrl(url?: string | null): string {
     return `https://lh3.googleusercontent.com/d/${directDMatch[1]}`;
   }
 
+  // 4. Patrón de Dropbox (cambiar dl=0 por raw=1)
+  if (trimmed.includes('dropbox.com')) {
+    return trimmed.replace(/([?&])dl=0/i, '$1raw=1').replace(/([?&])dl=1/i, '$1raw=1');
+  }
+
   return trimmed;
+}
+
+/**
+ * Alias universal para normalizar cualquier URL de imagen externa (Google Drive, Dropbox, etc.)
+ */
+export function normalizeImageUrl(url?: string | null): string {
+  return normalizeGoogleDriveImageUrl(url);
 }
 
 /**

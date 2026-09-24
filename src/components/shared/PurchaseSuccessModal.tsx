@@ -273,7 +273,7 @@ Conserva este comprobante para seguimiento o retiro.
   return (
     <div
       id="purchase-success-modal-overlay"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fadeIn overflow-y-auto"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fadeIn overflow-y-auto"
     >
       {/* Notificación flotante de feedback */}
       {toastMessage && (

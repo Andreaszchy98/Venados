@@ -68,14 +68,12 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
   const handleCardNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value.replace(/\D/g, '').slice(0, maxCardLength);
     if (brand === 'amex') {
-      // 4-6-5 format
       const part1 = val.slice(0, 4);
       const part2 = val.slice(4, 10);
       const part3 = val.slice(10, 15);
       const formatted = [part1, part2, part3].filter(Boolean).join(' ');
       setCardNumber(formatted);
     } else {
-      // 4-4-4-4 format
       const parts = val.match(/.{1,4}/g) || [];
       setCardNumber(parts.join(' '));
     }
@@ -169,22 +167,22 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
   return (
     <div
       id="card-payment-modal"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-fadeIn"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-fadeIn"
       onClick={(e) => {
         if (e.target === e.currentTarget && !isProcessing) onClose();
       }}
     >
       <div
-        className={`w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border my-auto transition-all ${
+        className={`w-full max-w-lg my-auto rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden border transition-all flex flex-col max-h-[90vh] ${
           theme === 'light'
             ? 'bg-white border-slate-200 text-slate-900'
             : 'bg-[#0B111E] border-slate-700/90 text-white'
         }`}
       >
         {/* Header con gradiente de seguridad */}
-        <div className="bg-gradient-to-r from-red-700 via-red-600 to-rose-700 p-4 sm:p-5 text-white relative">
+        <div className="bg-gradient-to-r from-red-700 via-red-600 to-rose-700 p-4 sm:p-5 text-white relative shrink-0">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
               <div className="p-2 bg-white/20 rounded-xl backdrop-blur-xs">
                 <CreditCard className="w-5 h-5 text-white" />
               </div>
@@ -192,7 +190,7 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
                 <h3 className="text-base sm:text-lg font-black tracking-tight leading-tight">
                   Pago Seguro con Tarjeta
                 </h3>
-                <p className="text-[11px] text-red-100 flex items-center gap-1.5 mt-0.5">
+                <p className="text-[11px] text-red-100 flex items-center gap-1.5 mt-0.5 font-sans">
                   <Lock className="w-3 h-3 text-emerald-300" />
                   <span>Cifrado SSL de 256 bits • Procesado vía Stripe</span>
                 </p>
@@ -211,23 +209,21 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
           </div>
         </div>
 
-        <div className="p-4 sm:p-6 space-y-5">
-          {/* Tarjeta de crédito interactiva en vivo */}
-          <div className="relative w-full h-44 sm:h-48 rounded-2xl p-5 text-white shadow-xl overflow-hidden bg-gradient-to-tr from-[#0F172A] via-[#1E293B] to-[#334155] border border-slate-700 flex flex-col justify-between select-none">
-            {/* Patrón decorativo de fondo */}
+        {/* Contenido scrolleable del modal */}
+        <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
+          {/* Tarjeta interactiva visual */}
+          <div className="relative w-full h-40 sm:h-44 rounded-2xl p-4 sm:p-5 text-white shadow-xl overflow-hidden bg-gradient-to-tr from-[#0F172A] via-[#1E293B] to-[#334155] border border-slate-700 flex flex-col justify-between select-none shrink-0">
             <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]" />
             <div className="absolute -top-12 -right-12 w-36 h-36 bg-red-600/30 rounded-full blur-2xl" />
 
             <div className="relative z-10 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                {/* Chip Dorado */}
-                <div className="w-10 h-7 rounded-md bg-gradient-to-br from-amber-200 via-amber-400 to-amber-600 border border-amber-300/80 shadow-inner flex items-center justify-center">
+                <div className="w-9 h-6 sm:w-10 sm:h-7 rounded-md bg-gradient-to-br from-amber-200 via-amber-400 to-amber-600 border border-amber-300/80 shadow-inner flex items-center justify-center">
                   <div className="w-full h-px bg-amber-700/40" />
                 </div>
                 <Wifi className="w-4 h-4 text-slate-300 rotate-90" />
               </div>
 
-              {/* Insignia de Marca */}
               <div className="text-right">
                 {brand === 'visa' && (
                   <span className="font-black text-xl tracking-wider text-blue-400 font-sans italic">
@@ -236,12 +232,12 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
                 )}
                 {brand === 'mastercard' && (
                   <div className="flex items-center">
-                    <div className="w-6 h-6 rounded-full bg-red-500 opacity-90 -mr-2 shadow-xs" />
-                    <div className="w-6 h-6 rounded-full bg-amber-400 opacity-90 shadow-xs" />
+                    <div className="w-5 h-5 rounded-full bg-red-500 opacity-90 -mr-2 shadow-xs" />
+                    <div className="w-5 h-5 rounded-full bg-amber-400 opacity-90 shadow-xs" />
                   </div>
                 )}
                 {brand === 'amex' && (
-                  <span className="font-black text-xs px-2 py-1 bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 rounded tracking-wider">
+                  <span className="font-black text-xs px-2 py-0.5 bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 rounded tracking-wider">
                     AMEX
                   </span>
                 )}
@@ -253,22 +249,19 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
               </div>
             </div>
 
-            {/* Número de tarjeta en pantalla */}
-            <div className="relative z-10 font-mono text-base sm:text-lg tracking-[0.2em] font-bold text-slate-100 drop-shadow-md">
+            <div className="relative z-10 font-mono text-sm sm:text-base tracking-[0.2em] font-bold text-slate-100 drop-shadow-md">
               {cardNumber || '•••• •••• •••• ••••'}
             </div>
 
-            {/* Titular y Expiración */}
             <div className="relative z-10 flex items-end justify-between text-xs">
               <div className="space-y-0.5">
                 <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-sans">
-                  Titular de la tarjeta
+                  Titular
                 </span>
-                <span className="font-semibold tracking-wider uppercase truncate block max-w-[200px]">
+                <span className="font-semibold tracking-wider uppercase truncate block max-w-[180px] sm:max-w-[220px]">
                   {cardHolder || 'NOMBRE DEL TITULAR'}
                 </span>
               </div>
-
               <div className="text-right space-y-0.5">
                 <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-sans">
                   Vence
@@ -280,15 +273,15 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
             </div>
           </div>
 
-          {/* Resumen del Cargo */}
+          {/* Resumen del Concepto y Total */}
           <div
-            className={`p-3.5 rounded-xl border flex items-center justify-between text-xs ${
+            className={`p-3 sm:p-3.5 rounded-xl border flex items-center justify-between text-xs shrink-0 ${
               theme === 'light'
                 ? 'bg-slate-50 border-slate-200 text-slate-800'
                 : 'bg-[#141C2E] border-slate-700 text-slate-200'
             }`}
           >
-            <div className="space-y-0.5 max-w-[70%]">
+            <div className="space-y-0.5 max-w-[65%]">
               <span className="text-[10px] uppercase font-bold tracking-wider text-red-500 block">
                 Concepto
               </span>
@@ -298,14 +291,14 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
               <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block">
                 Total a Cobrar
               </span>
-              <p className="text-base font-black font-scoreboard text-emerald-500">
+              <p className="text-sm sm:text-base font-black font-scoreboard text-emerald-500">
                 ${amount.toLocaleString('es-MX')} <span className="text-[10px] font-sans">MXN</span>
               </p>
             </div>
           </div>
 
           {/* Botón rápido de autollenado para pruebas */}
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between shrink-0">
             <span
               className={`text-[11px] font-medium ${
                 theme === 'light' ? 'text-slate-500' : 'text-slate-400'
@@ -331,8 +324,8 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
             </div>
           )}
 
-          {/* Formulario de Campos */}
-          <form id="card-form" onSubmit={handleSubmit} className="space-y-3.5">
+          {/* Formulario con todos los campos reales */}
+          <form id="card-form" onSubmit={handleSubmit} className="space-y-3">
             {/* Número de Tarjeta */}
             <div>
               <label
@@ -352,13 +345,13 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
                   onChange={handleCardNumberChange}
                   disabled={isProcessing}
                   required
-                  className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-sm font-mono tracking-wider font-semibold focus:outline-hidden focus:ring-2 focus:ring-red-500 transition-all ${
+                  className={`w-full pl-10 pr-4 py-2 rounded-xl border text-sm font-mono tracking-wider font-semibold focus:outline-hidden focus:ring-2 focus:ring-red-500 transition-all ${
                     theme === 'light'
                       ? 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400'
                       : 'bg-[#141C2E] border-slate-700 text-white placeholder:text-slate-500'
                   }`}
                 />
-                <CreditCard className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                <CreditCard className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5" />
               </div>
             </div>
 
@@ -379,7 +372,7 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
                 onChange={(e) => setCardHolder(e.target.value.toUpperCase())}
                 disabled={isProcessing}
                 required
-                className={`w-full px-3.5 py-2.5 rounded-xl border text-xs sm:text-sm font-semibold tracking-wide uppercase focus:outline-hidden focus:ring-2 focus:ring-red-500 transition-all ${
+                className={`w-full px-3.5 py-2 rounded-xl border text-xs sm:text-sm font-semibold tracking-wide uppercase focus:outline-hidden focus:ring-2 focus:ring-red-500 transition-all ${
                   theme === 'light'
                     ? 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400'
                     : 'bg-[#141C2E] border-slate-700 text-white placeholder:text-slate-500'
@@ -388,7 +381,7 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
             </div>
 
             {/* Expiración, CVC y Código Postal */}
-            <div className="grid grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-3 gap-2">
               <div>
                 <label
                   className={`block text-[11px] font-bold uppercase tracking-wider mb-1 ${
@@ -406,7 +399,7 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
                   onChange={handleExpiryChange}
                   disabled={isProcessing}
                   required
-                  className={`w-full px-3 py-2.5 rounded-xl border text-xs sm:text-sm font-mono text-center font-bold tracking-wider focus:outline-hidden focus:ring-2 focus:ring-red-500 transition-all ${
+                  className={`w-full px-2.5 py-2 rounded-xl border text-xs sm:text-sm font-mono text-center font-bold tracking-wider focus:outline-hidden focus:ring-2 focus:ring-red-500 transition-all ${
                     theme === 'light'
                       ? 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400'
                       : 'bg-[#141C2E] border-slate-700 text-white placeholder:text-slate-500'
@@ -432,13 +425,13 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
                     onChange={handleCvcChange}
                     disabled={isProcessing}
                     required
-                    className={`w-full pl-8 pr-2 py-2.5 rounded-xl border text-xs sm:text-sm font-mono text-center font-bold tracking-widest focus:outline-hidden focus:ring-2 focus:ring-red-500 transition-all ${
+                    className={`w-full pl-8 pr-2 py-2 rounded-xl border text-xs sm:text-sm font-mono text-center font-bold tracking-widest focus:outline-hidden focus:ring-2 focus:ring-red-500 transition-all ${
                       theme === 'light'
                         ? 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400'
                         : 'bg-[#141C2E] border-slate-700 text-white placeholder:text-slate-500'
                     }`}
                   />
-                  <Lock className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-3" />
+                  <Lock className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
                 </div>
               </div>
 
@@ -448,7 +441,7 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
                     theme === 'light' ? 'text-slate-700' : 'text-slate-300'
                   }`}
                 >
-                  C.P. Facturación
+                  C.P.
                 </label>
                 <input
                   type="text"
@@ -459,7 +452,7 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
                   onChange={(e) => setZipCode(e.target.value.replace(/\D/g, '').slice(0, 5))}
                   disabled={isProcessing}
                   required
-                  className={`w-full px-3 py-2.5 rounded-xl border text-xs sm:text-sm font-mono text-center font-bold tracking-wider focus:outline-hidden focus:ring-2 focus:ring-red-500 transition-all ${
+                  className={`w-full px-2.5 py-2 rounded-xl border text-xs sm:text-sm font-mono text-center font-bold tracking-wider focus:outline-hidden focus:ring-2 focus:ring-red-500 transition-all ${
                     theme === 'light'
                       ? 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400'
                       : 'bg-[#141C2E] border-slate-700 text-white placeholder:text-slate-500'
@@ -470,7 +463,7 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
 
             {/* Garantía de Seguridad */}
             <div
-              className={`p-2.5 rounded-xl border flex items-center gap-2 text-[11px] ${
+              className={`p-2 rounded-xl border flex items-center gap-2 text-[11px] ${
                 theme === 'light'
                   ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
                   : 'bg-emerald-950/30 border-emerald-800/50 text-emerald-300'
@@ -480,7 +473,7 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
               <span>Tus datos viajan tokenizados y encriptados de extremo a extremo conforme a PCI-DSS.</span>
             </div>
 
-            {/* Botones de Pago y Cancelación */}
+            {/* Botón de Confirmación de Pago */}
             <div className="pt-2 space-y-2">
               <button
                 type="submit"
@@ -500,7 +493,6 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
                 )}
               </button>
 
-              {/* Opción alternativa externa de Stripe (nueva ventana, nunca iframe) */}
               {externalSessionUrl && (
                 <button
                   type="button"

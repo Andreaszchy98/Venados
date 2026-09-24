@@ -4,8 +4,23 @@ import { QRCodeDisplay } from '../../components/shared/QRCodeDisplay';
 import { generateTotpCode } from '../../lib/tickets';
 import { cleanRowValue, cleanSeatValue, cleanSectionValue, formatMatchTime, formatRowLabel } from '../../lib/seatUtils';
 import { useTheme } from '../../context/ThemeContext';
-import { Calendar, MapPin, CheckCircle2, Clock, XCircle, Ticket as TicketIcon, Sparkles, ShieldCheck, ArrowRight } from 'lucide-react';
-import { collection, query, where, getDocs, doc, onSnapshot } from 'firebase/firestore';
+import {
+  Calendar,
+  MapPin,
+  CheckCircle2,
+  Clock,
+  XCircle,
+  Ticket as TicketIcon,
+  Sparkles,
+  ShieldCheck,
+  ArrowRight,
+  Download,
+  Copy,
+  Check,
+  Share2,
+  Compass,
+} from 'lucide-react';
+import { collection, query, where, getDocs, doc, getDoc, onSnapshot, limit } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 
@@ -21,30 +36,80 @@ export const ReclamoBoletoView: React.FC<ReclamoBoletoViewProps> = ({ claimToken
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState<string>(new Date().toLocaleTimeString());
   const [totpCode, setTotpCode] = useState<string>('');
+  const [copied, setCopied] = useState(false);
 
-  // Cargar boleto en tiempo real por claimToken
+  // Cargar boleto en tiempo real con resolución multi-criterio robusta
   useEffect(() => {
     let unsubscribe: (() => void) | null = null;
 
     async function fetchTicket() {
+      const cleanToken = claimToken.trim();
+      if (!cleanToken) {
+        setErrorMsg('No se especificó un código o enlace de butaca válido.');
+        setLoading(false);
+        return;
+      }
+
       try {
         const ticketsCol = collection(db, 'tickets');
-        const q = query(ticketsCol, where('claimToken', '==', claimToken));
-        const snap = await getDocs(q);
+        let foundDoc: any = null;
 
-        if (snap.empty) {
-          setErrorMsg('El enlace de reclamo no es válido, ha expirado o el boleto ya fue reclamado.');
+        // 1. Buscar por claimToken exacto
+        const q1 = query(ticketsCol, where('claimToken', '==', cleanToken), limit(1));
+        const snap1 = await getDocs(q1);
+        if (!snap1.empty) {
+          foundDoc = snap1.docs[0];
+        }
+
+        // 2. Si no, buscar por claimToken en mayúsculas
+        if (!foundDoc && cleanToken.toUpperCase() !== cleanToken) {
+          const qUpper = query(ticketsCol, where('claimToken', '==', cleanToken.toUpperCase()), limit(1));
+          const snapUpper = await getDocs(qUpper);
+          if (!snapUpper.empty) {
+            foundDoc = snapUpper.docs[0];
+          }
+        }
+
+        // 3. Si no, buscar por qrId
+        if (!foundDoc) {
+          const q2 = query(ticketsCol, where('qrId', '==', cleanToken), limit(1));
+          const snap2 = await getDocs(q2);
+          if (!snap2.empty) {
+            foundDoc = snap2.docs[0];
+          }
+        }
+
+        // 4. Si no, buscar por doc ID directo
+        if (!foundDoc) {
+          try {
+            const directDocSnap = await getDoc(doc(db, 'tickets', cleanToken));
+            if (directDocSnap.exists()) {
+              foundDoc = directDocSnap;
+            }
+          } catch {}
+        }
+
+        // 5. Si no, buscar por purchaseId
+        if (!foundDoc) {
+          const q3 = query(ticketsCol, where('purchaseId', '==', cleanToken), limit(1));
+          const snap3 = await getDocs(q3);
+          if (!snap3.empty) {
+            foundDoc = snap3.docs[0];
+          }
+        }
+
+        if (!foundDoc) {
+          setErrorMsg('El enlace de reclamo no es válido, ha expirado o el boleto ya no se encuentra en el sistema.');
           setLoading(false);
           return;
         }
 
-        const ticketDoc = snap.docs[0];
-        const ticketData = { id: ticketDoc.id, ...(ticketDoc.data() as Omit<Ticket, 'id'>) };
+        const ticketData = { id: foundDoc.id, ...(foundDoc.data() as Omit<Ticket, 'id'>) };
         setTicket(ticketData);
         setTotpCode(`${ticketData.qrId}-${ticketData.secretSeed ? generateTotpCode(ticketData.secretSeed) : ''}`);
 
-        // Escuchar cambios en tiempo real (ej. si el validador lo marca como usado)
-        unsubscribe = onSnapshot(doc(db, 'tickets', ticketDoc.id), (docSnap) => {
+        // Escuchar cambios en tiempo real (ej. si el validador del estadio lo marca como usado en molinete)
+        unsubscribe = onSnapshot(doc(db, 'tickets', foundDoc.id), (docSnap) => {
           if (docSnap.exists()) {
             setTicket({ id: docSnap.id, ...(docSnap.data() as Omit<Ticket, 'id'>) });
           }
@@ -64,7 +129,7 @@ export const ReclamoBoletoView: React.FC<ReclamoBoletoViewProps> = ({ claimToken
     };
   }, [claimToken]);
 
-  // Reloj digital y TOTP dinámico
+  // Reloj digital y TOTP dinámico anti-captura
   useEffect(() => {
     const timer = setInterval(() => {
       const now = new Date();
@@ -76,18 +141,63 @@ export const ReclamoBoletoView: React.FC<ReclamoBoletoViewProps> = ({ claimToken
     return () => clearInterval(timer);
   }, [ticket?.secretSeed, ticket?.qrId]);
 
+  const handleCopySeatData = async () => {
+    if (!ticket) return;
+    const text = `Boleto Oficial Venados VXP\nPartido: ${ticket.matchTitle}\nFecha: ${ticket.matchDate} ${ticket.matchTime || ''}\nRecinto: ${ticket.stadium || 'Estadio'}\nZona: ${cleanSectionValue(ticket.section)} | Fila: ${cleanRowValue(ticket.row)} | Butaca: ${cleanSeatValue(ticket.seat)}\nPuerta: ${ticket.gate || 'Acceso General'}\nCódigo: ${ticket.qrId}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {}
+  };
+
+  const handleDownloadPass = () => {
+    if (!ticket) return;
+    try {
+      const content = `========================================
+       PASE OFICIAL DE ACCESO AL ESTADIO
+========================================
+Evento:      ${ticket.matchTitle}
+Fecha:       ${ticket.matchDate}
+Hora:        ${ticket.matchTime || 'Por confirmar'}
+Recinto:     ${ticket.stadium || 'Estadio'}
+Zona:        ${cleanSectionValue(ticket.section)}
+Fila:        ${cleanRowValue(ticket.row)}
+Butaca:      ${cleanSeatValue(ticket.seat)}
+Puerta:      ${ticket.gate || 'Acceso Principal'}
+----------------------------------------
+Código QR:   ${ticket.qrId}
+Ref. Pase:   #${ticket.id.slice(-8)}
+Estado:      ${ticket.status === 'usado' ? 'UTILIZADO' : ticket.status === 'activo' ? 'ACCESO VÁLIDO' : 'CANCELADO'}
+========================================
+Muestra este pase en los torniquetes del estadio.
+`;
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Pase-${ticket.qrId}.txt`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch {
+      window.print();
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0A0E17] flex items-center justify-center p-6 text-white">
-        <LoadingSpinner message="Verificando pase de invitado oficial..." />
+        <LoadingSpinner message="Verificando tu pase de invitado oficial..." />
       </div>
     );
   }
 
   if (errorMsg || !ticket) {
     return (
-      <div className="min-h-screen bg-[#0A0E17] flex items-center justify-center p-6 text-white">
-        <div className="max-w-md w-full bg-[#0F1626] border border-slate-800 rounded-3xl p-8 text-center space-y-5 shadow-2xl">
+      <div className="min-h-screen bg-[#0A0E17] flex items-center justify-center p-4 sm:p-6 text-white">
+        <div className="max-w-md w-full bg-[#0F1626] border border-slate-800 rounded-3xl p-6 sm:p-8 text-center space-y-5 shadow-2xl">
           <div className="w-16 h-16 rounded-2xl bg-red-950/50 border border-red-500/40 text-red-400 flex items-center justify-center mx-auto">
             <XCircle className="w-8 h-8" />
           </div>
@@ -97,9 +207,10 @@ export const ReclamoBoletoView: React.FC<ReclamoBoletoViewProps> = ({ claimToken
           </div>
           <button
             onClick={onNavigateHome}
-            className="w-full py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-black uppercase tracking-wider font-sports shadow-lg transition-all cursor-pointer"
+            className="w-full py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-black uppercase tracking-wider font-sports shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2"
           >
-            Ir a la Aplicación Principal
+            <Compass className="w-4 h-4" />
+            <span>Explorar Cartelera de Partidos</span>
           </button>
         </div>
       </div>
@@ -110,20 +221,20 @@ export const ReclamoBoletoView: React.FC<ReclamoBoletoViewProps> = ({ claimToken
   const isCancelled = ticket.status === 'cancelado';
 
   return (
-    <div className="min-h-screen bg-[#0A0E17] text-slate-100 flex flex-col items-center justify-center p-4 sm:p-6">
+    <div className="min-h-screen bg-[#0A0E17] text-slate-100 flex flex-col items-center justify-center p-3 sm:p-6">
       <div className="w-full max-w-md bg-[#0F1626] border border-slate-700/80 rounded-3xl shadow-2xl overflow-hidden relative">
         {/* Franja superior deportiva */}
         <div className="h-2 bg-gradient-to-r from-red-600 via-amber-500 to-red-600 w-full" />
 
-        <div className="p-6 space-y-5">
+        <div className="p-5 sm:p-6 space-y-4">
           {/* Cabecera invitado */}
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="w-7 h-7 rounded-lg bg-red-600 text-white font-sports font-black text-xs flex items-center justify-center shadow-md">
                 V
               </span>
               <span className="text-xs font-sports font-bold tracking-widest uppercase text-slate-300">
-                Pase Web Guest • Sin Registro
+                Pase Oficial • Sin Registro
               </span>
             </div>
 
@@ -146,7 +257,7 @@ export const ReclamoBoletoView: React.FC<ReclamoBoletoViewProps> = ({ claimToken
           </div>
 
           <div>
-            <h1 className="text-xl sm:text-2xl font-black font-sports uppercase tracking-wide text-white leading-tight">
+            <h1 className="text-lg sm:text-2xl font-black font-sports uppercase tracking-wide text-white leading-tight">
               {ticket.matchTitle}
             </h1>
             <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-300 font-medium">
@@ -162,7 +273,7 @@ export const ReclamoBoletoView: React.FC<ReclamoBoletoViewProps> = ({ claimToken
           </div>
 
           {/* QR Dinámico Anti-Captura con Reloj en Vivo */}
-          <div className="bg-[#0A0E17] border border-slate-800 rounded-2xl p-5 flex flex-col items-center justify-center space-y-4 shadow-inner">
+          <div className="bg-[#0A0E17] border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col items-center justify-center space-y-3.5 shadow-inner">
             <div className="relative p-1.5 rounded-2xl bg-gradient-to-r from-red-500 via-amber-400 to-red-500 animate-pulse shadow-lg">
               <div className="p-3 bg-white rounded-xl inline-flex items-center justify-center">
                 <QRCodeDisplay value={totpCode || ticket.qrId} size={150} alt="QR Dinámico Guest" />
@@ -170,7 +281,7 @@ export const ReclamoBoletoView: React.FC<ReclamoBoletoViewProps> = ({ claimToken
             </div>
 
             {/* Reloj digital anti-captura */}
-            <div className="w-full bg-[#141C2E] border border-slate-700/80 rounded-xl px-3 py-1.5 text-center shadow-sm">
+            <div className="w-full bg-[#141C2E] border border-slate-700/80 rounded-xl px-3 py-1.5 text-center shadow-xs">
               <div className="flex items-center justify-center gap-2 text-xs font-mono font-bold text-amber-400">
                 <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-spin" />
                 <span>RELOJ EN VIVO: {currentTime}</span>
@@ -185,10 +296,10 @@ export const ReclamoBoletoView: React.FC<ReclamoBoletoViewProps> = ({ claimToken
           </div>
 
           {/* Butaca Asignada */}
-          <div className="grid grid-cols-3 gap-2 p-3.5 rounded-2xl bg-[#141C2E] border border-slate-700/80 text-center">
+          <div className="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-[#141C2E] border border-slate-700/80 text-center">
             <div>
               <span className="block text-[9px] uppercase font-bold text-slate-400 font-sports">Zona</span>
-              <span className="text-xs sm:text-sm font-black font-sports truncate block mt-0.5">
+              <span className="text-xs sm:text-sm font-black font-sports truncate block mt-0.5" title={ticket.section}>
                 {cleanSectionValue(ticket.section)}
               </span>
             </div>
@@ -212,12 +323,43 @@ export const ReclamoBoletoView: React.FC<ReclamoBoletoViewProps> = ({ claimToken
             </div>
           )}
 
-          <div className="pt-2">
+          {/* Acciones del pase: Copiar y Descargar */}
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <button
+              type="button"
+              onClick={handleCopySeatData}
+              className="py-2.5 px-3 bg-[#141C2E] hover:bg-[#1A253D] border border-slate-700 text-slate-200 rounded-xl text-xs font-bold uppercase font-sports flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>¡Copiado!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Copiar Datos</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDownloadPass}
+              className="py-2.5 px-3 bg-[#141C2E] hover:bg-[#1A253D] border border-slate-700 text-slate-200 rounded-xl text-xs font-bold uppercase font-sports flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5 text-red-400" />
+              <span>Descargar (.txt)</span>
+            </button>
+          </div>
+
+          {/* Navegar a la app oficial sin forzar login */}
+          <div className="pt-2 border-t border-slate-800">
             <button
               onClick={onNavigateHome}
               className="w-full py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-black uppercase tracking-wider font-sports shadow-lg shadow-red-950/40 transition-all cursor-pointer flex items-center justify-center gap-2"
             >
-              <span>Ir a la App Oficial Venados VXP</span>
+              <span>Explorar Cartelera de Partidos</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
