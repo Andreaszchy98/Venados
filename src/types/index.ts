@@ -121,6 +121,10 @@ export interface Ticket {
   status: TicketStatus;
   qrId: string;
   gate?: string;
+  specialType?: 'ninos' | 'insen' | 'prensa' | string;
+  usedAt?: string;
+  usedGate?: string;
+  usedBy?: string;
   createdAt: string;
   stripePaymentIntentId?: string;
   stripeSessionId?: string;

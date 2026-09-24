@@ -22,8 +22,11 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const resolvedFilename = (typeof import.meta !== 'undefined' && (import.meta as any).url)
+  ? fileURLToPath((import.meta as any).url)
+  : process.argv[1];
+const __dirname = path.dirname(resolvedFilename);
+const __filename = resolvedFilename;
 
 const PORT = 3000;
 

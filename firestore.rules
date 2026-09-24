@@ -126,7 +126,12 @@ service cloud.firestore {
           isVenueAdmin(request.resource.data.get('venueId', 'venue-teodoro-mariscal'))
         )
       );
-      allow update: if isAdmin() || isTaquilla() || (isAuthenticated() && resource.data.userId == request.auth.uid) || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal'));
+      allow update: if isAdmin() || isTaquilla() || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal')) || (
+        isAuthenticated() &&
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.get('status', 'activo') != 'usado' &&
+        !request.resource.data.keys().hasAny(['usedAt', 'usedGate', 'usedBy'])
+      );
       allow delete: if isAdmin() || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal'));
     }
 
