@@ -797,10 +797,13 @@ export async function seedDefaultEventsToFirestore() {
   try {
     for (const ev of DEFAULT_FALLBACK_EVENTS) {
       const docRef = doc(db, COLLECTION_NAME, ev.id);
-      await setDoc(docRef, {
-        ...ev,
-        createdAt: ev.createdAt || new Date().toISOString(),
-      }, { merge: true });
+      const docSnap = await getDoc(docRef);
+      if (!docSnap.exists()) {
+        await setDoc(docRef, {
+          ...ev,
+          createdAt: ev.createdAt || new Date().toISOString(),
+        });
+      }
     }
   } catch (e) {
     console.warn('Error seeding default events to Firestore:', e);
