@@ -9,6 +9,7 @@ import {
   ChefHat,
   Bike,
   Ticket,
+  Printer,
   Shield,
   User,
   Search,
@@ -149,6 +150,7 @@ export const PersonalAdmin: React.FC<PersonalAdminProps> = ({ user }) => {
 
   const countConcesionarios = users.filter((u) => u.role === 'concesionario').length;
   const countRunners = users.filter((u) => u.role === 'runner').length;
+  const countTaquilleras = users.filter((u) => u.role === 'taquillera').length;
   const countTaquillas = users.filter((u) => u.role === 'taquilla').length;
   const countAficionados = users.filter((u) => u.role === 'aficionado' || !u.role).length;
   const countAdmins = users.filter((u) => u.role === 'admin').length;
@@ -269,9 +271,10 @@ export const PersonalAdmin: React.FC<PersonalAdminProps> = ({ user }) => {
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs scrollbar-none">
           {[
             { id: 'todos', label: `Todos (${users.length})` },
+            { id: 'taquillera', label: `Taquilleras POS (${countTaquilleras})` },
+            { id: 'taquilla', label: `Control Accesos (${countTaquillas})` },
             { id: 'concesionario', label: `Concesionarios (${countConcesionarios})` },
             { id: 'runner', label: `Runners (${countRunners})` },
-            { id: 'taquilla', label: `Taquilla (${countTaquillas})` },
             { id: 'aficionado', label: `Aficionados (${countAficionados})` },
             { id: 'admin', label: `Admins (${countAdmins})` },
           ].map((tab) => (
@@ -355,10 +358,16 @@ export const PersonalAdmin: React.FC<PersonalAdminProps> = ({ user }) => {
                             Runner Estadio
                           </span>
                         )}
+                        {role === 'taquillera' && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-emerald-950/70 text-emerald-400 border border-emerald-800/60 font-sports">
+                            <Printer className="w-3.5 h-3.5 text-emerald-400" />
+                            Taquillera (POS Boletos)
+                          </span>
+                        )}
                         {role === 'taquilla' && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-purple-950/70 text-purple-400 border border-purple-800/60 font-sports">
                             <Ticket className="w-3.5 h-3.5 text-purple-400" />
-                            Taquilla / Puertas
+                            Control Accesos
                           </span>
                         )}
                         {role === 'admin' && (
@@ -510,9 +519,16 @@ export const PersonalAdmin: React.FC<PersonalAdminProps> = ({ user }) => {
                       color: 'border-blue-800/60 hover:border-blue-700 bg-[#141E34] text-blue-400',
                     },
                     {
+                      role: 'taquillera' as UserRole,
+                      label: 'Taquillera (Venta POS)',
+                      desc: 'Punto de venta y emisión de boletos físicos',
+                      icon: Printer,
+                      color: 'border-emerald-800/60 hover:border-emerald-700 bg-[#141E34] text-emerald-400',
+                    },
+                    {
                       role: 'taquilla' as UserRole,
-                      label: 'Taquilla / Puertas',
-                      desc: 'Escaneo y validación de QR',
+                      label: 'Control de Accesos',
+                      desc: 'Escaneo y validación de boletos en puertas',
                       icon: Ticket,
                       color: 'border-purple-800/60 hover:border-purple-700 bg-[#141E34] text-purple-400',
                     },

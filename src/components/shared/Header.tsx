@@ -507,10 +507,11 @@ export const Header: React.FC<HeaderProps> = ({ user, onOpenAuth, onRoleChanged 
                     <option value="superadmin">Superadmin (Gestión Global de Sedes)</option>
                   )}
                   <option value="admin">Administrador (Ventas, Inventario, Envíos)</option>
+                  <option value="taquillera">Taquillera (POS Venta e Impresión de Boletos)</option>
+                  <option value="taquilla">Taquilla (Control de Accesos y Puertas)</option>
                   <option value="aficionado">Aficionado (Boletos, Tienda, Comida)</option>
                   <option value="concesionario">Concesionario (Comanda en Vivo)</option>
                   <option value="runner">Runner (Entregas en Butaca)</option>
-                  <option value="taquilla">Taquilla (Control de Accesos)</option>
                 </select>
               </div>
             </div>

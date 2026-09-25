@@ -300,18 +300,64 @@ export function generateTotpCode(secretSeed: string, timeStepSeconds: number = 3
 }
 
 /**
- * Verificar si un código escaneado coincide con el TOTP actual (con tolerancia ±1 intervalo) o qrId/purchaseId/claimToken
+ * Extraer token o identificador de reclamo/boleto desde un string de URL arbitrario
+ */
+export function extractClaimTokenFromUrlString(urlStr: string): string | null {
+  try {
+    const clean = urlStr.trim();
+    const reclamoMatch = clean.match(/(?:reclamo|reclamos|boleto|boletos|ticket|tickets|pase|pases)\/([^\/?#]+)/i);
+    if (reclamoMatch && reclamoMatch[1]) {
+      return decodeURIComponent(reclamoMatch[1]).trim().replace(/\/+$/, '');
+    }
+    const qMatch = clean.match(/[?&#](?:reclamo|claim|claimToken|ticket|boleto|token|t|pass)=([^&#]+)/i);
+    if (qMatch && qMatch[1]) {
+      return decodeURIComponent(qMatch[1]).trim().replace(/\/+$/, '');
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Verificar si un código escaneado coincide con el TOTP actual (con tolerancia de ±2 minutos) o qrId/purchaseId/claimToken
  */
 export function verifyTotpOrCode(scannedCode: string, ticket: Ticket): boolean {
-  if (scannedCode === ticket.qrId || scannedCode === ticket.purchaseId || scannedCode === ticket.claimToken || scannedCode === ticket.id) {
+  const normScanned = (scannedCode || '').trim().toUpperCase();
+  const normQr = (ticket.qrId || '').toUpperCase();
+  const normPur = (ticket.purchaseId || '').toUpperCase();
+  const normClaim = (ticket.claimToken || '').toUpperCase();
+  const normId = (ticket.id || '').toUpperCase();
+
+  // 1. Coincidencia exacta directa
+  if (
+    normScanned === normQr ||
+    normScanned === normPur ||
+    normScanned === normClaim ||
+    normScanned === normId
+  ) {
     return true;
   }
+
+  // 2. Si el código escaneado tiene el formato [qrId]-[6_digitos_totp], extraer y comparar el prefijo base
+  const baseFromScanned = normScanned.replace(/-[0-9]{6}$/, '').replace(/-+$/, '');
+  if (
+    baseFromScanned &&
+    (baseFromScanned === normQr || baseFromScanned === normPur || baseFromScanned === normClaim || baseFromScanned === normId)
+  ) {
+    return true;
+  }
+
   if (!ticket.secretSeed) return false;
 
-  // Tolerancia de ±1 intervalo de tiempo (30s)
-  for (let offset = -1; offset <= 1; offset++) {
+  // 3. Tolerancia de ±4 intervalos de tiempo (120s / 2 minutos para evitar desincronizaciones de reloj entre teléfonos)
+  for (let offset = -4; offset <= 4; offset++) {
     const validTotp = generateTotpCode(ticket.secretSeed, 30, offset);
-    if (scannedCode === validTotp || scannedCode === `${ticket.qrId}-${validTotp}` || scannedCode.endsWith(validTotp)) {
+    if (
+      normScanned === validTotp ||
+      normScanned === `${normQr}-${validTotp}` ||
+      normScanned.endsWith(validTotp)
+    ) {
       return true;
     }
   }
@@ -479,55 +525,135 @@ export async function validateAndConsumeTicketByCode(
   gateName: string,
   userName: string
 ): Promise<ValidationScanResult> {
-  const cleanCode = code.trim();
-  if (!cleanCode) {
+  let raw = (code || '').trim();
+  if (!raw) {
     return {
       success: false,
       status: 'invalido',
-      message: 'Código de boleto vacío o inválido.',
+      message: 'Código de boleto vacío o ilegible.',
       tickets: [],
+    };
+  }
+
+  // 1. Mensajes específicos si se escaneó un código de comida o tienda por error en taquilla
+  if (raw.startsWith('FOOD:') || raw.includes('/pedido/comida') || raw.toLowerCase().includes('food')) {
+    return {
+      success: false,
+      status: 'invalido',
+      message: 'Este código corresponde a una orden de Alimentos y Bebidas (Pick-up / Concesión), no a un boleto de acceso a puertas.',
+      tickets: [],
+    };
+  }
+  if (raw.startsWith('MERCH:') || raw.includes('/pedido/tienda') || raw.toLowerCase().includes('merch')) {
+    return {
+      success: false,
+      status: 'invalido',
+      message: 'Este código corresponde a un pedido de Tienda Oficial (Merchandising / Envíos), no a un boleto de acceso a puertas.',
+      tickets: [],
+    };
+  }
+
+  // 2. Extraer identificador si el código es una URL completa
+  if (raw.startsWith('http://') || raw.startsWith('https://') || raw.includes('/reclamo/') || raw.includes('/boleto/') || raw.includes('/ticket/')) {
+    const urlClaim = extractClaimTokenFromUrlString(raw);
+    if (urlClaim) {
+      raw = urlClaim;
+    }
+  }
+
+  // 3. Limpiar prefijos auxiliares como 'TICKET:', 'BOLETO:', 'PASS:', 'QR:'
+  let cleanCode = raw.replace(/^(?:TICKET|BOLETO|PASS|PASE|QR):/i, '').trim();
+  cleanCode = cleanCode.replace(/[/\s-]+$/, '');
+
+  // 4. Modo Simulación / Demo en Taquilla
+  if (cleanCode.toUpperCase() === 'VND-2026-TKT-DEMO123' || cleanCode.toUpperCase() === 'DEMO123') {
+    const nowIso = new Date().toISOString();
+    return {
+      success: true,
+      status: 'valido',
+      message: '¡Acceso Válido (Simulación de Prueba)! Pase adelante.',
+      tickets: [
+        {
+          id: 'demo-ticket-123',
+          userId: 'demo-user',
+          eventId: DEFAULT_EVENT_ID,
+          matchTitle: 'Venados de Mazatlán vs Tomateros de Culiacán (Demo)',
+          opponent: 'Tomateros de Culiacán',
+          matchDate: '2026-10-15',
+          matchTime: '20:00 hrs',
+          stadium: 'Estadio Teodoro Mariscal',
+          section: 'Platino',
+          row: 'Fila A',
+          seat: 'Asiento 01',
+          price: 750,
+          status: 'usado',
+          qrId: 'VND-2026-TKT-DEMO123',
+          gate: gateName,
+          createdAt: nowIso,
+          usedAt: nowIso,
+          usedGate: gateName,
+          usedBy: userName,
+        },
+      ],
+      usedAt: nowIso,
+      usedGate: gateName,
     };
   }
 
   try {
     const ticketsCol = collection(db, 'tickets');
-    
-    // 1. Buscar por qrId
-    let qSnap = await getDocs(query(ticketsCol, where('qrId', '==', cleanCode), limit(20)));
-    let matchingDocs = qSnap.docs;
+    const upperCode = cleanCode.toUpperCase();
+    const baseCode = upperCode.replace(/-[0-9]{6}$/, '').replace(/-+$/, '');
 
-    // 2. Si no hay, buscar por purchaseId
-    if (matchingDocs.length === 0) {
-      qSnap = await getDocs(query(ticketsCol, where('purchaseId', '==', cleanCode), limit(20)));
-      matchingDocs = qSnap.docs;
-    }
+    // Generar lista de términos de búsqueda prioritarios (código original, mayúsculas, base sin sufijo TOTP)
+    const searchKeys = Array.from(new Set([cleanCode, upperCode, baseCode])).filter(Boolean);
 
-    // 3. Si no hay, buscar por claimToken
-    if (matchingDocs.length === 0) {
-      qSnap = await getDocs(query(ticketsCol, where('claimToken', '==', cleanCode), limit(5)));
-      matchingDocs = qSnap.docs;
-    }
+    let matchingDocs: any[] = [];
 
-    // 4. Si no hay, buscar por ID de documento directo
-    if (matchingDocs.length === 0) {
+    // 5. Buscar en Firestore por qrId, purchaseId, claimToken o doc ID
+    for (const key of searchKeys) {
+      if (matchingDocs.length > 0) break;
+
+      // 5.1 Buscar por qrId
+      const qQr = await getDocs(query(ticketsCol, where('qrId', '==', key), limit(20)));
+      if (!qQr.empty) {
+        matchingDocs = qQr.docs;
+        break;
+      }
+
+      // 5.2 Buscar por purchaseId (compra conjunta)
+      const qPur = await getDocs(query(ticketsCol, where('purchaseId', '==', key), limit(20)));
+      if (!qPur.empty) {
+        matchingDocs = qPur.docs;
+        break;
+      }
+
+      // 5.3 Buscar por claimToken
+      const qClaim = await getDocs(query(ticketsCol, where('claimToken', '==', key), limit(10)));
+      if (!qClaim.empty) {
+        matchingDocs = qClaim.docs;
+        break;
+      }
+
+      // 5.4 Buscar por doc ID directo
       try {
-        const docRef = doc(db, 'tickets', cleanCode);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          matchingDocs = [docSnap as any];
+        const directDoc = await getDoc(doc(db, 'tickets', key));
+        if (directDoc.exists()) {
+          matchingDocs = [directDoc];
+          break;
         }
       } catch (e) {
         // Ignorar
       }
     }
 
-    // 5. Si aún no hay, verificar si es un código TOTP dinámico entre boletos activos
+    // 6. Si aún no hay coincidencia, realizar verificación dinámica TOTP sobre los boletos
     if (matchingDocs.length === 0) {
-      const activeSnap = await getDocs(query(ticketsCol, where('status', '==', 'activo'), limit(150)));
+      const activeSnap = await getDocs(query(ticketsCol, limit(200)));
       for (const d of activeSnap.docs) {
         const tktData = { id: d.id, ...(d.data() as Omit<Ticket, 'id'>) };
         if (verifyTotpOrCode(cleanCode, tktData)) {
-          matchingDocs = [d as any];
+          matchingDocs = [d];
           break;
         }
       }
@@ -537,7 +663,7 @@ export async function validateAndConsumeTicketByCode(
       return {
         success: false,
         status: 'invalido',
-        message: 'Boleto no encontrado en el sistema.',
+        message: 'Boleto no encontrado en el sistema. Asegúrate de escanear un código de acceso válido.',
         tickets: [],
       };
     }
@@ -545,23 +671,90 @@ export async function validateAndConsumeTicketByCode(
     const ticketRefs = matchingDocs.map((d) => doc(db, 'tickets', d.id));
     const nowIso = new Date().toISOString();
 
-    const result = await runTransaction(db, async (transaction) => {
-      const ticketSnapshots = await Promise.all(ticketRefs.map((ref) => transaction.get(ref)));
-      const fetchedTickets: Ticket[] = [];
+    // Intentar consumo atómico con runTransaction
+    try {
+      const result = await runTransaction(db, async (transaction) => {
+        const ticketSnapshots = await Promise.all(ticketRefs.map((ref) => transaction.get(ref)));
+        const fetchedTickets: Ticket[] = [];
 
-      for (const snap of ticketSnapshots) {
-        if (!snap.exists()) {
-          throw new Error('NOT_FOUND');
+        for (const snap of ticketSnapshots) {
+          if (!snap.exists()) {
+            throw new Error('NOT_FOUND');
+          }
+          fetchedTickets.push({ id: snap.id, ...(snap.data() as Omit<Ticket, 'id'>) });
         }
-        fetchedTickets.push({ id: snap.id, ...(snap.data() as Omit<Ticket, 'id'>) });
+
+        // Verificar estados previos
+        for (const t of fetchedTickets) {
+          if (t.status === 'cancelado') {
+            return {
+              success: false,
+              status: 'invalido' as const,
+              message: 'Este boleto se encuentra cancelado.',
+              tickets: fetchedTickets,
+            };
+          }
+          if (t.status === 'usado') {
+            const usedTimeStr = t.usedAt
+              ? new Date(t.usedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              : 'hora desconocida';
+            return {
+              success: false,
+              status: 'usado' as const,
+              message: `Boleto ya utilizado previamente en ${t.usedGate || 'otra puerta'} a las ${usedTimeStr}.`,
+              tickets: fetchedTickets,
+              usedAt: t.usedAt,
+              usedGate: t.usedGate,
+            };
+          }
+        }
+
+        const hasSpecial = fetchedTickets.some((t) => !!t.specialType);
+
+        // Consumir atómicamente
+        for (const ref of ticketRefs) {
+          transaction.update(ref, {
+            status: 'usado',
+            usedAt: nowIso,
+            usedGate: gateName,
+            usedBy: userName,
+          });
+        }
+
+        return {
+          success: true,
+          status: hasSpecial ? ('especial' as const) : ('valido' as const),
+          message: hasSpecial
+            ? 'Boleto especial / cortesía. Requiere verificación de identificación.'
+            : '¡Acceso Válido! Pase adelante.',
+          tickets: fetchedTickets.map((t) => ({
+            ...t,
+            status: 'usado' as const,
+            usedAt: nowIso,
+            usedGate: gateName,
+            usedBy: userName,
+          })),
+        };
+      });
+
+      return result;
+    } catch (txErr: any) {
+      console.warn('Nota en transacción, procediendo con actualización directa de respaldo:', txErr);
+      
+      // Respaldo de actualización directa
+      const fetchedTickets: Ticket[] = [];
+      for (const d of matchingDocs) {
+        const snap = await getDoc(d.ref);
+        if (snap.exists()) {
+          fetchedTickets.push({ id: snap.id, ...(snap.data() as Omit<Ticket, 'id'>) });
+        }
       }
 
-      // Verificar estados previos
       for (const t of fetchedTickets) {
         if (t.status === 'cancelado') {
           return {
             success: false,
-            status: 'invalido' as const,
+            status: 'invalido',
             message: 'Este boleto se encuentra cancelado.',
             tickets: fetchedTickets,
           };
@@ -572,7 +765,7 @@ export async function validateAndConsumeTicketByCode(
             : 'hora desconocida';
           return {
             success: false,
-            status: 'usado' as const,
+            status: 'usado',
             message: `Boleto ya utilizado previamente en ${t.usedGate || 'otra puerta'} a las ${usedTimeStr}.`,
             tickets: fetchedTickets,
             usedAt: t.usedAt,
@@ -581,11 +774,8 @@ export async function validateAndConsumeTicketByCode(
         }
       }
 
-      const hasSpecial = fetchedTickets.some((t) => !!t.specialType);
-
-      // Consumir atómicamente
       for (const ref of ticketRefs) {
-        transaction.update(ref, {
+        await updateDoc(ref, {
           status: 'usado',
           usedAt: nowIso,
           usedGate: gateName,
@@ -593,9 +783,10 @@ export async function validateAndConsumeTicketByCode(
         });
       }
 
+      const hasSpecial = fetchedTickets.some((t) => !!t.specialType);
       return {
         success: true,
-        status: hasSpecial ? ('especial' as const) : ('valido' as const),
+        status: hasSpecial ? 'especial' : 'valido',
         message: hasSpecial
           ? 'Boleto especial / cortesía. Requiere verificación de identificación.'
           : '¡Acceso Válido! Pase adelante.',
@@ -607,16 +798,14 @@ export async function validateAndConsumeTicketByCode(
           usedBy: userName,
         })),
       };
-    });
-
-    return result;
+    }
   } catch (err: any) {
-    console.error('Error en validación atómica:', err);
-    if (err.message === 'NOT_FOUND') {
+    console.error('Error en validación de boleto:', err);
+    if (err?.code === 'permission-denied') {
       return {
         success: false,
         status: 'invalido',
-        message: 'El boleto o compra ya no existe en el sistema.',
+        message: 'Permiso denegado: tu cuenta requiere permisos de Taquilla o Administrador para validar accesos.',
         tickets: [],
       };
     }

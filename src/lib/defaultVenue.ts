@@ -197,6 +197,34 @@ export async function ensureDefaultVenueExists(): Promise<void> {
     } catch (cleanUsersErr) {
       console.warn('ensureDefaultVenueExists: Nota al sanitizar usuarios asignados a Chevron:', cleanUsersErr);
     }
+
+    // Asegurar boleto de prueba demo para validación en taquilla
+    try {
+      const demoTicketRef = doc(db, 'tickets', 'ticket-demo-taquilla-123');
+      const demoSnap = await getDoc(demoTicketRef);
+      if (!demoSnap.exists()) {
+        await setDoc(demoTicketRef, {
+          userId: 'demo-aficionado',
+          eventId: DEFAULT_EVENT_ID,
+          venueId: DEFAULT_VENUE_ID,
+          matchTitle: 'Venados de Mazatlán vs Tomateros de Culiacán',
+          opponent: 'Tomateros de Culiacán',
+          matchDate: '2026-10-15',
+          matchTime: '20:00 hrs',
+          stadium: 'Estadio Teodoro Mariscal',
+          section: 'Platino',
+          row: 'Fila A',
+          seat: 'Asiento 01',
+          price: 750,
+          status: 'activo',
+          qrId: 'VND-2026-TKT-DEMO123',
+          gate: 'Puerta 1 - Central Principal',
+          createdAt: new Date().toISOString(),
+        });
+      }
+    } catch (demoTicketErr) {
+      console.warn('ensureDefaultVenueExists: Nota al asegurar boleto demo:', demoTicketErr);
+    }
   } catch (err) {
     // Se captura la advertencia en caso de que el usuario no autenticado o no-admin
     // no tenga permisos de escritura en rules aún.

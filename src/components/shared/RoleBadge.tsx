@@ -1,6 +1,6 @@
 import React from 'react';
 import { UserRole } from '../../types';
-import { Shield, Ticket, User, Utensils, Bike, Crown } from 'lucide-react';
+import { Shield, Ticket, User, Utensils, Bike, Crown, Printer } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 
 interface RoleBadgeProps {
@@ -26,18 +26,18 @@ export const RoleBadge: React.FC<RoleBadgeProps> = ({ role, showIcon = true }) =
           {t('role.admin', 'Administrador')}
         </span>
       );
-    case 'runner':
+    case 'taquillera':
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-blue-500/20 text-blue-300 border border-blue-500/40 shadow-xs font-sports">
-          {showIcon && <Bike className="w-3.5 h-3.5 text-blue-400" />}
-          {t('role.runner', 'Runner Estadio')}
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-xs font-sports">
+          {showIcon && <Printer className="w-3.5 h-3.5 text-emerald-400" />}
+          {t('role.taquillera', 'Taquillera (POS Boletos)')}
         </span>
       );
     case 'taquilla':
       return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-xs font-sports">
           {showIcon && <Ticket className="w-3.5 h-3.5 text-purple-400" />}
-          {t('role.taquilla', 'Taquilla / Operador')}
+          {t('role.taquilla', 'Control de Accesos (Puertas)')}
         </span>
       );
     case 'concesionario':

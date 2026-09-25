@@ -106,7 +106,11 @@ export const ReclamoBoletoView: React.FC<ReclamoBoletoViewProps> = ({ claimToken
 
         const ticketData = { id: foundDoc.id, ...(foundDoc.data() as Omit<Ticket, 'id'>) };
         setTicket(ticketData);
-        setTotpCode(`${ticketData.qrId}-${ticketData.secretSeed ? generateTotpCode(ticketData.secretSeed) : ''}`);
+        setTotpCode(
+          ticketData.secretSeed
+            ? `${ticketData.qrId}-${generateTotpCode(ticketData.secretSeed)}`
+            : ticketData.qrId
+        );
 
         // Escuchar cambios en tiempo real (ej. si el validador del estadio lo marca como usado en molinete)
         unsubscribe = onSnapshot(doc(db, 'tickets', foundDoc.id), (docSnap) => {

@@ -3,7 +3,7 @@
  * Plataforma Integral de Negocio, Afición y Operaciones del Club Venados de Mazatlán
  */
 
-export type UserRole = 'aficionado' | 'admin' | 'taquilla' | 'concesionario' | 'runner' | 'superadmin';
+export type UserRole = 'aficionado' | 'admin' | 'taquilla' | 'taquillera' | 'concesionario' | 'runner' | 'superadmin';
 export type Language = 'es' | 'en';
 
 export interface UserProfile {
@@ -135,6 +135,10 @@ export interface Ticket {
   paymentMethod?: string;
   customerEmail?: string;
   customerName?: string;
+  issuedBy?: string; // Nombre o identificador del operador/taquillera que emitió el boleto
+  terminalId?: string; // Ej. "Taquilla 1 - Ventanilla Principal"
+  isPhysicalPrint?: boolean; // Marca si fue emitido como boleto físico para impresión térmica
+  posSaleId?: string; // Folio de la venta en el punto de venta
 }
 
 // Mapa físico — pertenece a la SEDE, no cambia entre eventos
