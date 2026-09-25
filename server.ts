@@ -1,4 +1,5 @@
 import express from 'express';
+import { createServer as createHttpServer } from 'http';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -159,6 +160,7 @@ ${JSON.stringify(texts)}`;
 
 async function startServer() {
   const app = express();
+  const httpServer = createHttpServer(app);
 
   app.use(express.json({ limit: '2mb' }));
 
@@ -704,7 +706,10 @@ async function startServer() {
   // Vite middleware en desarrollo o archivos estáticos en producción
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: { server: httpServer },
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -716,7 +721,7 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`VXP Server running on http://0.0.0.0:${PORT}`);
   });
 }
