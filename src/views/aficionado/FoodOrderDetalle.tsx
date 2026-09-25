@@ -213,43 +213,51 @@ Muestra tu código ${order.pickupCode} al Runner o en la barra para recibir tu o
 
         <div className="p-6 space-y-6">
           {/* QR de verificación y datos principales */}
-          <div className="flex flex-col sm:flex-row items-center gap-6 p-4 rounded-2xl bg-[#060A13] border border-slate-800/80">
+          <div className={`flex flex-col sm:flex-row items-center gap-6 p-4 rounded-2xl border ${
+            theme === 'light' ? 'bg-slate-100 border-slate-200 text-slate-900' : 'bg-[#060A13] border-slate-800/80 text-white'
+          }`}>
             <div className="p-3 bg-white rounded-2xl shadow-xl shrink-0">
               <QRCodeDisplay value={order.pickupCode || order.id} size={130} />
             </div>
 
             <div className="space-y-3 flex-1 text-center sm:text-left">
               <div>
-                <span className="text-[11px] font-mono text-slate-400 uppercase tracking-wider">
+                <span className={`text-[11px] font-mono uppercase tracking-wider ${
+                  theme === 'light' ? 'text-slate-600 font-bold' : 'text-slate-400'
+                }`}>
                   MODALIDAD DE ENTREGA
                 </span>
-                <p className="text-base font-extrabold text-white mt-0.5 flex items-center justify-center sm:justify-start gap-1.5 font-sports">
+                <p className={`text-base font-extrabold mt-0.5 flex items-center justify-center sm:justify-start gap-1.5 font-sports ${
+                  theme === 'light' ? 'text-slate-950' : 'text-white'
+                }`}>
                   {order.orderType === 'in-seat' ? (
                     <>
-                      <Bike className="w-4 h-4 text-red-400" />
+                      <Bike className="w-4 h-4 text-red-500" />
                       <span>Entrega a Butaca</span>
                     </>
                   ) : (
                     <>
-                      <PackageCheck className="w-4 h-4 text-emerald-400" />
+                      <PackageCheck className="w-4 h-4 text-emerald-500" />
                       <span>Pickup Express en Barra</span>
                     </>
                   )}
                 </p>
                 {order.orderType === 'in-seat' && (
-                  <p className="text-xs text-red-400 font-bold bg-red-950/60 border border-red-800/60 px-2.5 py-1 rounded-lg mt-1 inline-block">
+                  <p className="text-xs text-red-500 font-bold bg-red-50 border border-red-200 px-2.5 py-1 rounded-lg mt-1 inline-block">
                     📍 {formattedSeat}
                   </p>
                 )}
               </div>
 
-              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 text-xs text-slate-300">
+              <div className={`flex flex-wrap items-center justify-center sm:justify-start gap-3 text-xs ${
+                theme === 'light' ? 'text-slate-700' : 'text-slate-300'
+              }`}>
                 <span className="flex items-center gap-1 font-mono">
-                  <Clock className="w-3.5 h-3.5 text-slate-400" />
+                  <Clock className={`w-3.5 h-3.5 ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`} />
                   {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {new Date(order.createdAt).toLocaleDateString()}
                 </span>
-                <span className="text-slate-600">•</span>
-                <span className="font-sports font-extrabold text-emerald-400 text-sm font-scoreboard">
+                <span className={theme === 'light' ? 'text-slate-300' : 'text-slate-600'}>•</span>
+                <span className="font-sports font-extrabold text-emerald-600 text-sm font-scoreboard">
                   ${order.total.toLocaleString('es-MX')} MXN
                 </span>
               </div>
@@ -259,10 +267,12 @@ Muestra tu código ${order.pickupCode} al Runner o en la barra para recibir tu o
           {/* Estado de Progreso en Vivo */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider font-sports">
+              <span className={`text-xs font-bold uppercase tracking-wider font-sports ${
+                theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+              }`}>
                 Estatus del Pedido en Tiempo Real
               </span>
-              <span className="text-[11px] font-bold text-red-400 font-mono animate-pulse">
+              <span className="text-[11px] font-bold text-red-500 font-mono animate-pulse">
                 • Actualización en Vivo
               </span>
             </div>
@@ -290,6 +300,8 @@ Muestra tu código ${order.pickupCode} al Runner o en la barra para recibir tu o
                               ? 'bg-red-600 text-white ring-4 ring-red-500/30 shadow-lg shadow-red-950/40 scale-105'
                               : isPassed
                               ? 'bg-emerald-600 text-white'
+                              : theme === 'light'
+                              ? 'bg-slate-200 text-slate-500'
                               : 'bg-slate-800 text-slate-500'
                           }`}
                         >
@@ -302,9 +314,11 @@ Muestra tu código ${order.pickupCode} al Runner o en la barra para recibir tu o
                         <span
                           className={`text-[10px] mt-1.5 leading-tight font-sports font-bold ${
                             isCurrent
-                              ? 'text-red-400'
+                              ? 'text-red-500'
                               : isPassed
-                              ? 'text-emerald-400'
+                              ? 'text-emerald-600'
+                              : theme === 'light'
+                              ? 'text-slate-500'
                               : 'text-slate-500'
                           }`}
                         >
@@ -345,20 +359,24 @@ Muestra tu código ${order.pickupCode} al Runner o en la barra para recibir tu o
           </div>
 
           {/* Desglose de Platillos */}
-          <div className="space-y-2 pt-2 border-t border-slate-800">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider font-sports">
+          <div className={`space-y-2 pt-2 border-t ${theme === 'light' ? 'border-slate-200' : 'border-slate-800'}`}>
+            <span className={`text-xs font-bold uppercase tracking-wider font-sports ${
+              theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+            }`}>
               Desglose de Consumo ({totalItemsCount} platillos)
             </span>
-            <div className="divide-y divide-slate-800/80 rounded-2xl bg-[#060A13] border border-slate-800/80 p-3">
+            <div className={`divide-y rounded-2xl border p-3 ${
+              theme === 'light' ? 'bg-slate-100 border-slate-200 divide-slate-200' : 'bg-[#060A13] border-slate-800/80 divide-slate-800/80'
+            }`}>
               {order.items.map((item, idx) => (
                 <div key={idx} className="flex items-center justify-between py-2 text-xs">
                   <div className="flex items-center gap-2.5">
-                    <span className="px-2 py-0.5 rounded-md bg-red-600/20 text-red-400 font-mono font-black text-xs">
+                    <span className="px-2 py-0.5 rounded-md bg-red-600/20 text-red-600 font-mono font-black text-xs">
                       {item.quantity}x
                     </span>
-                    <span className="font-bold text-white">{item.name}</span>
+                    <span className={`font-bold ${theme === 'light' ? 'text-slate-950' : 'text-white'}`}>{item.name}</span>
                   </div>
-                  <span className="font-scoreboard font-bold text-emerald-400">
+                  <span className="font-scoreboard font-bold text-emerald-600">
                     ${(item.price * item.quantity).toFixed(2)} MXN
                   </span>
                 </div>
@@ -367,22 +385,30 @@ Muestra tu código ${order.pickupCode} al Runner o en la barra para recibir tu o
           </div>
 
           {/* Pago y Resumen */}
-          <div className="flex items-center justify-between p-4 rounded-2xl bg-[#060A13] border border-slate-800/80">
+          <div className={`flex items-center justify-between p-4 rounded-2xl border ${
+            theme === 'light' ? 'bg-slate-100 border-slate-200 text-slate-800' : 'bg-[#060A13] border-slate-800/80 text-white'
+          }`}>
             <div className="space-y-0.5">
-              <span className="text-[10px] uppercase tracking-wider text-slate-400 font-mono">
+              <span className={`text-[10px] uppercase tracking-wider font-mono ${
+                theme === 'light' ? 'text-slate-500 font-bold' : 'text-slate-400'
+              }`}>
                 MÉTODO DE PAGO
               </span>
-              <div className="flex items-center gap-1.5 text-xs text-slate-200 font-bold">
-                <CreditCard className="w-3.5 h-3.5 text-emerald-400" />
+              <div className={`flex items-center gap-1.5 text-xs font-bold ${
+                theme === 'light' ? 'text-slate-900' : 'text-slate-200'
+              }`}>
+                <CreditCard className="w-3.5 h-3.5 text-emerald-500" />
                 <span>{order.paymentMethod || 'Tarjeta en Línea'}</span>
               </div>
             </div>
 
             <div className="text-right">
-              <span className="text-[10px] uppercase tracking-wider text-slate-400 font-mono">
+              <span className={`text-[10px] uppercase tracking-wider font-mono ${
+                theme === 'light' ? 'text-slate-500 font-bold' : 'text-slate-400'
+              }`}>
                 TOTAL PAGADO
               </span>
-              <p className="text-lg font-black text-emerald-400 font-scoreboard">
+              <p className="text-lg font-black text-emerald-600 font-scoreboard">
                 ${order.total.toLocaleString('es-MX')} MXN
               </p>
             </div>
@@ -393,9 +419,13 @@ Muestra tu código ${order.pickupCode} al Runner o en la barra para recibir tu o
             <button
               type="button"
               onClick={handleShare}
-              className="py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-sports font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer"
+              className={`py-3 px-4 rounded-xl font-sports font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                theme === 'light'
+                  ? 'bg-slate-200 hover:bg-slate-300 text-slate-900 border border-slate-300'
+                  : 'bg-slate-800 hover:bg-slate-700 text-white'
+              }`}
             >
-              <Share2 className="w-4 h-4 text-red-400" />
+              <Share2 className="w-4 h-4 text-red-500" />
               <span>Compartir</span>
             </button>
             <button

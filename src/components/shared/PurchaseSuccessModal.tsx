@@ -285,7 +285,11 @@ Conserva este comprobante para seguimiento o retiro.
 
       <div
         id="purchase-success-modal-container"
-        className="w-full max-w-lg bg-[#0F1626] rounded-3xl border border-slate-700/80 shadow-2xl overflow-hidden text-white relative my-auto max-h-[94vh] flex flex-col"
+        className={`w-full max-w-lg rounded-3xl border shadow-2xl overflow-hidden relative my-auto max-h-[94vh] flex flex-col ${
+          theme === 'light'
+            ? 'bg-white text-slate-900 border-slate-200'
+            : 'bg-[#0F1626] text-white border-slate-700/80'
+        }`}
       >
         {/* Barra superior decorativa multicolor */}
         <div className="h-1.5 bg-gradient-to-r from-red-600 via-amber-500 to-emerald-500 shrink-0" />
@@ -293,7 +297,11 @@ Conserva este comprobante para seguimiento o retiro.
         {/* Botón de cerrar */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 z-20 p-2 text-slate-400 hover:text-white rounded-full bg-slate-900/60 hover:bg-slate-800 border border-slate-700/60 transition-colors cursor-pointer"
+          className={`absolute top-4 right-4 z-20 p-2 rounded-full border transition-colors cursor-pointer ${
+            theme === 'light'
+              ? 'text-slate-500 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border-slate-200'
+              : 'text-slate-400 hover:text-white bg-slate-900/60 hover:bg-slate-800 border-slate-700/60'
+          }`}
           title="Cerrar"
         >
           <X className="w-4 h-4" />
@@ -306,10 +314,14 @@ Conserva este comprobante para seguimiento o retiro.
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
               <span>Pago Confirmado • Stripe SSL</span>
             </div>
-            <h2 className="text-2xl sm:text-3xl font-black text-white font-sports tracking-wide leading-tight">
+            <h2 className={`text-2xl sm:text-3xl font-black font-sports tracking-wide leading-tight ${
+              theme === 'light' ? 'text-slate-950' : 'text-white'
+            }`}>
               {modalTitle}
             </h2>
-            <p className="text-xs text-slate-300 max-w-sm mx-auto leading-relaxed">
+            <p className={`text-xs max-w-sm mx-auto leading-relaxed ${
+              theme === 'light' ? 'text-slate-600' : 'text-slate-300'
+            }`}>
               {modalSubtitle}
             </p>
           </div>
@@ -321,22 +333,28 @@ Conserva este comprobante para seguimiento o retiro.
             <div className="space-y-3">
               {/* Selector de boletos múltiples si compró más de 1 */}
               {tickets.length > 1 && (
-                <div className="flex items-center justify-between gap-2 p-2 rounded-2xl bg-slate-900/90 border border-slate-800">
+                <div className={`flex items-center justify-between gap-2 p-2 rounded-2xl border ${
+                  theme === 'light' ? 'bg-slate-100 border-slate-200' : 'bg-slate-900/90 border-slate-800'
+                }`}>
                   <button
                     type="button"
                     onClick={() => setSelectedTicketIndex((prev) => Math.max(0, prev - 1))}
                     disabled={selectedTicketIndex === 0}
-                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-white transition-colors cursor-pointer"
+                    className={`p-1.5 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer ${
+                      theme === 'light' ? 'bg-slate-200 hover:bg-slate-300 text-slate-800' : 'bg-slate-800 hover:bg-slate-700 text-white'
+                    }`}
                     title="Boleto anterior"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
 
                   <div className="text-center">
-                    <span className="text-xs font-sports font-bold text-amber-400 uppercase tracking-wider block">
+                    <span className="text-xs font-sports font-bold text-amber-500 uppercase tracking-wider block">
                       Boleto {selectedTicketIndex + 1} de {tickets.length}
                     </span>
-                    <span className="text-[10px] text-slate-400 block truncate max-w-[200px]">
+                    <span className={`text-[10px] block truncate max-w-[200px] ${
+                      theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                    }`}>
                       {currentTicket.section} • {currentTicket.row} • {currentTicket.seat}
                     </span>
                   </div>
@@ -347,7 +365,9 @@ Conserva este comprobante para seguimiento o retiro.
                       setSelectedTicketIndex((prev) => Math.min(tickets.length - 1, prev + 1))
                     }
                     disabled={selectedTicketIndex === tickets.length - 1}
-                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-white transition-colors cursor-pointer"
+                    className={`p-1.5 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer ${
+                      theme === 'light' ? 'bg-slate-200 hover:bg-slate-300 text-slate-800' : 'bg-slate-800 hover:bg-slate-700 text-white'
+                    }`}
                     title="Siguiente boleto"
                   >
                     <ChevronRight className="w-4 h-4" />
@@ -366,24 +386,30 @@ Conserva este comprobante para seguimiento o retiro.
           {type === 'food' && foodOrder && (
             <div
               id="food-receipt-card"
-              className="rounded-3xl shadow-2xl border border-slate-800 overflow-hidden bg-[#0B111E] text-white"
+              className={`rounded-3xl shadow-2xl border overflow-hidden ${
+                theme === 'light'
+                  ? 'bg-slate-50 text-slate-900 border-slate-200 shadow-slate-200'
+                  : 'bg-[#0B111E] text-white border-slate-800'
+              }`}
             >
               {/* Cabecera del pedido */}
               <div className="p-5 pb-3 text-center relative bg-gradient-to-b from-amber-600/15 via-transparent to-transparent">
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[10px] font-black uppercase tracking-wider font-sports mb-2">
-                  <Utensils className="w-3 h-3 text-amber-400" />
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-500 text-[10px] font-black uppercase tracking-wider font-sports mb-2">
+                  <Utensils className="w-3 h-3 text-amber-500" />
                   <span>Pedido Oficial • Alimentos & Bebidas</span>
                 </div>
 
-                <h3 className="text-xl sm:text-2xl font-black font-sports tracking-wide leading-tight text-white px-2">
+                <h3 className={`text-xl sm:text-2xl font-black font-sports tracking-wide leading-tight px-2 ${
+                  theme === 'light' ? 'text-slate-950' : 'text-white'
+                }`}>
                   {foodOrder.standName || 'Stand Estadio Teodoro Mariscal'}
                 </h3>
                 <div className="mt-1 flex items-center justify-center gap-2">
                   <span
                     className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
                       foodOrder.orderType === 'in-seat'
-                        ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                        : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                        ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                        : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                     }`}
                   >
                     {foodOrder.orderType === 'in-seat' ? (
@@ -410,10 +436,16 @@ Conserva este comprobante para seguimiento o retiro.
                     />
                   </div>
                   <div className="mt-3 text-center">
-                    <span className="font-mono text-xl font-black tracking-widest text-amber-400 px-3.5 py-1 rounded-lg bg-slate-900/90 border border-slate-800 inline-block">
+                    <span className={`font-mono text-xl font-black tracking-widest px-3.5 py-1 rounded-lg border inline-block ${
+                      theme === 'light'
+                        ? 'bg-slate-200 text-amber-600 border-slate-300'
+                        : 'bg-slate-900/90 text-amber-400 border-slate-800'
+                    }`}>
                       {foodOrder.pickupCode || foodOrder.id.slice(-6).toUpperCase()}
                     </span>
-                    <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold mt-1.5">
+                    <p className={`text-[10px] uppercase tracking-wider font-bold mt-1.5 ${
+                      theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                    }`}>
                       {foodOrder.orderType === 'in-seat'
                         ? 'Muestra este código al Runner que lleve tu orden'
                         : 'Muestra este código en la barra express para retirar'}
@@ -424,9 +456,15 @@ Conserva este comprobante para seguimiento o retiro.
 
               {/* Línea perforada punteada */}
               <div className="relative my-1">
-                <div className="absolute -left-3.5 -top-3 w-7 h-7 rounded-full bg-[#0F1626] border border-slate-700/80" />
-                <div className="absolute -right-3.5 -top-3 w-7 h-7 rounded-full bg-[#0F1626] border border-slate-700/80" />
-                <div className="border-b-2 border-dashed border-slate-700/70 mx-7" />
+                <div className={`absolute -left-3.5 -top-3 w-7 h-7 rounded-full border ${
+                  theme === 'light' ? 'bg-white border-slate-200' : 'bg-[#0F1626] border-slate-700/80'
+                }`} />
+                <div className={`absolute -right-3.5 -top-3 w-7 h-7 rounded-full border ${
+                  theme === 'light' ? 'bg-white border-slate-200' : 'bg-[#0F1626] border-slate-700/80'
+                }`} />
+                <div className={`border-b-2 border-dashed mx-7 ${
+                  theme === 'light' ? 'border-slate-300' : 'border-slate-700/70'
+                }`} />
               </div>
 
               {/* Contenido inferior */}
@@ -434,42 +472,56 @@ Conserva este comprobante para seguimiento o retiro.
                 {/* Punto de entrega / Butaca */}
                 {foodOrder.orderType === 'in-seat' ? (
                   <div>
-                    <span className="text-[10px] uppercase font-black tracking-wider text-slate-400 block font-sports mb-1">
+                    <span className={`text-[10px] uppercase font-black tracking-wider block font-sports mb-1 ${
+                      theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                    }`}>
                       Lugar de Entrega
                     </span>
-                    <div className="grid grid-cols-3 gap-2 p-2.5 rounded-xl bg-[#121929] border border-slate-800 text-center text-xs">
+                    <div className={`grid grid-cols-3 gap-2 p-2.5 rounded-xl border text-center text-xs ${
+                      theme === 'light' ? 'bg-white border-slate-200 text-slate-900 shadow-xs' : 'bg-[#121929] border-slate-800'
+                    }`}>
                       <div>
-                        <span className="text-[9px] text-slate-400 block uppercase font-sports">
+                        <span className={`text-[9px] block uppercase font-sports ${
+                          theme === 'light' ? 'text-slate-500 font-bold' : 'text-slate-400'
+                        }`}>
                           Sección
                         </span>
-                        <span className="font-black text-white">{foodOrder.section || '-'}</span>
+                        <span className={`font-black ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>{foodOrder.section || '-'}</span>
                       </div>
-                      <div className="border-x border-slate-800">
-                        <span className="text-[9px] text-slate-400 block uppercase font-sports">
+                      <div className={`border-x ${theme === 'light' ? 'border-slate-200' : 'border-slate-800'}`}>
+                        <span className={`text-[9px] block uppercase font-sports ${
+                          theme === 'light' ? 'text-slate-500 font-bold' : 'text-slate-400'
+                        }`}>
                           Fila
                         </span>
-                        <span className="font-mono font-bold text-amber-400">
+                        <span className="font-mono font-bold text-amber-500">
                           {foodOrder.row || '-'}
                         </span>
                       </div>
                       <div>
-                        <span className="text-[9px] text-slate-400 block uppercase font-sports">
+                        <span className={`text-[9px] block uppercase font-sports ${
+                          theme === 'light' ? 'text-slate-500 font-bold' : 'text-slate-400'
+                        }`}>
                           Butaca
                         </span>
-                        <span className="font-mono font-bold text-red-400">
+                        <span className="font-mono font-bold text-red-500">
                           {foodOrder.seat || '-'}
                         </span>
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <div className="p-2.5 rounded-xl bg-[#121929] border border-slate-800 flex items-center gap-2 text-xs">
-                    <MapPin className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <div className={`p-2.5 rounded-xl border flex items-center gap-2 text-xs ${
+                    theme === 'light' ? 'bg-white border-slate-200 text-slate-900 shadow-xs' : 'bg-[#121929] border-slate-800'
+                  }`}>
+                    <MapPin className="w-4 h-4 text-emerald-500 shrink-0" />
                     <div>
-                      <span className="text-slate-400 text-[10px] block font-sports uppercase">
+                      <span className={`text-[10px] block font-sports uppercase ${
+                        theme === 'light' ? 'text-slate-500 font-bold' : 'text-slate-400'
+                      }`}>
                         Punto de Retiro
                       </span>
-                      <strong className="text-white">
+                      <strong className={theme === 'light' ? 'text-slate-900' : 'text-white'}>
                         Barra Express de {foodOrder.standName || 'Concesión'}
                       </strong>
                     </div>
@@ -478,20 +530,28 @@ Conserva este comprobante para seguimiento o retiro.
 
                 {/* Desglose de platillos */}
                 <div>
-                  <span className="text-[10px] uppercase font-black tracking-wider text-slate-400 block font-sports mb-1.5">
+                  <span className={`text-[10px] uppercase font-black tracking-wider block font-sports mb-1.5 ${
+                    theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                  }`}>
                     Detalle del Pedido ({foodOrder.items.reduce((s, i) => s + i.quantity, 0)}{' '}
                     artículos)
                   </span>
-                  <div className="max-h-36 overflow-y-auto custom-scrollbar space-y-1.5 p-2.5 rounded-xl bg-[#121929] border border-slate-800 text-xs">
+                  <div className={`max-h-36 overflow-y-auto custom-scrollbar space-y-1.5 p-2.5 rounded-xl border text-xs ${
+                    theme === 'light' ? 'bg-white border-slate-200 shadow-xs' : 'bg-[#121929] border-slate-800'
+                  }`}>
                     {foodOrder.items.map((item, idx) => (
-                      <div key={idx} className="flex items-center justify-between text-slate-300">
+                      <div key={idx} className={`flex items-center justify-between ${
+                        theme === 'light' ? 'text-slate-900 font-semibold' : 'text-slate-300'
+                      }`}>
                         <div className="flex items-center gap-2 truncate pr-2">
-                          <span className="px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-400 font-mono font-bold text-[10px]">
+                          <span className="px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-600 font-mono font-bold text-[10px]">
                             {item.quantity}x
                           </span>
                           <span className="truncate">{item.name}</span>
                         </div>
-                        <span className="font-mono font-bold text-white shrink-0">
+                        <span className={`font-mono font-bold shrink-0 ${
+                          theme === 'light' ? 'text-slate-950' : 'text-white'
+                        }`}>
                           ${(item.price * item.quantity).toFixed(2)}
                         </span>
                       </div>
@@ -504,33 +564,45 @@ Conserva este comprobante para seguimiento o retiro.
                   <button
                     type="button"
                     onClick={handleShareFood}
-                    className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer font-sports uppercase tracking-wider"
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer font-sports uppercase tracking-wider ${
+                      theme === 'light'
+                        ? 'bg-slate-200 hover:bg-slate-300 border-slate-300 text-slate-900 shadow-xs'
+                        : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
+                    }`}
                   >
-                    <Share2 className="w-3.5 h-3.5 text-amber-400" />
+                    <Share2 className="w-3.5 h-3.5 text-amber-500" />
                     <span>Compartir</span>
                   </button>
                   <button
                     type="button"
                     onClick={handleDownloadFood}
-                    className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer font-sports uppercase tracking-wider"
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer font-sports uppercase tracking-wider ${
+                      theme === 'light'
+                        ? 'bg-slate-200 hover:bg-slate-300 border-slate-300 text-slate-900 shadow-xs'
+                        : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
+                    }`}
                   >
-                    <Download className="w-3.5 h-3.5 text-emerald-400" />
+                    <Download className="w-3.5 h-3.5 text-emerald-500" />
                     <span>Descargar</span>
                   </button>
                 </div>
 
                 {/* Total y método */}
-                <div className="p-2.5 rounded-xl bg-[#080D18] border border-slate-800 flex items-center justify-between text-xs">
-                  <span className="text-slate-400">Total Pagado:</span>
-                  <strong className="text-emerald-400 font-black text-base font-mono">
+                <div className={`p-2.5 rounded-xl border flex items-center justify-between text-xs ${
+                  theme === 'light' ? 'bg-emerald-50 border-emerald-200 text-slate-900 shadow-xs' : 'bg-[#080D18] border-slate-800'
+                }`}>
+                  <span className={theme === 'light' ? 'text-slate-700 font-bold' : 'text-slate-400'}>Total Pagado:</span>
+                  <strong className="text-emerald-600 font-black text-base font-mono">
                     ${foodOrder.total.toLocaleString('es-MX')} MXN
                   </strong>
                 </div>
 
                 {/* Pie de seguridad */}
-                <div className="flex items-center justify-between text-[10px] text-slate-500 pt-0.5">
+                <div className={`flex items-center justify-between text-[10px] pt-0.5 ${
+                  theme === 'light' ? 'text-slate-500 font-medium' : 'text-slate-500'
+                }`}>
                   <span>Ref: #{foodOrder.id.slice(-8).toUpperCase()}</span>
-                  <span className="inline-flex items-center gap-1 text-emerald-500/90 font-medium">
+                  <span className="inline-flex items-center gap-1 text-emerald-600 font-medium">
                     <ShieldCheck className="w-3 h-3" />
                     Autenticado por Stripe
                   </span>
@@ -545,19 +617,27 @@ Conserva este comprobante para seguimiento o retiro.
           {type === 'merch' && merchOrder && (
             <div
               id="merch-receipt-card"
-              className="rounded-3xl shadow-2xl border border-slate-800 overflow-hidden bg-[#0B111E] text-white"
+              className={`rounded-3xl shadow-2xl border overflow-hidden ${
+                theme === 'light'
+                  ? 'bg-slate-50 text-slate-900 border-slate-200 shadow-slate-200'
+                  : 'bg-[#0B111E] text-white border-slate-800'
+              }`}
             >
               {/* Cabecera del pedido */}
               <div className="p-5 pb-3 text-center relative bg-gradient-to-b from-red-600/15 via-transparent to-transparent">
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-600/15 border border-red-500/30 text-red-400 text-[10px] font-black uppercase tracking-wider font-sports mb-2">
-                  <ShoppingBag className="w-3 h-3 text-red-400" />
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-600/15 border border-red-500/30 text-red-500 text-[10px] font-black uppercase tracking-wider font-sports mb-2">
+                  <ShoppingBag className="w-3 h-3 text-red-500" />
                   <span>Comprobante Oficial • Tienda Oficial</span>
                 </div>
 
-                <h3 className="text-xl sm:text-2xl font-black font-sports tracking-wide leading-tight text-white px-2">
+                <h3 className={`text-xl sm:text-2xl font-black font-sports tracking-wide leading-tight px-2 ${
+                  theme === 'light' ? 'text-slate-950' : 'text-white'
+                }`}>
                   {storeName || 'Tienda Oficial Venados de Mazatlán'}
                 </h3>
-                <p className="text-[11px] text-slate-400 mt-0.5 font-medium">
+                <p className={`text-[11px] mt-0.5 font-medium ${
+                  theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                }`}>
                   Liga ARCO Mexicana del Pacífico
                 </p>
 
@@ -571,10 +651,16 @@ Conserva este comprobante para seguimiento o retiro.
                     />
                   </div>
                   <div className="mt-3 text-center">
-                    <span className="font-mono text-base font-black tracking-widest text-white px-3.5 py-1 rounded-lg bg-slate-900/90 border border-slate-800 inline-block">
+                    <span className={`font-mono text-base font-black tracking-widest px-3.5 py-1 rounded-lg border inline-block ${
+                      theme === 'light'
+                        ? 'bg-slate-900 text-amber-400 border-slate-800'
+                        : 'bg-slate-900/90 text-white border-slate-800'
+                    }`}>
                       #{merchOrder.id.slice(-8).toUpperCase()}
                     </span>
-                    <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold mt-1.5">
+                    <p className={`text-[10px] uppercase tracking-wider font-bold mt-1.5 ${
+                      theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                    }`}>
                       {merchOrder.shippingType === 'domicilio'
                         ? 'Código de seguimiento y despacho oficial'
                         : 'Muestra este código en la tienda para retirar tu pedido'}
@@ -585,26 +671,36 @@ Conserva este comprobante para seguimiento o retiro.
 
               {/* Línea perforada punteada */}
               <div className="relative my-1">
-                <div className="absolute -left-3.5 -top-3 w-7 h-7 rounded-full bg-[#0F1626] border border-slate-700/80" />
-                <div className="absolute -right-3.5 -top-3 w-7 h-7 rounded-full bg-[#0F1626] border border-slate-700/80" />
-                <div className="border-b-2 border-dashed border-slate-700/70 mx-7" />
+                <div className={`absolute -left-3.5 -top-3 w-7 h-7 rounded-full border ${
+                  theme === 'light' ? 'bg-white border-slate-200' : 'bg-[#0F1626] border-slate-700/80'
+                }`} />
+                <div className={`absolute -right-3.5 -top-3 w-7 h-7 rounded-full border ${
+                  theme === 'light' ? 'bg-white border-slate-200' : 'bg-[#0F1626] border-slate-700/80'
+                }`} />
+                <div className={`border-b-2 border-dashed mx-7 ${
+                  theme === 'light' ? 'border-slate-300' : 'border-slate-700/70'
+                }`} />
               </div>
 
               {/* Contenido inferior */}
               <div className="p-5 pt-3 space-y-4">
                 {/* Modalidad de entrega */}
-                <div className="p-2.5 rounded-xl bg-[#121929] border border-slate-800 flex items-start gap-2.5 text-xs">
+                <div className={`p-2.5 rounded-xl border flex items-start gap-2.5 text-xs ${
+                  theme === 'light' ? 'bg-white border-slate-200 text-slate-900 shadow-xs' : 'bg-[#121929] border-slate-800 text-white'
+                }`}>
                   {merchOrder.shippingType === 'domicilio' ? (
                     <>
-                      <Truck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                      <Truck className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
                       <div>
-                        <span className="text-slate-400 text-[10px] block font-sports uppercase">
+                        <span className={`text-[10px] block font-sports uppercase ${
+                          theme === 'light' ? 'text-slate-500 font-bold' : 'text-slate-400'
+                        }`}>
                           Envío a Domicilio
                         </span>
-                        <strong className="text-white block">
+                        <strong className={`block ${theme === 'light' ? 'text-slate-950 font-extrabold' : 'text-white'}`}>
                           {merchOrder.shippingAddress?.street || 'Dirección registrada'}
                         </strong>
-                        <span className="text-[11px] text-slate-400">
+                        <span className={`text-[11px] ${theme === 'light' ? 'text-slate-600 font-medium' : 'text-slate-400'}`}>
                           {merchOrder.shippingAddress?.neighborhood
                             ? `${merchOrder.shippingAddress.neighborhood}, `
                             : ''}
@@ -615,15 +711,17 @@ Conserva este comprobante para seguimiento o retiro.
                     </>
                   ) : (
                     <>
-                      <Building className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                      <Building className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
                       <div>
-                        <span className="text-slate-400 text-[10px] block font-sports uppercase">
+                        <span className={`text-[10px] block font-sports uppercase ${
+                          theme === 'light' ? 'text-slate-500 font-bold' : 'text-slate-400'
+                        }`}>
                           Punto de Retiro
                         </span>
-                        <strong className="text-white block">
+                        <strong className={`block ${theme === 'light' ? 'text-slate-950 font-extrabold' : 'text-white'}`}>
                           Tienda Oficial — Estadio Teodoro Mariscal
                         </strong>
-                        <span className="text-[11px] text-slate-400">
+                        <span className={`text-[11px] ${theme === 'light' ? 'text-slate-600 font-medium' : 'text-slate-400'}`}>
                           {merchOrder.notes || 'Retirar con identificación oficial y este código'}
                         </span>
                       </div>
@@ -633,31 +731,39 @@ Conserva este comprobante para seguimiento o retiro.
 
                 {/* Desglose de artículos */}
                 <div>
-                  <span className="text-[10px] uppercase font-black tracking-wider text-slate-400 block font-sports mb-1.5">
+                  <span className={`text-[10px] uppercase font-black tracking-wider block font-sports mb-1.5 ${
+                    theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                  }`}>
                     Productos Comprados ({merchOrder.items.reduce((s, i) => s + i.quantity, 0)}{' '}
                     artículos)
                   </span>
-                  <div className="max-h-36 overflow-y-auto custom-scrollbar space-y-1.5 p-2.5 rounded-xl bg-[#121929] border border-slate-800 text-xs">
+                  <div className={`max-h-36 overflow-y-auto custom-scrollbar space-y-1.5 p-2.5 rounded-xl border text-xs ${
+                    theme === 'light' ? 'bg-white border-slate-200 shadow-xs' : 'bg-[#121929] border-slate-800'
+                  }`}>
                     {merchOrder.items.map((item: any, idx) => {
                       const title = getMerchItemTitle(item);
                       const size = getMerchItemSize(item);
                       const price = getMerchItemPrice(item);
                       return (
-                        <div key={idx} className="flex items-center justify-between text-slate-300">
+                        <div key={idx} className={`flex items-center justify-between ${
+                          theme === 'light' ? 'text-slate-900 font-semibold' : 'text-slate-300'
+                        }`}>
                           <div className="flex items-center gap-2 truncate pr-2">
-                            <span className="px-1.5 py-0.5 rounded-md bg-red-600/20 text-red-400 font-mono font-bold text-[10px]">
+                            <span className="px-1.5 py-0.5 rounded-md bg-red-600/20 text-red-600 font-mono font-bold text-[10px]">
                               {item.quantity}x
                             </span>
                             <span className="truncate">
                               {title}
                               {size ? (
-                                <span className="text-slate-400 ml-1 font-mono">
+                                <span className={`ml-1 font-mono ${theme === 'light' ? 'text-slate-600 font-medium' : 'text-slate-400'}`}>
                                   ({size})
                                 </span>
                               ) : null}
                             </span>
                           </div>
-                          <span className="font-mono font-bold text-white shrink-0">
+                          <span className={`font-mono font-bold shrink-0 ${
+                            theme === 'light' ? 'text-slate-950' : 'text-white'
+                          }`}>
                             ${(price * item.quantity).toFixed(2)}
                           </span>
                         </div>
@@ -671,33 +777,45 @@ Conserva este comprobante para seguimiento o retiro.
                   <button
                     type="button"
                     onClick={handleShareMerch}
-                    className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer font-sports uppercase tracking-wider"
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer font-sports uppercase tracking-wider ${
+                      theme === 'light'
+                        ? 'bg-slate-200 hover:bg-slate-300 border-slate-300 text-slate-900 shadow-xs'
+                        : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
+                    }`}
                   >
-                    <Share2 className="w-3.5 h-3.5 text-red-400" />
+                    <Share2 className="w-3.5 h-3.5 text-red-500" />
                     <span>Compartir</span>
                   </button>
                   <button
                     type="button"
                     onClick={handleDownloadMerch}
-                    className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer font-sports uppercase tracking-wider"
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer font-sports uppercase tracking-wider ${
+                      theme === 'light'
+                        ? 'bg-slate-200 hover:bg-slate-300 border-slate-300 text-slate-900 shadow-xs'
+                        : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
+                    }`}
                   >
-                    <Download className="w-3.5 h-3.5 text-amber-400" />
+                    <Download className="w-3.5 h-3.5 text-amber-500" />
                     <span>Descargar</span>
                   </button>
                 </div>
 
                 {/* Total y método */}
-                <div className="p-2.5 rounded-xl bg-[#080D18] border border-slate-800 flex items-center justify-between text-xs">
-                  <span className="text-slate-400">Total Pagado:</span>
-                  <strong className="text-emerald-400 font-black text-base font-mono">
+                <div className={`p-2.5 rounded-xl border flex items-center justify-between text-xs ${
+                  theme === 'light' ? 'bg-emerald-50 border-emerald-200 text-slate-900 shadow-xs' : 'bg-[#080D18] border-slate-800 text-slate-300'
+                }`}>
+                  <span className={theme === 'light' ? 'text-slate-700 font-bold' : 'text-slate-400'}>Total Pagado:</span>
+                  <strong className="text-emerald-600 font-black text-base font-mono">
                     ${merchOrder.total.toLocaleString('es-MX')} MXN
                   </strong>
                 </div>
 
                 {/* Pie de seguridad */}
-                <div className="flex items-center justify-between text-[10px] text-slate-500 pt-0.5">
+                <div className={`flex items-center justify-between text-[10px] pt-0.5 ${
+                  theme === 'light' ? 'text-slate-500 font-medium' : 'text-slate-500'
+                }`}>
                   <span>Ref: #{merchOrder.id.slice(-8).toUpperCase()}</span>
-                  <span className="inline-flex items-center gap-1 text-emerald-500/90 font-medium">
+                  <span className="inline-flex items-center gap-1 text-emerald-600 font-medium">
                     <ShieldCheck className="w-3 h-3" />
                     Autenticado por Stripe
                   </span>

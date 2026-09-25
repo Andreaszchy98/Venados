@@ -24,34 +24,28 @@ interface HeaderProps {
   user: UserProfile | null;
   onOpenAuth: () => void;
   onRoleChanged?: () => void;
+  activeView?: UserRole | null;
+  onActiveViewChange?: (newView: UserRole | null) => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ user, onOpenAuth, onRoleChanged }) => {
+export const Header: React.FC<HeaderProps> = ({
+  user,
+  onOpenAuth,
+  onRoleChanged,
+  activeView,
+  onActiveViewChange,
+}) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [switchingRole, setSwitchingRole] = useState(false);
   const { language, setLanguage, t, isTranslating } = useLanguage();
   const { theme, setTheme } = useTheme();
 
-  const handleRoleChange = async (newRole: UserRole) => {
+  const handleRoleChange = (newRole: UserRole) => {
     if (!user) return;
-    setSwitchingRole(true);
-    try {
-      const isInvalid = !user.venueId || user.venueId === 'venue-chevron' || user.venueName === 'Estadio Chevron';
-      const targetVenueId = isInvalid ? 'venue-teodoro-mariscal' : user.venueId;
-      const targetVenueName = isInvalid ? 'Estadio Teodoro Mariscal' : (user.venueName || 'Estadio Teodoro Mariscal');
-
-      await updateUserRole(
-        user.uid,
-        newRole,
-        targetVenueId,
-        targetVenueName
-      );
-      if (onRoleChanged) onRoleChanged();
-    } catch (err) {
-      console.error('Error changing role:', err);
-    } finally {
-      setSwitchingRole(false);
+    if (onActiveViewChange) {
+      // Si selecciona el rol original del usuario, quitar la simulación
+      onActiveViewChange(newRole === user.role ? null : newRole);
     }
+    setIsSidebarOpen(false);
   };
 
   const userInitial = (user?.displayName || user?.email || 'U').charAt(0).toUpperCase();
@@ -256,7 +250,9 @@ export const Header: React.FC<HeaderProps> = ({ user, onOpenAuth, onRoleChanged 
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="font-extrabold text-sm truncate leading-tight">
+                  <p className={`font-extrabold text-sm truncate leading-tight ${
+                    theme === 'light' ? 'text-slate-950' : 'text-white'
+                  }`}>
                     {user.displayName || 'Aficionado'}
                   </p>
                   <p
@@ -383,95 +379,7 @@ export const Header: React.FC<HeaderProps> = ({ user, onOpenAuth, onRoleChanged 
             </div>
           </div>
 
-          {/* SECCIÓN 2: SELECTOR DE IDIOMA */}
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between">
-              <label
-                className={`text-[11px] font-black uppercase tracking-wider font-sports ${
-                  theme === 'light' ? 'text-slate-500' : 'text-slate-400'
-                }`}
-              >
-                Idioma de la App
-              </label>
-              <span className="flex items-center gap-1 text-emerald-500 text-[10px] font-bold">
-                <Sparkles className="w-3 h-3 animate-pulse" />
-                Gemini IA
-              </span>
-            </div>
-
-            <div className="space-y-1.5">
-              {/* Español */}
-              <button
-                type="button"
-                id="sidebar-lang-es"
-                onClick={() => setLanguage('es')}
-                className={`w-full p-3 rounded-xl border flex items-center justify-between transition-all cursor-pointer ${
-                  language === 'es'
-                    ? theme === 'light'
-                      ? 'bg-red-50 border-red-300 text-red-700 font-bold shadow-xs'
-                      : 'bg-red-600/20 border-red-500 text-red-200 font-bold shadow-xs'
-                    : theme === 'light'
-                    ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                    : 'bg-[#101728] border-slate-800 text-slate-300 hover:bg-[#141D32]'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-xl">🇲🇽</span>
-                  <div className="text-left">
-                    <p className="font-bold text-xs">Español</p>
-                    <p
-                      className={`text-[10px] ${
-                        theme === 'light' ? 'text-slate-500' : 'text-slate-400'
-                      }`}
-                    >
-                      Idioma oficial del recinto
-                    </p>
-                  </div>
-                </div>
-                {language === 'es' && <Check className="w-4 h-4 text-red-500" />}
-              </button>
-
-              {/* English */}
-              <button
-                type="button"
-                id="sidebar-lang-en"
-                onClick={() => setLanguage('en')}
-                className={`w-full p-3 rounded-xl border flex items-center justify-between transition-all cursor-pointer ${
-                  language === 'en'
-                    ? theme === 'light'
-                      ? 'bg-red-50 border-red-300 text-red-700 font-bold shadow-xs'
-                      : 'bg-red-600/20 border-red-500 text-red-200 font-bold shadow-xs'
-                    : theme === 'light'
-                    ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                    : 'bg-[#101728] border-slate-800 text-slate-300 hover:bg-[#141D32]'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-xl">🇺🇸</span>
-                  <div className="text-left">
-                    <p className="font-bold text-xs">English</p>
-                    <p
-                      className={`text-[10px] ${
-                        theme === 'light' ? 'text-slate-500' : 'text-slate-400'
-                      }`}
-                    >
-                      Auto real-time AI translation
-                    </p>
-                  </div>
-                </div>
-                {language === 'en' && <Check className="w-4 h-4 text-red-500" />}
-              </button>
-            </div>
-
-            {isTranslating && (
-              <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-500 text-xs flex items-center gap-2">
-                <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-                <span className="text-[11px] font-medium">Traduciendo con IA...</span>
-              </div>
-            )}
-          </div>
-
-          {/* SECCIÓN 3: CAMBIO DE VISTA / ROL (EXCLUSIVO PARA ADMINISTRADORES DE SEDE) */}
+          {/* SECCIÓN 2: CAMBIO DE VISTA / ROL (EXCLUSIVO PARA ADMINISTRADORES DE SEDE) */}
           {user && (user.role === 'admin' || user.role === 'superadmin') && (
             <div className="space-y-2.5 pt-2 border-t border-slate-800/60">
               <label
@@ -493,15 +401,14 @@ export const Header: React.FC<HeaderProps> = ({ user, onOpenAuth, onRoleChanged 
                   <span>Explorar Módulos del Negocio</span>
                 </div>
                 <select
-                  value={user.role}
-                  disabled={switchingRole}
+                  value={activeView || user.role}
                   onChange={(e) => handleRoleChange(e.target.value as UserRole)}
                   className={`w-full p-2.5 rounded-xl border text-xs font-bold focus:outline-hidden cursor-pointer transition-colors ${
                     theme === 'light'
                       ? 'bg-white border-slate-300 text-slate-900'
                       : 'bg-[#141C2E] border-slate-700 text-white'
                   }`}
-                  title="Cambiar rol"
+                  title="Simular vista de módulo"
                 >
                   {user.role === 'superadmin' && (
                     <option value="superadmin">Superadmin (Gestión Global de Sedes)</option>

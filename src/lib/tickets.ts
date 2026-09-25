@@ -817,3 +817,129 @@ export async function validateAndConsumeTicketByCode(
     };
   }
 }
+
+export interface PosTicketItemRequest {
+  seatId?: string;
+  section: string;
+  price: number;
+  row?: string;
+  seat?: string;
+  gate?: string;
+}
+
+/**
+ * Emitir e imprimir lote de boletos físicos en Punto de Venta (POS - Taquillera)
+ */
+export async function createPosTicketBatch(params: {
+  eventId: string;
+  venueId?: string;
+  matchTitle: string;
+  opponent: string;
+  matchDate: string;
+  matchTime: string;
+  stadium: string;
+  items: PosTicketItemRequest[];
+  paymentMethod: 'efectivo' | 'tarjeta' | 'transferencia';
+  customerName: string;
+  customerEmail?: string;
+  issuedBy: string;
+  terminalId: string;
+  userId?: string;
+}): Promise<{ posSaleId: string; tickets: Ticket[]; totalAmount: number }> {
+  const posSaleId = `POS-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+  const purchaseId = `PUR-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+  const nowIso = new Date().toISOString();
+  let totalAmount = 0;
+
+  const ticketsCol = collection(db, 'tickets');
+  const createdTickets: Ticket[] = [];
+
+  for (let i = 0; i < params.items.length; i++) {
+    const item = params.items[i];
+    totalAmount += item.price;
+    const qrId = `VND-2026-TKT-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const claimToken = `CLAIM-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+    const secretSeed = `SEED-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+
+    const newTicketData: Omit<Ticket, 'id'> = {
+      userId: params.userId || 'cliente-ventanilla',
+      eventId: params.eventId,
+      venueId: params.venueId || DEFAULT_VENUE_ID,
+      matchTitle: params.matchTitle,
+      opponent: params.opponent,
+      matchDate: params.matchDate,
+      matchTime: params.matchTime,
+      stadium: params.stadium,
+      section: item.section,
+      row: item.row || `Fila ${String.fromCharCode(65 + (i % 10))}`,
+      seat: item.seat || `Asiento ${String(i + 1).padStart(2, '0')}`,
+      price: item.price,
+      status: 'activo',
+      qrId,
+      claimToken,
+      secretSeed,
+      purchaseId,
+      gate: item.gate || 'Puerta 1 - Central Principal',
+      createdAt: nowIso,
+      paymentMethod: params.paymentMethod,
+      customerName: params.customerName,
+      customerEmail: params.customerEmail,
+      issuedBy: params.issuedBy,
+      terminalId: params.terminalId,
+      isPhysicalPrint: true,
+      posSaleId,
+    };
+
+    const docRef = await addDoc(ticketsCol, newTicketData);
+    createdTickets.push({
+      id: docRef.id,
+      ...newTicketData,
+    });
+
+    // Actualizar el documento del asiento físico en Firestore a 'vendido'
+    if (item.seatId) {
+      try {
+        await updateDoc(doc(db, 'eventSeats', item.seatId), {
+          status: 'vendido',
+          soldTo: params.customerName || 'Cliente Ventanilla',
+          soldAt: nowIso,
+          updatedAt: nowIso,
+        });
+      } catch (seatErr) {
+        console.warn('Nota actualizando estado de asiento en POS:', seatErr);
+      }
+    }
+  }
+
+  // Registrar transacción de venta para auditoría y finanzas
+  try {
+    const salesCol = collection(db, 'sales');
+    await addDoc(salesCol, {
+      channel: 'boletos',
+      type: 'boletos',
+      posSaleId,
+      purchaseId,
+      userId: params.userId || 'cliente-ventanilla',
+      venueId: params.venueId || DEFAULT_VENUE_ID,
+      eventId: params.eventId,
+      amount: totalAmount,
+      date: nowIso,
+      paymentMethod: params.paymentMethod,
+      customerName: params.customerName,
+      customerEmail: params.customerEmail || '',
+      issuedBy: params.issuedBy,
+      terminalId: params.terminalId,
+      ticketCount: params.items.length,
+      status: 'completada',
+    });
+  } catch (saleErr) {
+    console.warn('Nota al registrar venta de auditoría POS:', saleErr);
+  }
+
+  return {
+    posSaleId,
+    tickets: createdTickets,
+    totalAmount,
+  };
+}
+

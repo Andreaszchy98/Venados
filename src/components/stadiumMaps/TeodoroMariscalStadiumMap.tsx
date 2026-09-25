@@ -9,6 +9,7 @@ interface TeodoroMariscalStadiumMapProps {
   activeZoneFilter: string | null;
   onSelectSection: (sectionNumber: string) => void;
   event?: VenueEvent | null;
+  soldOutSectionsSet?: Set<string>;
 }
 
 interface SectorDef {
@@ -238,12 +239,13 @@ const SECTOR_DEFINITIONS: SectorDef[] = [
   { num: '305', zone: 'Sky Plus', fillColor: COLOR_SKY_PLUS, textColor: '#0F172A', rIn: R_T3_IN, rOut: R_T3_OUT, startDeg: 44.0, endDeg: 58.0 },
 ];
 
-export const TeodoroMariscalStadiumMap: React.FC<TeodoroMariscalStadiumMapProps> = ({
+const TeodoroMariscalStadiumMapComponent = React.memo<TeodoroMariscalStadiumMapProps>(({
   sections,
   activeSectionNumber,
   activeZoneFilter,
   onSelectSection,
   event,
+  soldOutSectionsSet,
 }) => {
   const [hoveredSection, setHoveredSection] = useState<string | null>(null);
   const [zoomLevel, setZoomLevel] = useState<number>(1);
@@ -453,11 +455,12 @@ export const TeodoroMariscalStadiumMap: React.FC<TeodoroMariscalStadiumMapProps>
                 const hovered = hoveredSection === sec.num;
                 const dimmed = isDimmed(sec.zone);
                 const price = getZonePrice(sec.zone, event);
+                const isSoldOut = soldOutSectionsSet ? (soldOutSectionsSet.has(sec.num) || soldOutSectionsSet.has(sec.num.toLowerCase())) : false;
 
                 return (
                   <g
                     key={sec.num}
-                    className="cursor-pointer transition-transform duration-100"
+                    className={isSoldOut ? 'cursor-not-allowed opacity-40' : 'cursor-pointer transition-transform duration-100'}
                     onClick={() => onSelectSection(sec.num)}
                     onMouseEnter={() => setHoveredSection(sec.num)}
                     onMouseLeave={() => setHoveredSection(null)}
@@ -465,10 +468,10 @@ export const TeodoroMariscalStadiumMap: React.FC<TeodoroMariscalStadiumMapProps>
                     {/* Sector curvado */}
                     <path
                       d={pathD}
-                      fill={selected ? '#FFFFFF' : sec.fillColor}
-                      stroke={selected ? '#F59E0B' : hovered ? '#FFFFFF' : '#0B0F19'}
+                      fill={isSoldOut ? '#1E293B' : selected ? '#FFFFFF' : sec.fillColor}
+                      stroke={selected ? '#F59E0B' : hovered ? '#FFFFFF' : isSoldOut ? '#334155' : '#0B0F19'}
                       strokeWidth={selected ? 3 : hovered ? 2 : 1.2}
-                      opacity={dimmed ? 0.22 : 1}
+                      opacity={isSoldOut ? 0.35 : dimmed ? 0.22 : 1}
                       filter={selected ? 'url(#activeGlow)' : undefined}
                     />
 
@@ -477,14 +480,14 @@ export const TeodoroMariscalStadiumMap: React.FC<TeodoroMariscalStadiumMapProps>
                       x={tx}
                       y={ty + 2.5}
                       transform={`rotate(${rotDeg} ${tx} ${ty})`}
-                      fill={selected ? '#0F172A' : sec.textColor}
+                      fill={isSoldOut ? '#64748B' : selected ? '#0F172A' : sec.textColor}
                       fontSize={sec.num.length >= 3 ? 9 : 10.5}
                       fontWeight="900"
                       letterSpacing="0.2"
                       textAnchor="middle"
                       style={{ pointerEvents: 'none', userSelect: 'none' }}
                     >
-                      {sec.num}
+                      {isSoldOut ? '✕' : sec.num}
                     </text>
 
                     {/* Tooltip flotante con información de zona y precio */}
@@ -575,4 +578,7 @@ export const TeodoroMariscalStadiumMap: React.FC<TeodoroMariscalStadiumMapProps>
       )}
     </div>
   );
-};
+});
+
+TeodoroMariscalStadiumMapComponent.displayName = 'TeodoroMariscalStadiumMap';
+export const TeodoroMariscalStadiumMap = TeodoroMariscalStadiumMapComponent;

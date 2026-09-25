@@ -51,9 +51,11 @@ interface SeatMapSelectorProps {
   event: VenueEvent;
   user: UserProfile;
   stadiumName: string;
-  onPurchaseSuccess: (purchaseId: string, count: number) => void;
-  onCancel: () => void;
+  onPurchaseSuccess?: (purchaseId: string, count: number) => void;
+  onCancel?: () => void;
   onRequireAuth?: () => void;
+  isPosMode?: boolean;
+  onSelectionChangeForPos?: (seats: SeatPurchaseItem[]) => void;
 }
 
 function getFieldGraphic(type: EventType) {
@@ -78,6 +80,8 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
   onPurchaseSuccess,
   onCancel,
   onRequireAuth,
+  isPosMode = false,
+  onSelectionChangeForPos,
 }) => {
   const isEncanto = useMemo(
     () => isEncantoVenue(event.venueId, stadiumName, event.type),
@@ -92,9 +96,16 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
   // Gráfico central del recinto/cancha según el tipo de evento
   const FieldGraphic = getFieldGraphic(event.type);
 
-  const [sections, setSections] = useState<SeatSection[]>([]);
+  // Cargar instantáneamente las secciones maestro de memoria para un render inicial sin pantalla de carga (< 5ms)
+  const [sections, setSections] = useState<SeatSection[]>(() => {
+    const initial = buildSectionsForVenue(event.venueId, event.type);
+    return initial.map((d) => ({
+      id: `${event.venueId}_sec_${d.sectionNumber.replace(/\s+/g, '_')}`,
+      ...d,
+    }));
+  });
   const [eventSeats, setEventSeats] = useState<EventSeat[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [generating] = useState(false);
 
   // Sección activa para visualizar la cuadrícula
@@ -121,6 +132,13 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
       return [];
     }
   });
+
+  // Notificar cambios de selección al Punto de Venta POS cuando se usa en modo Taquillera
+  useEffect(() => {
+    if (isPosMode && onSelectionChangeForPos) {
+      onSelectionChangeForPos(selectedSeats);
+    }
+  }, [selectedSeats, isPosMode, onSelectionChangeForPos]);
 
   // Evitar ejecuciones duplicadas concurrentes por doble clic sobre el mismo asiento
   const pendingSeatLocks = useRef<Set<string>>(new Set());
@@ -241,36 +259,32 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
   // Helper para normalizar identificadores de sección (elimina guiones, espacios y mayúsculas)
   const normalizeSec = (val?: string | null) => (val || '').trim().toUpperCase().replace(/[\s_-]+/g, '');
 
-  // Cargar y escuchar secciones del estadio
+  // Cargar y escuchar secciones del estadio en segundo plano
   useEffect(() => {
-    setLoading(true);
     const unsubscribeSections = subscribeSeatSections(
       event.venueId,
       (fetchedSections) => {
-        setSections(fetchedSections);
-        setLoading(false);
+        if (fetchedSections && fetchedSections.length > 0) {
+          setSections(fetchedSections);
+        }
       },
       (err) => {
         console.warn('Error en secciones:', err);
-        setLoading(false);
       }
     );
 
     return () => unsubscribeSections();
   }, [event.venueId]);
 
-  // Cargar y escuchar asientos del evento en tiempo real
+  // Cargar y escuchar asientos del evento en tiempo real en segundo plano
   useEffect(() => {
-    setLoading(true);
     const unsubscribeSeats = subscribeEventSeats(
       event.id,
       (seats) => {
         setEventSeats(seats);
-        setLoading(false);
       },
       (err) => {
         console.warn('Aviso escuchando asientos de evento:', err);
-        setLoading(false);
       }
     );
 
@@ -291,6 +305,48 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
     }
     return map;
   }, [eventSeats]);
+
+  // Mapa de secciones totalmente agotadas
+  const soldOutSectionsSet = useMemo(() => {
+    const set = new Set<string>();
+    sections.forEach((sec) => {
+      const secKey = normalizeSec(sec.sectionNumber);
+      const seats = seatsBySection.get(secKey) || [];
+      const totalSeats = sec.totalSeats || (sec.rows || 3) * (sec.seatsPerRow || 10);
+      const soldCount = seats.filter((s) => s.status === 'vendido' || s.status === 'reservado').length;
+      if (seats.length > 0 && soldCount >= totalSeats) {
+        set.add(sec.sectionNumber);
+        set.add(secKey);
+      }
+    });
+    return set;
+  }, [sections, seatsBySection]);
+
+  // Mapa de zonas totalmente agotadas
+  const soldOutZonesSet = useMemo(() => {
+    const set = new Set<string>();
+    const zoneSecsMap = new Map<string, SeatSection[]>();
+    sections.forEach((sec) => {
+      if (!zoneSecsMap.has(sec.zoneName)) {
+        zoneSecsMap.set(sec.zoneName, []);
+      }
+      zoneSecsMap.get(sec.zoneName)!.push(sec);
+    });
+
+    zoneSecsMap.forEach((zoneSecs, zoneName) => {
+      const allSoldOut = zoneSecs.length > 0 && zoneSecs.every((sec) => {
+        const secKey = normalizeSec(sec.sectionNumber);
+        const seats = seatsBySection.get(secKey) || [];
+        const totalSeats = sec.totalSeats || (sec.rows || 3) * (sec.seatsPerRow || 10);
+        const soldCount = seats.filter((s) => s.status === 'vendido' || s.status === 'reservado').length;
+        return seats.length > 0 && soldCount >= totalSeats;
+      });
+      if (allSoldOut) {
+        set.add(zoneName);
+      }
+    });
+    return set;
+  }, [sections, seatsBySection]);
 
   // Sección actualmente seleccionada: resuelve dinámicamente según la sección seleccionada por el usuario
   const currentSection = useMemo<SeatSection | null>(() => {
@@ -654,162 +710,123 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
     : null;
 
   return (
-    <div className="space-y-6">
-      {/* 1. Header con Información del Evento & Botón Volver */}
-      <div className="bg-[#0F1626] p-4 sm:p-5 rounded-3xl border border-slate-700/80 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onCancel}
-              className="inline-flex items-center gap-1 text-xs font-sports font-bold tracking-wider uppercase text-slate-400 hover:text-white transition-colors cursor-pointer mr-1"
-            >
-              <ArrowLeft className="w-4 h-4" /> Volver a eventos
-            </button>
-            <span
-              className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider font-sports ${
-                isEncanto ? 'bg-amber-950/70 text-amber-300 border border-amber-500/50' : 'bg-red-900/40 text-red-300 border border-red-700/50'
-              }`}
-            >
-              {isEncanto ? 'Fútbol • Liga Expansión MX' : event.type}
-            </span>
-            <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1 font-sports">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              {isEncanto ? 'Mapa Oficial en Vivo' : 'Mapa en Vivo'}
-            </span>
-          </div>
+    <div className="space-y-4 pb-24">
+      {/* 1. Header Estructurado Limpio con Fecha, Hora, Lugar y Asientos Disponibles */}
+      <div className="bg-[#0E1626] border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
+        {/* Fila 1: Botón Volver & Badge de Disponibilidad */}
+        <div className="flex items-center justify-between gap-2">
+          <button
+            onClick={onCancel}
+            className="inline-flex items-center gap-1.5 text-xs font-sports font-bold tracking-wider uppercase text-slate-400 hover:text-white transition-colors cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4 text-slate-400" /> Volver a eventos
+          </button>
 
-          <h2 className="text-base sm:text-xl font-black text-white tracking-wide font-sports uppercase">
-            {event.name}
-          </h2>
-
-          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300">
-            <span className="flex items-center gap-1 font-semibold text-slate-200">
-              <Calendar className={`w-3.5 h-3.5 ${isEncanto ? 'text-amber-400' : 'text-red-500'}`} />
-              {event.date}
-            </span>
-            <span className="flex items-center gap-1 text-slate-300">
-              <Clock className="w-3.5 h-3.5 text-slate-400" />
-              {event.time || '20:00 hrs'}
-            </span>
-            <span className="flex items-center gap-1 font-bold text-slate-200">
-              <MapPin className="w-3.5 h-3.5 text-amber-400" />
-              {stadiumName}
-            </span>
-          </div>
+          <span className="px-2.5 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-emerald-950/80 text-emerald-400 border border-emerald-500/50 font-sports flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            {globalStats.available.toLocaleString('es-MX')} Asientos Disponibles
+          </span>
         </div>
 
-        {/* Contadores globales */}
-        <div className="flex items-center gap-3 bg-[#0A0E17] p-2.5 rounded-2xl border border-slate-700/80 text-xs">
-          <div className="text-center px-2">
-            <span className="block text-[10px] text-slate-400 font-sports font-bold uppercase tracking-wider">Disponibles</span>
-            <span className="text-sm font-scoreboard font-bold text-emerald-400">{globalStats.available}</span>
+        {/* Fila 2: Título del Partido completo sin recortes */}
+        <h2 className="text-sm sm:text-lg font-black text-white font-sports uppercase tracking-wide leading-snug">
+          {event.name}
+        </h2>
+
+        {/* Fila 3: Metadata - Fecha, Hora y Lugar */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-300 pt-2 border-t border-slate-800/80 font-sans">
+          <div className="flex items-center gap-1.5">
+            <Calendar className={`w-3.5 h-3.5 ${isEncanto ? 'text-amber-400' : 'text-red-500'}`} />
+            <span className="font-semibold text-white">{event.date}</span>
           </div>
-          <div className="w-px h-6 bg-slate-700"></div>
-          <div className="text-center px-2">
-            <span className="block text-[10px] text-slate-400 font-sports font-bold uppercase tracking-wider">Ocupados</span>
-            <span className="text-sm font-scoreboard font-bold text-slate-400">{globalStats.sold}</span>
+          <div className="flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5 text-slate-400" />
+            <span className="text-slate-300">{event.time || '20:00 hrs'}</span>
           </div>
-          <div className="w-px h-6 bg-slate-700"></div>
-          <div className="text-center px-2">
-            <span className="block text-[10px] text-slate-400 font-sports font-bold uppercase tracking-wider">Capacidad</span>
-            <span className="text-sm font-scoreboard font-bold text-white">{globalStats.total}</span>
+          <div className="flex items-center gap-1.5">
+            <MapPin className="w-3.5 h-3.5 text-amber-400" />
+            <span className="font-bold text-slate-200">{stadiumName}</span>
           </div>
         </div>
       </div>
 
       {/* Banner si el evento ya finalizó o la venta está cerrada */}
       {isEventClosed && (
-        <div className="bg-red-950/80 border border-red-500/70 rounded-2xl p-4 flex items-center gap-3 text-red-200 shadow-xl">
-          <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
-          <div className="space-y-0.5">
-            <p className="font-bold text-sm font-sports uppercase tracking-wider text-red-100">
-              Venta de boletos concluida / Juego o evento finalizado
-            </p>
-            <p className="text-xs text-red-300">
-              La fecha y horario programados para este evento ya pasaron o la venta ha sido cerrada. El mapa de butacas está en modo de consulta.
-            </p>
-          </div>
+        <div className="bg-red-950/80 border border-red-500/70 rounded-2xl p-3 flex items-center gap-3 text-red-200 shadow-xl">
+          <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+          <p className="font-bold text-xs font-sports uppercase tracking-wider text-red-100">
+            Venta de boletos concluida / Juego o evento finalizado (Modo consulta)
+          </p>
         </div>
       )}
 
-      {/* 2. Barra de Leyenda de Zonas y Filtro Rápido */}
-      <div className="bg-[#0F1626] p-3 sm:p-4 rounded-2xl border border-slate-700/80 shadow-xl space-y-2">
-        <div className="flex items-center justify-between">
+      {/* 2. Selección de Zona Minimalista-Dinámica (Grid Adaptativo sin scroll horizontal) */}
+      <div className="bg-[#0E1626] border border-slate-800/90 rounded-2xl p-3.5 shadow-lg space-y-2.5">
+        <div className="flex items-center justify-between gap-2">
           <span className="text-xs font-black uppercase tracking-wider text-slate-300 flex items-center gap-1.5 font-sports">
             <Layers className={`w-4 h-4 ${isEncanto ? 'text-amber-400' : 'text-red-500'}`} />
-            {isEncanto ? `Zonas Oficiales: ${stadiumName}` : 'Zonas Oficiales del Teodoro Mariscal'}
+            Filtrar Zona del Estadio
           </span>
-          <span className="text-[11px] text-slate-400">
-            {isEncanto
-              ? 'Haz clic en una zona para filtrar secciones o selecciónala directamente en el mapa'
-              : 'Haz clic en una zona para filtrar secciones o selecciónala en el mapa'}
-          </span>
+
+          {activeZoneFilter !== 'Todas' && (
+            <button
+              onClick={() => setActiveZoneFilter('Todas')}
+              className="text-[11px] font-bold text-red-400 hover:text-red-300 font-sports uppercase tracking-wider transition-colors cursor-pointer"
+            >
+              Ver Todas ({sections.length})
+            </button>
+          )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5 font-sports">
+        {/* Grid Adaptativo Minimalista de Zonas */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 font-sports">
           <button
             onClick={() => setActiveZoneFilter('Todas')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+            className={`p-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer border ${
               activeZoneFilter === 'Todas'
                 ? isEncanto
-                  ? 'bg-amber-500 text-black font-black shadow-md'
-                  : 'bg-red-600 text-white shadow-md'
-                : 'bg-[#0A0E17] text-slate-400 hover:text-white border border-slate-700'
+                  ? 'bg-amber-500 text-black border-amber-400 font-black shadow-md'
+                  : 'bg-red-600 text-white border-red-500 font-black shadow-md'
+                : 'bg-[#141E34] text-slate-300 border-slate-700/60 hover:border-slate-600'
             }`}
           >
-            Todas ({sections.length})
+            <span>Todas</span>
+            <span className="text-[10px] opacity-80 font-mono">({sections.length})</span>
           </button>
 
           {availableZones.map((zName) => {
             const zMeta = stadiumZones[zName];
             const price = getZonePrice(zName, event);
             const isFilterActive = activeZoneFilter === zName;
+            const isZoneSoldOut = soldOutZonesSet.has(zName);
 
             return (
               <button
                 key={zName}
                 onClick={() => setActiveZoneFilter(zName)}
-                className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
-                  isFilterActive
-                    ? 'ring-2 ring-red-500 text-white bg-red-950/40 border-red-500 shadow-md'
-                    : 'border-slate-700 bg-[#0A0E17] text-slate-300 hover:bg-[#141C2E]'
+                className={`p-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between gap-1.5 cursor-pointer border ${
+                  isZoneSoldOut
+                    ? 'border-slate-800/80 bg-[#101827]/60 text-slate-500 opacity-60'
+                    : isFilterActive
+                    ? 'ring-2 ring-red-500 text-white bg-red-950/70 border-red-500 shadow-md scale-[1.02]'
+                    : 'border-slate-800 bg-[#141E34] text-slate-300 hover:bg-[#1A2846] hover:border-slate-700'
                 }`}
               >
-                <span
-                  className="w-2.5 h-2.5 rounded-full shrink-0"
-                  style={{ backgroundColor: zMeta.colorHex }}
-                ></span>
-                <span>{zName}</span>
-                <span className="text-[10px] font-mono text-emerald-400 font-bold">
-                  ${price}
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span
+                    className={`w-2.5 h-2.5 rounded-full shrink-0 shadow-xs ${isZoneSoldOut ? 'bg-slate-600' : ''}`}
+                    style={isZoneSoldOut ? undefined : { backgroundColor: zMeta.colorHex }}
+                  />
+                  <span className={`truncate ${isZoneSoldOut ? 'line-through text-slate-500' : ''}`}>{zName}</span>
+                </div>
+                <span className={`text-[10px] font-mono font-black shrink-0 ${isZoneSoldOut ? 'text-red-400 font-sans uppercase' : 'text-emerald-400'}`}>
+                  {isZoneSoldOut ? 'Agotado' : `$${price}`}
                 </span>
               </button>
             );
           })}
         </div>
       </div>
-
-      {/* GUÍA DE PUERTAS DE ACCESO (Especial para Estadio El Encanto) */}
-      {isEncanto && (
-        <div className="bg-[#0A0E17] border border-amber-500/40 p-3 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs">
-          <div className="flex items-center gap-2">
-            <span className="w-6 h-6 rounded-full bg-amber-500 text-black flex items-center justify-center text-xs font-black shrink-0">
-              <DoorOpen className="w-3.5 h-3.5" />
-            </span>
-            <span className="font-sports font-bold tracking-wide text-amber-300 uppercase">Guía de Puertas de Acceso Oficiales:</span>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {ENCANTO_GATES_GUIDE.map((g) => (
-              <span
-                key={g.gate}
-                className="px-2 py-0.5 rounded-lg bg-[#141C2E] border border-amber-700/50 text-[11px] text-amber-200 font-medium"
-              >
-                <strong className="font-bold text-white">{g.gate}:</strong> {g.zones.join(', ')}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* 3. Panel Principal: Mapa Interactivo SVG + Cuadrícula de Asientos */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -841,7 +858,7 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
             )}
           </div>
 
-          {/* RENDERIZADO DEL MAPA */}
+          {/* RENDERIZADO DEL MAPA CON DESHABILITACIÓN DE SECCIONES AGOTADAS */}
           {isEncanto ? (
             <EncantoStadiumMap
               sections={sections}
@@ -849,6 +866,7 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
               activeZoneFilter={activeZoneFilter === 'Todas' ? null : activeZoneFilter}
               onSelectSection={handleSelectSection}
               event={event}
+              soldOutSectionsSet={soldOutSectionsSet}
             />
           ) : (
             <TeodoroMariscalStadiumMap
@@ -857,6 +875,7 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
               activeZoneFilter={activeZoneFilter === 'Todas' ? null : activeZoneFilter}
               onSelectSection={handleSelectSection}
               event={event}
+              soldOutSectionsSet={soldOutSectionsSet}
             />
           )}
 
@@ -1176,102 +1195,159 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
               )}
             </div>
 
-            {/* Método de Pago (Exclusivo Tarjeta en Línea) */}
-            <div className="space-y-2 pt-2 border-t border-slate-700/70">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 block font-sports">
-                  Método de Pago
+            {/* Modo POS o Método de Pago Online */}
+            {isPosMode ? (
+              <div className="p-3 bg-red-950/40 border border-red-500/50 rounded-xl text-center space-y-1">
+                <span className="text-xs font-black text-white font-sports uppercase tracking-wider block">
+                  🎟️ Módulo POS Ventanilla Activo
                 </span>
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 font-sports">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  Pasarela SSL Segura
-                </span>
+                <p className="text-[11px] text-slate-300">
+                  {selectedSeats.length > 0
+                    ? `${selectedSeats.length} asiento(s) seleccionado(s). Procesa el pago y la impresión térmica en el panel derecho del POS.`
+                    : 'Toca una o varias butacas arriba para agregarlas a la comanda de la taquilla.'}
+                </p>
               </div>
+            ) : (
+              <>
+                {/* Método de Pago (Exclusivo Tarjeta en Línea) */}
+                <div className="space-y-2 pt-2 border-t border-slate-700/70">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 block font-sports">
+                      Método de Pago
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 font-sports">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      Pasarela SSL Segura
+                    </span>
+                  </div>
 
-              <div className={`p-3 rounded-xl border flex items-center justify-between ${
-                isEncanto
-                  ? 'border-amber-500/50 bg-amber-950/30 text-amber-200'
-                  : 'border-red-500/50 bg-red-950/30 text-red-200'
-              }`}>
-                <div className="flex items-center gap-2.5">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                    isEncanto ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400'
+                  <div className={`p-3 rounded-xl border flex items-center justify-between ${
+                    isEncanto
+                      ? 'border-amber-500/50 bg-amber-950/30 text-amber-200'
+                      : 'border-red-500/50 bg-red-950/30 text-red-200'
                   }`}>
-                    <CreditCard className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-wide text-white font-sports">
-                      Tarjeta en Línea
-                    </p>
-                    <p className="text-[10px] text-slate-400 font-sans">
-                      Visa, Mastercard, Amex • Cobro directo Stripe
-                    </p>
-                  </div>
-                </div>
-                <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
-                  Activo
-                </span>
-              </div>
-            </div>
-
-            {/* Total y Botón Atómico */}
-            <div className="pt-3 border-t border-slate-700/70 space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase block font-sports tracking-wider">
-                    Total ({selectedSeats.length} {selectedSeats.length === 1 ? 'boleto' : 'boletos'})
-                  </span>
-                  <span className="text-xs text-slate-400">Impuestos y cargos incluidos</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-xl sm:text-2xl font-black text-emerald-400 font-scoreboard">
-                    ${totalAmount} <span className="text-xs font-normal text-slate-400 font-sans">MXN</span>
-                  </span>
-                </div>
-              </div>
-
-              <button
-                id="btn-confirm-seat-transaction"
-                type="button"
-                onClick={handleConfirmPurchase}
-                disabled={purchasing || selectedSeats.length === 0 || isEventClosed}
-                className={`w-full py-3.5 ${
-                  isEncanto
-                    ? 'bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-black font-black shadow-amber-500/20'
-                    : 'bg-red-600 hover:bg-red-500 active:bg-red-700 text-white'
-                } disabled:opacity-50 disabled:cursor-not-allowed font-black text-xs sm:text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer font-sports uppercase tracking-wider`}
-              >
-                {isEventClosed ? (
-                  <span>Venta Concluida (Evento Finalizado)</span>
-                ) : purchasing ? (
-                  'Verificando asientos en tiempo real...'
-                ) : !user || !user.uid ? (
-                  <>
-                    <ShieldCheck className="w-4 h-4" />
-                    <span>
-                      Iniciar Sesión para Pagar ({selectedSeats.length}{' '}
-                      {selectedSeats.length === 1 ? 'Boleto' : 'Boletos'} — ${totalAmount} MXN)
+                    <div className="flex items-center gap-2.5">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                        isEncanto ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400'
+                      }`}>
+                        <CreditCard className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-wide text-white font-sports">
+                          Tarjeta en Línea
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-sans">
+                          Visa, Mastercard, Amex • Cobro directo Stripe
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                      Activo
                     </span>
-                  </>
-                ) : (
-                  <>
-                    <CreditCard className="w-4 h-4" />
-                    <span>
-                      Pagar con Tarjeta ({selectedSeats.length}{' '}
-                      {selectedSeats.length === 1 ? 'Boleto' : 'Boletos'} — ${totalAmount} MXN)
-                    </span>
-                  </>
-                )}
-              </button>
+                  </div>
+                </div>
 
-              <p className="text-[10px] text-center text-slate-400 flex items-center justify-center gap-1 font-sports">
-                <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                Transacción atómica protegida • Asignación oficial de butacas
-              </p>
-            </div>
+                {/* Total y Botón Atómico */}
+                <div className="pt-3 border-t border-slate-700/70 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase block font-sports tracking-wider">
+                        Total ({selectedSeats.length} {selectedSeats.length === 1 ? 'boleto' : 'boletos'})
+                      </span>
+                      <span className="text-xs text-slate-400">Impuestos y cargos incluidos</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xl sm:text-2xl font-black text-emerald-400 font-scoreboard">
+                        ${totalAmount} <span className="text-xs font-normal text-slate-400 font-sans">MXN</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    id="btn-confirm-seat-transaction"
+                    type="button"
+                    onClick={handleConfirmPurchase}
+                    disabled={purchasing || selectedSeats.length === 0 || isEventClosed}
+                    className={`w-full py-3.5 ${
+                      isEncanto
+                        ? 'bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-black font-black shadow-amber-500/20'
+                        : 'bg-red-600 hover:bg-red-500 active:bg-red-700 text-white'
+                    } disabled:opacity-50 disabled:cursor-not-allowed font-black text-xs sm:text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer font-sports uppercase tracking-wider`}
+                  >
+                    {isEventClosed ? (
+                      <span>Venta Concluida (Evento Finalizado)</span>
+                    ) : purchasing ? (
+                      'Verificando asientos en tiempo real...'
+                    ) : !user || !user.uid ? (
+                      <>
+                        <ShieldCheck className="w-4 h-4" />
+                        <span>
+                          Iniciar Sesión para Pagar ({selectedSeats.length}{' '}
+                          {selectedSeats.length === 1 ? 'Boleto' : 'Boletos'} — ${totalAmount} MXN)
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="w-4 h-4" />
+                        <span>
+                          Pagar con Tarjeta ({selectedSeats.length}{' '}
+                          {selectedSeats.length === 1 ? 'Boleto' : 'Boletos'} — ${totalAmount} MXN)
+                        </span>
+                      </>
+                    )}
+                  </button>
+
+                  <p className="text-[10px] text-center text-slate-400 flex items-center justify-center gap-1 font-sports">
+                    <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                    Transacción atómica protegida • Asignación oficial de butacas
+                  </p>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Barra flotante de compra rápida en móvil cuando hay asientos seleccionados (solo modo aficionado) */}
+      {!isPosMode && selectedSeats.length > 0 && (
+        <div className="fixed bottom-16 left-3 right-3 z-40 lg:hidden bg-[#0D1527]/95 border border-red-500/60 p-3 rounded-2xl shadow-2xl backdrop-blur-xl flex items-center justify-between gap-3 animate-in slide-in-from-bottom duration-200">
+          <div className="min-w-0 space-y-0.5">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-black text-white font-sports uppercase tracking-wider">
+                {selectedSeats.length} {selectedSeats.length === 1 ? 'Boleto' : 'Boletos'}
+              </span>
+              {lockRemainingSeconds > 0 && (
+                <span className="text-[10px] font-mono font-bold text-amber-300 bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-500/40">
+                  ⏱️ {Math.floor(lockRemainingSeconds / 60)}:{(lockRemainingSeconds % 60).toString().padStart(2, '0')}
+                </span>
+              )}
+            </div>
+            <div className="text-[11px] text-slate-300 truncate">
+              {selectedSeats.map((s) => `${s.rowLabel}#${s.seatNumber}`).slice(0, 3).join(', ')}
+              {selectedSeats.length > 3 ? '...' : ''}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="text-right">
+              <span className="text-base font-black text-emerald-400 font-scoreboard">
+                ${totalAmount} <span className="text-[10px] text-slate-400 font-sans">MXN</span>
+              </span>
+            </div>
+            <button
+              onClick={handleConfirmPurchase}
+              disabled={purchasing || isEventClosed}
+              className={`py-2.5 px-4 rounded-xl font-black text-xs uppercase font-sports shadow-lg transition-all cursor-pointer ${
+                isEncanto
+                  ? 'bg-amber-500 text-black'
+                  : 'bg-red-600 hover:bg-red-500 text-white shadow-red-950/50'
+              }`}
+            >
+              Pagar →
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Formulario de Pago con Tarjeta en Línea */}
       <CardPaymentModal

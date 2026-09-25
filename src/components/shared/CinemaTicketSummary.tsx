@@ -141,10 +141,14 @@ Presenta este código en los molinetes del estadio.
             <span>Pase Digital Oficial</span>
           </div>
 
-          <h3 className="text-xl sm:text-2xl font-black font-sports tracking-wide leading-tight px-2 text-white">
+          <h3 className={`text-xl sm:text-2xl font-black font-sports tracking-wide leading-tight px-2 ${
+            theme === 'light' ? 'text-slate-950' : 'text-white'
+          }`}>
             {ticket.matchTitle}
           </h3>
-          <p className="text-[11px] text-slate-400 mt-1 font-medium">
+          <p className={`text-[11px] mt-1 font-medium ${
+            theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+          }`}>
             Liga ARCO Mexicana del Pacífico
           </p>
 
@@ -160,10 +164,16 @@ Presenta este código en los molinetes del estadio.
 
             {/* Código alfanumérico */}
             <div className="mt-3 text-center">
-              <span className="font-mono text-base font-black tracking-widest text-white px-3 py-1 rounded-lg bg-slate-900/80 border border-slate-800">
+              <span className={`font-mono text-base font-black tracking-widest px-3 py-1 rounded-lg border ${
+                theme === 'light'
+                  ? 'bg-slate-900 text-white border-slate-800'
+                  : 'bg-slate-900/80 text-white border-slate-800'
+              }`}>
                 {ticket.qrId}
               </span>
-              <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold mt-1.5">
+              <p className={`text-[10px] uppercase tracking-wider font-bold mt-1.5 ${
+                theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+              }`}>
                 Muestra este código en el lector del molinete
               </p>
             </div>
@@ -176,7 +186,7 @@ Presenta este código en los molinetes del estadio.
           <div
             className={`absolute -left-3.5 -top-3 w-7 h-7 rounded-full border ${
               theme === 'light'
-                ? 'bg-[#0F1626] border-slate-700/80'
+                ? 'bg-white border-slate-200'
                 : 'bg-[#0F1626] border-slate-700/80'
             }`}
           />
@@ -184,27 +194,33 @@ Presenta este código en los molinetes del estadio.
           <div
             className={`absolute -right-3.5 -top-3 w-7 h-7 rounded-full border ${
               theme === 'light'
-                ? 'bg-[#0F1626] border-slate-700/80'
+                ? 'bg-white border-slate-200'
                 : 'bg-[#0F1626] border-slate-700/80'
             }`}
           />
           {/* Línea perforada punteada */}
-          <div className="border-b-2 border-dashed border-slate-700/70 mx-7" />
+          <div className={`border-b-2 border-dashed mx-7 ${
+            theme === 'light' ? 'border-slate-300' : 'border-slate-700/70'
+          }`} />
         </div>
 
         {/* Contenido inferior: Datos del Boleto tipo Cinépolis */}
         <div className="p-6 pt-4 space-y-5">
           {/* 1. Bloque de Fecha y hora del evento (etiqueta arriba, dato grande abajo) */}
           <div className="space-y-1">
-            <span className="text-[10px] uppercase font-black tracking-wider text-slate-400 block font-sports">
+            <span className={`text-[10px] uppercase font-black tracking-wider block font-sports ${
+              theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+            }`}>
               Fecha y Hora del Evento
             </span>
             <div className="flex items-baseline gap-2 flex-wrap">
-              <span className="text-lg sm:text-xl font-black text-white font-sports tracking-wide">
+              <span className={`text-lg sm:text-xl font-black font-sports tracking-wide ${
+                theme === 'light' ? 'text-slate-950' : 'text-white'
+              }`}>
                 {ticket.matchDate}
               </span>
               {ticket.matchTime && (
-                <span className="text-sm sm:text-base font-bold text-amber-400 font-sports">
+                <span className="text-sm sm:text-base font-bold text-amber-500 font-sports">
                   • {ticket.matchTime} hrs
                 </span>
               )}
@@ -213,12 +229,16 @@ Presenta este código en los molinetes del estadio.
 
           {/* 2. Bloque para el Recinto (etiqueta arriba, valor grande abajo) */}
           <div className="space-y-1">
-            <span className="text-[10px] uppercase font-black tracking-wider text-slate-400 block font-sports">
+            <span className={`text-[10px] uppercase font-black tracking-wider block font-sports ${
+              theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+            }`}>
               Recinto
             </span>
             <div className="flex items-center gap-2">
               <MapPin className="w-4 h-4 text-red-500 shrink-0" />
-              <span className="text-base sm:text-lg font-black text-white font-sports tracking-wide">
+              <span className={`text-base sm:text-lg font-black font-sports tracking-wide ${
+                theme === 'light' ? 'text-slate-950' : 'text-white'
+              }`}>
                 {ticket.stadium || 'Estadio Teodoro Mariscal'}
               </span>
             </div>
@@ -226,36 +246,48 @@ Presenta este código en los molinetes del estadio.
 
           {/* 3. Bloque de Asiento en 3 columnas cortas (Zona/Sección, Fila, Butaca) */}
           <div>
-            <span className="text-[10px] uppercase font-black tracking-wider text-slate-400 block font-sports mb-1.5">
+            <span className={`text-[10px] uppercase font-black tracking-wider block font-sports mb-1.5 ${
+              theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+            }`}>
               Asignación de Butaca
             </span>
-            <div className="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-[#121929] border border-slate-800 text-center">
+            <div className={`grid grid-cols-3 gap-2 p-3 rounded-2xl border text-center ${
+              theme === 'light' ? 'bg-white border-slate-200 shadow-xs' : 'bg-[#121929] border-slate-800'
+            }`}>
               {/* Columna 1: Zona/Sección */}
               <div className="px-1">
-                <span className="block text-[9px] uppercase font-bold tracking-wider text-slate-400 font-sports">
+                <span className={`block text-[9px] uppercase font-bold tracking-wider font-sports ${
+                  theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                }`}>
                   Zona / Sección
                 </span>
-                <span className="block text-sm sm:text-base font-black text-white font-sports mt-0.5 truncate" title={ticket.section}>
+                <span className={`block text-sm sm:text-base font-black font-sports mt-0.5 truncate ${
+                  theme === 'light' ? 'text-slate-950' : 'text-white'
+                }`} title={ticket.section}>
                   {ticket.section}
                 </span>
               </div>
 
               {/* Columna 2: Fila */}
-              <div className="px-1 border-x border-slate-800">
-                <span className="block text-[9px] uppercase font-bold tracking-wider text-slate-400 font-sports">
+              <div className={`px-1 border-x ${theme === 'light' ? 'border-slate-200' : 'border-slate-800'}`}>
+                <span className={`block text-[9px] uppercase font-bold tracking-wider font-sports ${
+                  theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                }`}>
                   Fila
                 </span>
-                <span className="block text-sm sm:text-base font-black text-amber-400 font-mono mt-0.5">
+                <span className="block text-sm sm:text-base font-black text-amber-500 font-mono mt-0.5">
                   {ticket.row}
                 </span>
               </div>
 
               {/* Columna 3: Butaca */}
               <div className="px-1">
-                <span className="block text-[9px] uppercase font-bold tracking-wider text-slate-400 font-sports">
+                <span className={`block text-[9px] uppercase font-bold tracking-wider font-sports ${
+                  theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                }`}>
                   Butaca
                 </span>
-                <span className="block text-sm sm:text-base font-black text-red-400 font-mono mt-0.5">
+                <span className="block text-sm sm:text-base font-black text-red-500 font-mono mt-0.5">
                   {ticket.seat}
                 </span>
               </div>
@@ -269,9 +301,13 @@ Presenta este código en los molinetes del estadio.
               <button
                 type="button"
                 onClick={handleShare}
-                className="py-2.5 px-3 rounded-xl bg-slate-800/90 hover:bg-slate-700 active:scale-[0.98] border border-slate-700 text-slate-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer font-sports uppercase tracking-wider"
+                className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer font-sports uppercase tracking-wider ${
+                  theme === 'light'
+                    ? 'bg-slate-200 hover:bg-slate-300 border-slate-300 text-slate-900'
+                    : 'bg-slate-800/90 hover:bg-slate-700 border-slate-700 text-slate-200'
+                }`}
               >
-                <Share2 className="w-3.5 h-3.5 text-red-400" />
+                <Share2 className="w-3.5 h-3.5 text-red-500" />
                 <span>Compartir</span>
               </button>
 
@@ -279,9 +315,13 @@ Presenta este código en los molinetes del estadio.
               <button
                 type="button"
                 onClick={handleDownload}
-                className="py-2.5 px-3 rounded-xl bg-slate-800/90 hover:bg-slate-700 active:scale-[0.98] border border-slate-700 text-slate-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer font-sports uppercase tracking-wider"
+                className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer font-sports uppercase tracking-wider ${
+                  theme === 'light'
+                    ? 'bg-slate-200 hover:bg-slate-300 border-slate-300 text-slate-900'
+                    : 'bg-slate-800/90 hover:bg-slate-700 border-slate-700 text-slate-200'
+                }`}
               >
-                <Download className="w-3.5 h-3.5 text-amber-400" />
+                <Download className="w-3.5 h-3.5 text-amber-500" />
                 <span>Descargar</span>
               </button>
             </div>
@@ -293,7 +333,9 @@ Presenta este código en los molinetes del estadio.
               className={`w-full py-2.5 px-4 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 border ${
                 isWalletAdded
                   ? 'bg-emerald-950/80 border-emerald-500/60 text-emerald-300'
-                  : 'bg-black hover:bg-zinc-900 active:scale-[0.99] border-zinc-700 text-white shadow-md'
+                  : theme === 'light'
+                  ? 'bg-slate-900 hover:bg-slate-800 text-white shadow-md'
+                  : 'bg-black hover:bg-zinc-900 border-zinc-700 text-white shadow-md'
               }`}
             >
               {isWalletAdded ? (
@@ -319,26 +361,30 @@ Presenta este código en los molinetes del estadio.
           </div>
 
           {/* 5. Puerta de Acceso y Total Pagado (Fila corta estilizada cerca del final) */}
-          <div className="p-3 rounded-xl bg-[#080D18] border border-slate-800/80 flex items-center justify-between text-xs">
-            <div className="flex items-center gap-1.5 text-slate-400">
-              <span className="text-slate-400">Puerta de ingreso:</span>
-              <strong className="text-white font-bold">
+          <div className={`p-3 rounded-xl border flex items-center justify-between text-xs ${
+            theme === 'light' ? 'bg-emerald-50 border-emerald-200 text-slate-900' : 'bg-[#080D18] border-slate-800/80 text-white'
+          }`}>
+            <div className="flex items-center gap-1.5">
+              <span className={theme === 'light' ? 'text-slate-600 font-medium' : 'text-slate-400'}>Puerta de ingreso:</span>
+              <strong className={theme === 'light' ? 'text-slate-900 font-extrabold' : 'text-white font-bold'}>
                 {ticket.gate || 'Rampa Nivel 300'}
               </strong>
             </div>
-            <div className="h-3 w-px bg-slate-800" />
+            <div className={`h-3 w-px ${theme === 'light' ? 'bg-slate-300' : 'bg-slate-800'}`} />
             <div className="flex items-center gap-1.5">
-              <span className="text-slate-400">Total:</span>
-              <strong className="text-emerald-400 font-black text-sm">
+              <span className={theme === 'light' ? 'text-slate-600 font-medium' : 'text-slate-400'}>Total:</span>
+              <strong className="text-emerald-600 font-black text-sm">
                 ${ticket.price} MXN
               </strong>
             </div>
           </div>
 
           {/* Pie de seguridad y referencia */}
-          <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1">
+          <div className={`flex items-center justify-between text-[10px] pt-1 ${
+            theme === 'light' ? 'text-slate-500 font-medium' : 'text-slate-500'
+          }`}>
             <span>Ref: #{ticket.purchaseId ? ticket.purchaseId.slice(-7) : ticket.id.slice(-7)}</span>
-            <span className="inline-flex items-center gap-1 text-emerald-500/90 font-medium">
+            <span className="inline-flex items-center gap-1 text-emerald-600 font-medium">
               <ShieldCheck className="w-3 h-3" />
               Autenticado por Stripe
             </span>

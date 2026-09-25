@@ -238,49 +238,57 @@ TOTAL PAGADO:    $${order.total.toFixed(2)} MXN
 
         <div className="p-6 space-y-6">
           {/* QR de verificación y datos principales */}
-          <div className="flex flex-col sm:flex-row items-center gap-6 p-4 rounded-2xl bg-[#060A13] border border-slate-800/80">
+          <div className={`flex flex-col sm:flex-row items-center gap-6 p-4 rounded-2xl border ${
+            theme === 'light' ? 'bg-slate-100 border-slate-200 text-slate-900' : 'bg-[#060A13] border-slate-800/80 text-white'
+          }`}>
             <div className="p-3 bg-white rounded-2xl shadow-xl shrink-0">
               <QRCodeDisplay value={order.id} size={130} />
             </div>
 
             <div className="space-y-3 flex-1 text-center sm:text-left">
               <div>
-                <span className="text-[11px] font-mono text-slate-400 uppercase tracking-wider">
+                <span className={`text-[11px] font-mono uppercase tracking-wider ${
+                  theme === 'light' ? 'text-slate-600 font-bold' : 'text-slate-400'
+                }`}>
                   MODALIDAD DE ENTREGA
                 </span>
-                <p className="text-base font-extrabold text-white mt-0.5 flex items-center justify-center sm:justify-start gap-1.5 font-sports">
+                <p className={`text-base font-extrabold mt-0.5 flex items-center justify-center sm:justify-start gap-1.5 font-sports ${
+                  theme === 'light' ? 'text-slate-950' : 'text-white'
+                }`}>
                   {order.shippingType === 'domicilio' ? (
                     <>
-                      <Truck className="w-4 h-4 text-blue-400" />
+                      <Truck className="w-4 h-4 text-blue-500" />
                       <span>Paquetería a Domicilio</span>
                     </>
                   ) : (
                     <>
-                      <Building className="w-4 h-4 text-emerald-400" />
+                      <Building className="w-4 h-4 text-emerald-500" />
                       <span>Retiro en Tienda Estadio</span>
                     </>
                   )}
                 </p>
 
                 {order.shippingType === 'domicilio' && order.shippingAddress && (
-                  <p className="text-xs text-slate-300 mt-1">
+                  <p className={`text-xs mt-1 ${theme === 'light' ? 'text-slate-700' : 'text-slate-300'}`}>
                     📍 {order.shippingAddress.street}, {order.shippingAddress.neighborhood}, {order.shippingAddress.city}, {order.shippingAddress.state}
                   </p>
                 )}
                 {order.shippingType === 'tienda' && (
-                  <p className="text-xs text-slate-300 mt-1">
+                  <p className={`text-xs mt-1 ${theme === 'light' ? 'text-slate-700' : 'text-slate-300'}`}>
                     📍 Mostrador Principal • Estadio Teodoro Mariscal
                   </p>
                 )}
               </div>
 
-              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 text-xs text-slate-300">
+              <div className={`flex flex-wrap items-center justify-center sm:justify-start gap-3 text-xs ${
+                theme === 'light' ? 'text-slate-700' : 'text-slate-300'
+              }`}>
                 <span className="flex items-center gap-1 font-mono">
-                  <Clock className="w-3.5 h-3.5 text-slate-400" />
+                  <Clock className={`w-3.5 h-3.5 ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`} />
                   {new Date(order.createdAt).toLocaleDateString()} {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
-                <span className="text-slate-600">•</span>
-                <span className="font-sports font-extrabold text-emerald-400 text-sm font-scoreboard">
+                <span className={theme === 'light' ? 'text-slate-300' : 'text-slate-600'}>•</span>
+                <span className="font-sports font-extrabold text-emerald-600 text-sm font-scoreboard">
                   ${order.total.toLocaleString('es-MX')} MXN
                 </span>
               </div>
@@ -289,7 +297,9 @@ TOTAL PAGADO:    $${order.total.toFixed(2)} MXN
 
           {/* Estado de Progreso de Envío */}
           <div className="space-y-3">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider font-sports">
+            <span className={`text-xs font-bold uppercase tracking-wider font-sports ${
+              theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+            }`}>
               Seguimiento Logístico
             </span>
 
@@ -316,6 +326,8 @@ TOTAL PAGADO:    $${order.total.toFixed(2)} MXN
                               ? 'bg-red-600 text-white ring-4 ring-red-500/30 shadow-lg shadow-red-950/40 scale-105'
                               : isPassed
                               ? 'bg-emerald-600 text-white'
+                              : theme === 'light'
+                              ? 'bg-slate-200 text-slate-500'
                               : 'bg-slate-800 text-slate-500'
                           }`}
                         >
@@ -328,9 +340,11 @@ TOTAL PAGADO:    $${order.total.toFixed(2)} MXN
                         <span
                           className={`text-[10px] mt-1.5 leading-tight font-sports font-bold ${
                             isCurrent
-                              ? 'text-red-400'
+                              ? 'text-red-500'
                               : isPassed
-                              ? 'text-emerald-400'
+                              ? 'text-emerald-600'
+                              : theme === 'light'
+                              ? 'text-slate-500'
                               : 'text-slate-500'
                           }`}
                         >
@@ -343,19 +357,21 @@ TOTAL PAGADO:    $${order.total.toFixed(2)} MXN
 
                 {/* Info de paquetería / guía si está en tránsito */}
                 {order.shippingType === 'domicilio' && (
-                  <div className="p-3 bg-[#060A13] border border-slate-800 rounded-xl text-xs flex flex-wrap items-center justify-between gap-2">
+                  <div className={`p-3 border rounded-xl text-xs flex flex-wrap items-center justify-between gap-2 ${
+                    theme === 'light' ? 'bg-slate-100 border-slate-200 text-slate-800' : 'bg-[#060A13] border-slate-800 text-slate-300'
+                  }`}>
                     <div className="flex items-center gap-2">
-                      <Truck className="w-4 h-4 text-slate-400" />
-                      <span className="text-slate-300">
-                        Transportista: <strong className="text-white">{order.carrier || 'Por asignar'}</strong>
+                      <Truck className={`w-4 h-4 ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`} />
+                      <span>
+                        Transportista: <strong className={theme === 'light' ? 'text-slate-900' : 'text-white'}>{order.carrier || 'Por asignar'}</strong>
                       </span>
                     </div>
                     {order.trackingNumber ? (
-                      <span className="font-mono text-red-400 bg-red-950/60 px-2 py-0.5 rounded border border-red-800/60 font-bold">
+                      <span className="font-mono text-red-500 bg-red-50 px-2 py-0.5 rounded border border-red-200 font-bold">
                         Guía: #{order.trackingNumber}
                       </span>
                     ) : (
-                      <span className="text-slate-500 italic text-[11px]">
+                      <span className={`italic text-[11px] ${theme === 'light' ? 'text-slate-500' : 'text-slate-500'}`}>
                         Guía de rastreo disponible una vez empaquetado
                       </span>
                     )}
@@ -366,11 +382,15 @@ TOTAL PAGADO:    $${order.total.toFixed(2)} MXN
           </div>
 
           {/* Desglose de Artículos */}
-          <div className="space-y-2 pt-2 border-t border-slate-800">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider font-sports">
+          <div className={`space-y-2 pt-2 border-t ${theme === 'light' ? 'border-slate-200' : 'border-slate-800'}`}>
+            <span className={`text-xs font-bold uppercase tracking-wider font-sports ${
+              theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+            }`}>
               Artículos ({totalItemsCount} unidades)
             </span>
-            <div className="divide-y divide-slate-800/80 rounded-2xl bg-[#060A13] border border-slate-800/80 p-3">
+            <div className={`divide-y rounded-2xl border p-3 ${
+              theme === 'light' ? 'bg-slate-100 border-slate-200 divide-slate-200' : 'bg-[#060A13] border-slate-800/80 divide-slate-800/80'
+            }`}>
               {order.items.map((item, idx) => {
                 const title = getMerchItemTitle(item);
                 const size = getMerchItemSize(item);
@@ -379,19 +399,19 @@ TOTAL PAGADO:    $${order.total.toFixed(2)} MXN
                 return (
                   <div key={idx} className="flex items-center justify-between py-2 text-xs">
                     <div className="flex items-center gap-2.5">
-                      <span className="px-2 py-0.5 rounded-md bg-red-600/20 text-red-400 font-mono font-black text-xs">
+                      <span className="px-2 py-0.5 rounded-md bg-red-600/20 text-red-600 font-mono font-black text-xs">
                         {item.quantity}x
                       </span>
                       <div>
-                        <span className="font-bold text-white block">{title}</span>
+                        <span className={`font-bold block ${theme === 'light' ? 'text-slate-950' : 'text-white'}`}>{title}</span>
                         {size && (
-                          <span className="text-[11px] text-slate-400 font-mono">
+                          <span className={`text-[11px] font-mono ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
                             Talla: {size}
                           </span>
                         )}
                       </div>
                     </div>
-                    <span className="font-scoreboard font-bold text-emerald-400">
+                    <span className="font-scoreboard font-bold text-emerald-600">
                       ${(price * item.quantity).toFixed(2)} MXN
                     </span>
                   </div>
@@ -401,36 +421,38 @@ TOTAL PAGADO:    $${order.total.toFixed(2)} MXN
           </div>
 
           {/* Totales y Método de Pago */}
-          <div className="space-y-2 p-4 rounded-2xl bg-[#060A13] border border-slate-800/80 text-xs">
-            <div className="flex justify-between text-slate-400">
+          <div className={`space-y-2 p-4 rounded-2xl border text-xs ${
+            theme === 'light' ? 'bg-slate-100 border-slate-200 text-slate-800' : 'bg-[#060A13] border-slate-800/80 text-white'
+          }`}>
+            <div className={`flex justify-between ${theme === 'light' ? 'text-slate-600 font-medium' : 'text-slate-400'}`}>
               <span>Subtotal</span>
-              <span className="font-mono text-slate-200">
+              <span className={`font-mono ${theme === 'light' ? 'text-slate-900 font-bold' : 'text-slate-200'}`}>
                 ${(order.subtotal || order.total).toFixed(2)} MXN
               </span>
             </div>
             {order.shippingCost !== undefined && order.shippingCost > 0 && (
-              <div className="flex justify-between text-slate-400">
+              <div className={`flex justify-between ${theme === 'light' ? 'text-slate-600 font-medium' : 'text-slate-400'}`}>
                 <span>Costo de Envío</span>
-                <span className="font-mono text-slate-200">
+                <span className={`font-mono ${theme === 'light' ? 'text-slate-900 font-bold' : 'text-slate-200'}`}>
                   ${order.shippingCost.toFixed(2)} MXN
                 </span>
               </div>
             )}
-            <div className="flex justify-between items-center pt-2 border-t border-slate-800">
+            <div className={`flex justify-between items-center pt-2 border-t ${theme === 'light' ? 'border-slate-200' : 'border-slate-800'}`}>
               <div>
-                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-mono block">
+                <span className={`text-[10px] uppercase tracking-wider font-mono block ${theme === 'light' ? 'text-slate-500 font-bold' : 'text-slate-400'}`}>
                   MÉTODO DE PAGO
                 </span>
-                <span className="font-bold text-slate-200 flex items-center gap-1 mt-0.5">
-                  <CreditCard className="w-3.5 h-3.5 text-emerald-400" />
+                <span className={`font-bold flex items-center gap-1 mt-0.5 ${theme === 'light' ? 'text-slate-900' : 'text-slate-200'}`}>
+                  <CreditCard className="w-3.5 h-3.5 text-emerald-500" />
                   {order.paymentMethod || 'Tarjeta en Línea'}
                 </span>
               </div>
               <div className="text-right">
-                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-mono block">
+                <span className={`text-[10px] uppercase tracking-wider font-mono block ${theme === 'light' ? 'text-slate-500 font-bold' : 'text-slate-400'}`}>
                   TOTAL PAGADO
                 </span>
-                <span className="text-lg font-black text-emerald-400 font-scoreboard">
+                <span className="text-lg font-black text-emerald-600 font-scoreboard">
                   ${order.total.toLocaleString('es-MX')} MXN
                 </span>
               </div>
@@ -442,9 +464,13 @@ TOTAL PAGADO:    $${order.total.toFixed(2)} MXN
             <button
               type="button"
               onClick={handleShare}
-              className="py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-sports font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer"
+              className={`py-3 px-4 rounded-xl font-sports font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                theme === 'light'
+                  ? 'bg-slate-200 hover:bg-slate-300 text-slate-900 border border-slate-300'
+                  : 'bg-slate-800 hover:bg-slate-700 text-white'
+              }`}
             >
-              <Share2 className="w-4 h-4 text-red-400" />
+              <Share2 className="w-4 h-4 text-red-500" />
               <span>Compartir</span>
             </button>
             <button

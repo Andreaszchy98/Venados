@@ -2,12 +2,13 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { auth, db } from './lib/firebase';
 import { syncUserProfile } from './lib/auth';
-import { UserProfile } from './types';
+import { UserProfile, UserRole } from './types';
 import { Header } from './components/shared/Header';
 import { AuthModal } from './components/shared/AuthModal';
 import { AficionadoView } from './views/aficionado/AficionadoView';
 import { AdminView } from './views/admin/AdminView';
 import { TaquillaView } from './views/taquilla/TaquillaView';
+import { TaquilleraPOSView } from './views/taquillera/TaquilleraPOSView';
 import { ConcesionarioView } from './views/concesionario/ConcesionarioView';
 import { RunnerView } from './views/runner/RunnerView';
 import { SuperAdminView } from './views/superadmin/SuperAdminView';
@@ -66,6 +67,45 @@ function MainLayout() {
       return null;
     }
   });
+
+  // Vista simulada en cliente (para administradores que exploran otros módulos sin alterar su rol real en la BD)
+  const [activeView, setActiveView] = useState<UserRole | null>(() => {
+    try {
+      const saved = sessionStorage.getItem('vxp_active_view');
+      return (saved as UserRole) || null;
+    } catch {
+      return null;
+    }
+  });
+
+  const handleActiveViewChange = (newView: UserRole | null) => {
+    setActiveView(newView);
+    try {
+      if (newView) {
+        sessionStorage.setItem('vxp_active_view', newView);
+      } else {
+        sessionStorage.removeItem('vxp_active_view');
+      }
+    } catch {}
+  };
+
+  // Calcular el rol efectivo a renderizar (mantiene intacto el rol real de Firestore)
+  const effectiveRole = useMemo(() => {
+    if (!userProfile) return null;
+    if ((userProfile.role === 'admin' || userProfile.role === 'superadmin') && activeView) {
+      return activeView;
+    }
+    return userProfile.role;
+  }, [userProfile, activeView]);
+
+  // Perfil simulado para entregar al componente renderizado
+  const activeUserProfile = useMemo(() => {
+    if (!userProfile) return null;
+    if (effectiveRole && effectiveRole !== userProfile.role) {
+      return { ...userProfile, role: effectiveRole };
+    }
+    return userProfile;
+  }, [userProfile, effectiveRole]);
 
   // Estados para Stripe Checkout (Éxito, Cancelado y Simulación Demo)
   const [stripeSuccessSessionId, setStripeSuccessSessionId] = useState<string | null>(null);
@@ -243,10 +283,30 @@ function MainLayout() {
       <Header
         user={userProfile}
         onOpenAuth={handleGenericLogin}
+        activeView={activeView}
+        onActiveViewChange={handleActiveViewChange}
       />
 
+      {/* Banner Flotante Informativo de Modo Vista Simulada para Administradores */}
+      {userProfile && (userProfile.role === 'admin' || userProfile.role === 'superadmin') && activeView && activeView !== userProfile.role && (
+        <div className="bg-gradient-to-r from-amber-500 via-amber-600 to-amber-500 text-black px-4 py-2 text-xs font-bold shadow-xl flex flex-wrap items-center justify-between gap-2 z-30 sticky top-14 font-sports border-b border-amber-400">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-black animate-ping shrink-0" />
+            <span>
+              👁️ MODO VISTA SIMULADA: <strong className="uppercase bg-black/20 px-1.5 py-0.5 rounded text-black font-black">{activeView}</strong> • Tu rol real en base de datos es permanentemente <strong className="uppercase font-black">{userProfile.role}</strong>.
+            </span>
+          </div>
+          <button
+            onClick={() => handleActiveViewChange(null)}
+            className="px-3 py-1 bg-black text-amber-300 hover:text-white rounded-lg text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer border border-amber-400/50 flex items-center gap-1"
+          >
+            <span>Volver a Panel Administrador</span> ↩
+          </button>
+        </div>
+      )}
+
       {/* Contenido Principal */}
-      <main className={`flex-1 w-full ${!userProfile || userProfile?.role === 'aficionado' ? 'p-0 max-w-none' : 'max-w-7xl mx-auto p-3 sm:p-6 lg:p-8'}`}>
+      <main className={`flex-1 w-full ${!activeUserProfile || activeUserProfile?.role === 'aficionado' ? 'p-0 max-w-none' : 'max-w-7xl mx-auto p-3 sm:p-6 lg:p-8'}`}>
         {/* Banner de cancelación de Stripe si el usuario canceló el checkout */}
         {stripeCancelledNotice && (
           <div className="bg-amber-950/90 border-b border-amber-600/50 text-amber-200 px-4 py-3 flex items-center justify-between text-xs transition-all">
@@ -275,7 +335,7 @@ function MainLayout() {
           <div className="min-h-[50vh] flex items-center justify-center">
             <LoadingSpinner message={t('hero.loading_session', 'Cargando eventos y experiencia VXP...')} />
           </div>
-        ) : !userProfile ? (
+        ) : !activeUserProfile ? (
           /* Navegación libre para invitados (Cartelera, Boletos, Tienda, Comida) */
           <AficionadoView
             user={guestUser}
@@ -302,14 +362,14 @@ function MainLayout() {
             onRequireAuth={handleGenericLogin}
           />
         ) : (
-          /* Vistas según el rol del usuario autenticado */
+          /* Vistas según el rol efectivo del usuario */
           <div>
-            {userProfile.role === 'superadmin' && (
-              <SuperAdminView user={userProfile} />
+            {effectiveRole === 'superadmin' && activeUserProfile && (
+              <SuperAdminView user={activeUserProfile} />
             )}
-            {userProfile.role === 'aficionado' && (
+            {effectiveRole === 'aficionado' && activeUserProfile && (
               <AficionadoView
-                user={userProfile}
+                user={activeUserProfile}
                 pendingEventId={pendingEventId}
                 initialTab={
                   pendingView === 'tienda'
@@ -333,17 +393,20 @@ function MainLayout() {
                 onRequireAuth={handleGenericLogin}
               />
             )}
-            {userProfile.role === 'admin' && (
-              <AdminView user={userProfile} />
+            {effectiveRole === 'admin' && activeUserProfile && (
+              <AdminView user={activeUserProfile} />
             )}
-            {userProfile.role === 'concesionario' && (
-              <ConcesionarioView user={userProfile} />
+            {effectiveRole === 'concesionario' && activeUserProfile && (
+              <ConcesionarioView user={activeUserProfile} />
             )}
-            {userProfile.role === 'runner' && (
-              <RunnerView user={userProfile} />
+            {effectiveRole === 'runner' && activeUserProfile && (
+              <RunnerView user={activeUserProfile} />
             )}
-            {userProfile.role === 'taquilla' && (
-              <TaquillaView user={userProfile} />
+            {effectiveRole === 'taquillera' && activeUserProfile && (
+              <TaquilleraPOSView user={activeUserProfile} />
+            )}
+            {effectiveRole === 'taquilla' && activeUserProfile && (
+              <TaquillaView user={activeUserProfile} />
             )}
           </div>
         )}

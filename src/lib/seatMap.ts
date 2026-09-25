@@ -864,11 +864,18 @@ export function subscribeEventSeats(
   callback: (seats: EventSeat[]) => void,
   onError?: (err: any) => void
 ): () => void {
+  const cacheKey = `stadium_event_seats_${eventId}`;
+  const cached = getCachedData<EventSeat[]>(cacheKey);
+  if (cached && cached.length > 0) {
+    callback(cached);
+  }
+
   const q = query(collection(db, 'eventSeats'), where('eventId', '==', eventId));
   return onSnapshot(
     q,
     (snap) => {
       const seats = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<EventSeat, 'id'>) }));
+      setCachedData(cacheKey, seats, 10);
       callback(seats);
     },
     (err) => {

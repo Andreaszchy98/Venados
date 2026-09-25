@@ -8,14 +8,16 @@ interface EncantoStadiumMapProps {
   activeZoneFilter: string | null;
   onSelectSection: (sectionNumber: string) => void;
   event?: VenueEvent | null;
+  soldOutSectionsSet?: Set<string>;
 }
 
-export const EncantoStadiumMap: React.FC<EncantoStadiumMapProps> = ({
+const EncantoStadiumMapComponent = React.memo<EncantoStadiumMapProps>(({
   sections,
   activeSectionNumber,
   activeZoneFilter,
   onSelectSection,
   event,
+  soldOutSectionsSet,
 }) => {
   const [hoveredSection, setHoveredSection] = useState<string | null>(null);
 
@@ -48,11 +50,12 @@ export const EncantoStadiumMap: React.FC<EncantoStadiumMapProps> = ({
     const hovered = hoveredSection === secNumber;
     const dimmed = isDimmed(zoneName);
     const price = getZonePrice(zoneName, event);
+    const isSoldOut = soldOutSectionsSet ? (soldOutSectionsSet.has(secNumber) || soldOutSectionsSet.has(secNumber.toLowerCase())) : false;
 
     return (
       <g
         key={secNumber}
-        className="cursor-pointer transition-all duration-150"
+        className={isSoldOut ? 'cursor-not-allowed opacity-40' : 'cursor-pointer transition-all duration-150'}
         onClick={() => onSelectSection(secNumber)}
         onMouseEnter={() => setHoveredSection(secNumber)}
         onMouseLeave={() => setHoveredSection(null)}
@@ -63,10 +66,10 @@ export const EncantoStadiumMap: React.FC<EncantoStadiumMapProps> = ({
           width={width}
           height={height}
           rx={rx}
-          fill={meta.fillColor}
-          stroke={selected ? '#FBBF24' : hovered ? '#FFFFFF' : meta.strokeColor}
+          fill={isSoldOut ? '#1E293B' : meta.fillColor}
+          stroke={selected ? '#FBBF24' : hovered ? '#FFFFFF' : isSoldOut ? '#334155' : meta.strokeColor}
           strokeWidth={selected ? 3 : hovered ? 2 : 1}
-          opacity={dimmed ? 0.3 : hovered ? 1 : 0.92}
+          opacity={isSoldOut ? 0.35 : dimmed ? 0.3 : hovered ? 1 : 0.92}
           className="transition-all"
           filter={selected ? 'drop-shadow(0 0 6px rgba(251, 191, 36, 0.75))' : undefined}
         />
@@ -591,4 +594,7 @@ export const EncantoStadiumMap: React.FC<EncantoStadiumMapProps> = ({
       </svg>
     </div>
   );
-};
+});
+
+EncantoStadiumMapComponent.displayName = 'EncantoStadiumMap';
+export const EncantoStadiumMap = EncantoStadiumMapComponent;
