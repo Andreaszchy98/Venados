@@ -536,8 +536,8 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
     return { total, sold, available };
   }, [sections, eventSeats, isEncanto, event?.availableSeats, event?.totalCapacity]);
 
-  // Alternar selección de un asiento mediante Transacción Atómica con bloqueo de 8 minutos
-  const handleToggleSeat = async (seat: EventSeat, section: SeatSection) => {
+  // Alternar selección de un asiento mediante actualización optimista inmediata (0 ms) y bloqueo en segundo plano
+  const handleToggleSeat = (seat: EventSeat, section: SeatSection) => {
     if (isEventClosed) {
       setPurchaseError('La venta de boletos ha finalizado o está cerrada para este evento.');
       return;
@@ -545,7 +545,7 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
 
     if (seat.status === 'vendido') return;
 
-    // Prevenir bloqueos duplicados en transiciones concurrentes / doble clic
+    // Prevenir clics duplicados mientras se sincroniza
     if (pendingSeatLocks.current.has(seat.id)) return;
 
     const userId = user?.uid || 'guest';
@@ -553,9 +553,8 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
     setPurchaseError(null);
     const isAlreadySelected = selectedSeatsRef.current.some((s) => s.seatId === seat.id);
 
-    // Límite estricto de 5 boletos por compra (verificado sincronizadamente con ref y cola de pendientes)
-    const currentTotalAttempted = selectedSeatsRef.current.length + pendingSeatLocks.current.size;
-    if (!isAlreadySelected && currentTotalAttempted >= MAX_TICKETS_PER_PURCHASE) {
+    // Límite estricto de 5 boletos por compra
+    if (!isAlreadySelected && selectedSeatsRef.current.length >= MAX_TICKETS_PER_PURCHASE) {
       setPurchaseError(
         `¡Límite alcanzado! Máximo ${MAX_TICKETS_PER_PURCHASE} boletos por aficionado en cada compra. Si deseas seleccionar este asiento, deselecciona uno previamente apartado.`
       );
@@ -563,8 +562,7 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
     }
 
     if (isAlreadySelected) {
-      // Liberar bloqueo atómico en Firestore
-      releaseSeatLockTransaction(seat.id, userId, clientToken).catch(() => {});
+      // 1. Deselección visual instantánea en la interfaz
       setSelectedSeats((prev) => {
         const remaining = prev.filter((s) => s.seatId !== seat.id);
         if (remaining.length === 0) {
@@ -572,56 +570,68 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
         }
         return remaining;
       });
+      // 2. Liberar bloqueo atómico en Firestore en segundo plano
+      releaseSeatLockTransaction(seat.id, userId, clientToken).catch(() => {});
     } else {
-      pendingSeatLocks.current.add(seat.id);
-      try {
-        const lockRes = await lockSeatSelectionTransaction({
-          eventId: event.id,
-          seatId: seat.id,
-          userId,
-          sectionNumber: section.sectionNumber,
-          rowLabel: seat.rowLabel,
-          seatNumber: seat.seatNumber,
-          zoneName: section.zoneName,
-          sectionId: section.id,
-          clientLockToken: clientToken,
-        });
+      // 1. Selección visual INMEDIATA en la interfaz (0ms de retraso percibido)
+      const price = getZonePrice(section.zoneName, event);
+      const newItem: SeatPurchaseItem = {
+        seatId: seat.id,
+        sectionId: section.id,
+        sectionNumber: section.sectionNumber,
+        zoneName: section.zoneName,
+        rowLabel: seat.rowLabel,
+        seatNumber: seat.seatNumber,
+        price,
+      };
 
-        // Registrar o actualizar expiración
-        setLockExpiresAt(lockRes.lockedUntil);
+      setSelectedSeats((prev) => {
+        if (prev.some((s) => s.seatId === newItem.seatId)) return prev;
+        if (prev.length >= MAX_TICKETS_PER_PURCHASE) return prev;
+        return [...prev, newItem];
+      });
 
-        const price = getZonePrice(section.zoneName, event);
-        const newItem: SeatPurchaseItem = {
-          seatId: seat.id,
-          sectionId: section.id,
-          sectionNumber: section.sectionNumber,
-          zoneName: section.zoneName,
-          rowLabel: seat.rowLabel,
-          seatNumber: seat.seatNumber,
-          price,
-        };
-        setSelectedSeats((prev) => {
-          if (prev.some((s) => s.seatId === newItem.seatId)) {
-            return prev;
-          }
-          if (prev.length >= MAX_TICKETS_PER_PURCHASE) {
-            // Liberar en segundo plano si ya se alcanzó el límite por colisión concurrente
-            releaseSeatLockTransaction(seat.id, userId, clientToken).catch(() => {});
-            return prev;
-          }
-          return [...prev, newItem];
-        });
-      } catch (err: any) {
-        console.warn('Conflicto o error al bloquear asiento:', err);
-        const cleanMsg =
-          err.message
-            ?.replace('SEAT_LOCKED_BY_OTHER: ', '')
-            ?.replace('SEAT_ALREADY_SOLD: ', '') ||
-          'Este asiento no está disponible en este momento.';
-        setPurchaseError(cleanMsg);
-      } finally {
-        pendingSeatLocks.current.delete(seat.id);
+      // Si no había tiempo de expiración activo, establecer el temporizador visual de 8 minutos
+      if (!lockExpiresAt) {
+        setLockExpiresAt(new Date(Date.now() + 8 * 60 * 1000).toISOString());
       }
+
+      // 2. Registrar el bloqueo atómico en Firestore en segundo plano
+      pendingSeatLocks.current.add(seat.id);
+      lockSeatSelectionTransaction({
+        eventId: event.id,
+        seatId: seat.id,
+        userId,
+        sectionNumber: section.sectionNumber,
+        rowLabel: seat.rowLabel,
+        seatNumber: seat.seatNumber,
+        zoneName: section.zoneName,
+        sectionId: section.id,
+        clientLockToken: clientToken,
+      })
+        .then((lockRes) => {
+          // Si el usuario no lo deseleccionó mientras se procesaba, actualizar tiempo exacto
+          if (selectedSeatsRef.current.some((s) => s.seatId === seat.id)) {
+            setLockExpiresAt(lockRes.lockedUntil);
+          } else {
+            // Si el usuario lo deseleccionó antes de que respondiera la red, liberarlo
+            releaseSeatLockTransaction(seat.id, userId, clientToken).catch(() => {});
+          }
+        })
+        .catch((err: any) => {
+          console.warn('Conflicto al apartar asiento:', err);
+          // Revertir la selección optimista si el asiento fue tomado o hubo conflicto
+          setSelectedSeats((prev) => prev.filter((s) => s.seatId !== seat.id));
+          const cleanMsg =
+            err.message
+              ?.replace('SEAT_LOCKED_BY_OTHER: ', '')
+              ?.replace('SEAT_ALREADY_SOLD: ', '') ||
+            'Este asiento no está disponible en este momento.';
+          setPurchaseError(cleanMsg);
+        })
+        .finally(() => {
+          pendingSeatLocks.current.delete(seat.id);
+        });
     }
   };
 
