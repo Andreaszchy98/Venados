@@ -1,11 +1,10 @@
+// VXP Cartelera y CarteleraLanding principal de eventos
 import React, { useState, useEffect, useMemo } from 'react';
 import { VenueEvent, Venue, EventType, UserProfile, EventPriceTier, GameScoreboard } from '../../types';
 import { DEFAULT_VENUES, DEFAULT_VENUE_ID, DEFAULT_FALLBACK_EVENT } from '../../lib/defaultVenue';
 import { subscribeVenues, getAllowedEventTypesForVenue } from '../../lib/venues';
-import { DEFAULT_FALLBACK_EVENTS, isVenadosHomeSeasonGame, isVenadosPruebaMatch } from '../../lib/venueEvents';
+import { DEFAULT_FALLBACK_EVENTS } from '../../lib/venueEvents';
 import { normalizeGoogleDriveImageUrl, getEventPosterPlaceholder } from '../../lib/imageUtils';
-import { VenadosSeasonPosterCard } from './VenadosSeasonPosterCard';
-import { VenadosSeasonPosterModal } from './VenadosSeasonPosterModal';
 import { SeatMapSelector } from '../../views/aficionado/SeatMapSelector';
 import { MarcadorEnVivo } from '../../views/aficionado/MarcadorEnVivo';
 import { HistorialJuegos } from '../../views/aficionado/HistorialJuegos';
@@ -110,10 +109,6 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
 
   // Visor de imagen promocional completa a pantalla completa (lightbox)
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
-
-  // Control de la carpeta oficial / póster de temporada de Venados en casa
-  const [isVenadosPosterModalOpen, setIsVenadosPosterModalOpen] = useState(false);
-  const [venadosViewMode, setVenadosViewMode] = useState<'carpeta' | 'desglosado'>('carpeta');
 
   // Fecha actual formateada para el recuadro de fecha
   const todayFormatted = useMemo(() => {
@@ -317,23 +312,6 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
     list.sort((a, b) => a.date.localeCompare(b.date));
     return list;
   }, [allEvents, venues, selectedCity, selectedVenueId, selectedCategory]);
-
-  // Particionar eventos para agrupar partidos de Venados en casa en su carpeta oficial
-  // (excluyendo el juego de prueba/demo vs Tomateros para mantenerlo como tarjeta individual independiente)
-  const { venadosSeasonGames, standaloneEvents } = useMemo(() => {
-    const seasonGames: VenueEvent[] = [];
-    const others: VenueEvent[] = [];
-
-    filteredEvents.forEach((e) => {
-      if (isVenadosHomeSeasonGame(e)) {
-        seasonGames.push(e);
-      } else {
-        others.push(e);
-      }
-    });
-
-    return { venadosSeasonGames: seasonGames, standaloneEvents: others };
-  }, [filteredEvents]);
 
   // Generar descripción / sinopsis atractiva
   const getEventSynopsis = (ev: VenueEvent) => {
@@ -654,53 +632,26 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
 
         {/* Chips de filtro deportivo compactos (Solo en modo Cartelera; respetan recinto seleccionado) */}
         {carteleraMode === 'cartelera' && (
-          <div className="flex flex-wrap items-center justify-between gap-2 py-0.5">
-            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
-              {availableCategories.map((cat) => {
-                const isSelected = selectedCategory === cat.id;
-                return (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => setSelectedCategory(cat.id as any)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                      isSelected
-                        ? 'bg-red-600 text-white shadow-xs'
-                        : theme === 'light'
-                        ? 'bg-white text-slate-700 hover:text-slate-900 border border-slate-200 hover:border-slate-300 shadow-xs'
-                        : 'bg-[#101625] text-slate-400 hover:text-slate-200 border border-slate-800 hover:border-slate-700'
-                    }`}
-                  >
-                    {cat.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Alternador de vista Carpeta vs Desglosado para juegos de Venados */}
-            {venadosSeasonGames.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setVenadosViewMode(venadosViewMode === 'carpeta' ? 'desglosado' : 'carpeta')}
-                className={`px-2.5 py-1 rounded-xl text-[11px] font-sports font-bold flex items-center gap-1.5 transition-all cursor-pointer border ${
-                  venadosViewMode === 'carpeta'
-                    ? theme === 'light'
-                      ? 'bg-red-50 text-red-700 border-red-200 shadow-xs'
-                      : 'bg-red-950/60 text-red-300 border-red-500/40 shadow-xs'
-                    : theme === 'light'
-                    ? 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                    : 'bg-[#101625] text-slate-400 border-slate-800 hover:text-slate-200'
-                }`}
-                title="Alternar entre ver partidos de Venados agrupados en póster/carpeta o desglosados"
-              >
-                <Layers className="w-3.5 h-3.5 text-red-500" />
-                <span>
-                  {venadosViewMode === 'carpeta'
-                    ? `Carpeta Venados Activa (${venadosSeasonGames.length} juegos)`
-                    : 'Ver en Carpeta Oficial'}
-                </span>
-              </button>
-            )}
+          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
+            {availableCategories.map((cat) => {
+              const isSelected = selectedCategory === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setSelectedCategory(cat.id as any)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                    isSelected
+                      ? 'bg-red-600 text-white shadow-xs'
+                      : theme === 'light'
+                      ? 'bg-white text-slate-700 hover:text-slate-900 border border-slate-200 hover:border-slate-300 shadow-xs'
+                      : 'bg-[#101625] text-slate-400 hover:text-slate-200 border border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
@@ -745,18 +696,7 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto px-4 py-6">
-            {/* Si está activo el modo carpeta y hay juegos oficiales de temporada en casa de Venados */}
-            {venadosViewMode === 'carpeta' && venadosSeasonGames.length > 0 && (
-              <VenadosSeasonPosterCard
-                games={venadosSeasonGames}
-                venue={venues.find((v) => v.id === DEFAULT_VENUE_ID)}
-                onOpenFolder={() => setIsVenadosPosterModalOpen(true)}
-                onOpenLightbox={(url, title) => setPreviewImage({ url, title })}
-              />
-            )}
-
-            {(venadosViewMode === 'carpeta' && venadosSeasonGames.length > 0 ? standaloneEvents : filteredEvents).map((ev) => {
-              const isPruebaMatch = isVenadosPruebaMatch(ev);
+            {filteredEvents.map((ev) => {
               const rating = getEventRatingBadge(ev.type);
               const minPrice = getMinPrice(ev);
               const posterSrc =
@@ -767,31 +707,20 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
                 <div
                   key={ev.id}
                   className={`group flex flex-col justify-between h-full rounded-2xl sm:rounded-3xl border overflow-hidden transition-all duration-300 ${
-                    isPruebaMatch
-                      ? theme === 'light'
-                        ? 'bg-amber-50/20 border-amber-300 shadow-md hover:border-amber-500'
-                        : 'bg-[#121624] border-amber-500/40 shadow-xl hover:border-amber-400'
-                      : theme === 'light'
+                    theme === 'light'
                       ? 'bg-white border-slate-200 shadow-xs hover:border-red-500/80 hover:shadow-lg'
                       : 'bg-[#101625] border-slate-800/80 shadow-lg hover:border-red-500/80 hover:shadow-xl hover:shadow-red-950/20'
                   }`}
                 >
                   {/* Cintillo de Recinto y Fecha sin invadir el arte del póster */}
                   <div className={`px-2.5 py-1.5 border-b flex items-center justify-between gap-1 text-[10px] ${
-                    isPruebaMatch
-                      ? theme === 'light' ? 'bg-amber-100/70 border-amber-200' : 'bg-amber-950/40 border-amber-500/30'
-                      : theme === 'light' ? 'bg-slate-100 border-slate-200' : 'bg-[#0C121E] border-slate-800/80'
+                    theme === 'light' ? 'bg-slate-100 border-slate-200' : 'bg-[#0C121E] border-slate-800/80'
                   }`}>
                     <span className={`font-bold truncate max-w-[58%] flex items-center gap-1 ${
                       theme === 'light' ? 'text-slate-700' : 'text-slate-300'
                     }`}>
                       <MapPin className="w-3 h-3 text-red-500 shrink-0" />
                       <span className="truncate">{ev.venueName || venueObj?.name || 'Estadio'}</span>
-                      {isPruebaMatch && (
-                        <span className="px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-500 border border-amber-500/40 text-[9px] font-black uppercase font-sports ml-1 shrink-0">
-                          Prueba
-                        </span>
-                      )}
                     </span>
                     <span className={`font-black shrink-0 flex items-center gap-1 ${
                       theme === 'light' ? 'text-red-700' : 'text-amber-400'
@@ -1252,19 +1181,6 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
           </div>
         </div>
       )}
-
-      {/* Modal Interactivo: Póster Oficial y Rol de Juegos de Venados de Mazatlán en Casa Temporada 2026-2027 */}
-      <VenadosSeasonPosterModal
-        isOpen={isVenadosPosterModalOpen}
-        onClose={() => setIsVenadosPosterModalOpen(false)}
-        seasonGames={venadosSeasonGames}
-        onSelectGame={(game) => {
-          setSelectedMapEvent(game);
-          setIsVenadosPosterModalOpen(false);
-        }}
-        onViewSynopsis={(game) => setSynopsisEvent(game)}
-        onOpenLightbox={(url, title) => setPreviewImage({ url, title })}
-      />
 
       {/* 5. VISOR MODAL DE IMAGEN PROMOCIONAL COMPLETA (LIGHTBOX) */}
       {previewImage && (
