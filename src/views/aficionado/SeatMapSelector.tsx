@@ -17,8 +17,11 @@ import {
   getClientLockToken,
   isSeatLockedByOther,
   SEAT_LOCK_DURATION_MS,
+  MAX_TICKETS_PER_PURCHASE,
   getZonePrice,
   MARISCAL_ZONES,
+  MARISCAL_SECTION_ZONE_MAP,
+  getMariscalSectionZone,
   getStadiumZones,
   isEncantoVenue,
   ENCANTO_GATES_GUIDE,
@@ -29,6 +32,7 @@ import { isEventPassed } from '../../lib/venueEvents';
 import { EncantoStadiumMap } from '../../components/stadiumMaps/EncantoStadiumMap';
 import { TeodoroMariscalStadiumMap } from '../../components/stadiumMaps/TeodoroMariscalStadiumMap';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
+import { useTheme } from '../../context/ThemeContext';
 import { createStripeCheckoutSession } from '../../lib/stripe';
 import { CardPaymentModal } from '../../components/shared/CardPaymentModal';
 import { DirectPaymentResult } from '../../lib/stripe';
@@ -55,6 +59,7 @@ interface SeatMapSelectorProps {
   onCancel?: () => void;
   onRequireAuth?: () => void;
   isPosMode?: boolean;
+  posSelectedSeats?: SeatPurchaseItem[];
   onSelectionChangeForPos?: (seats: SeatPurchaseItem[]) => void;
 }
 
@@ -81,8 +86,11 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
   onCancel,
   onRequireAuth,
   isPosMode = false,
+  posSelectedSeats,
   onSelectionChangeForPos,
 }) => {
+  const { theme } = useTheme();
+
   const isEncanto = useMemo(
     () => isEncantoVenue(event.venueId, stadiumName, event.type),
     [event.venueId, stadiumName, event.type]
@@ -127,18 +135,72 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
           uniqueMap.set(item.seatId, item);
         }
       }
-      return Array.from(uniqueMap.values());
+      return Array.from(uniqueMap.values()).slice(0, MAX_TICKETS_PER_PURCHASE);
     } catch {
       return [];
     }
   });
 
+  // Referencia para rastrear la selección más reciente sin disparar efectos
+  const selectedSeatsRef = useRef<SeatPurchaseItem[]>(selectedSeats);
+  useEffect(() => {
+    selectedSeatsRef.current = selectedSeats;
+    // Si por alguna razón la selección excede el límite máximo (por ejemplo estado previo en sesión), truncar inmediatamente a 5
+    if (selectedSeats.length > MAX_TICKETS_PER_PURCHASE) {
+      const trimmed = selectedSeats.slice(0, MAX_TICKETS_PER_PURCHASE);
+      const toRelease = selectedSeats.slice(MAX_TICKETS_PER_PURCHASE);
+      const userId = user?.uid || 'guest';
+      const clientToken = getClientLockToken();
+      toRelease.forEach((s) => {
+        releaseSeatLockTransaction(s.seatId, userId, clientToken).catch(() => {});
+      });
+      setSelectedSeats(trimmed);
+    }
+  }, [selectedSeats, user?.uid]);
+
+  // Referencia para evitar bucles infinitos de notificación
+  const lastNotifiedSeatsStr = useRef<string>('');
+
   // Notificar cambios de selección al Punto de Venta POS cuando se usa en modo Taquillera
   useEffect(() => {
     if (isPosMode && onSelectionChangeForPos) {
-      onSelectionChangeForPos(selectedSeats);
+      const currentStr = selectedSeats.map((s) => s.seatId).sort().join(',');
+      if (currentStr !== lastNotifiedSeatsStr.current) {
+        lastNotifiedSeatsStr.current = currentStr;
+        onSelectionChangeForPos(selectedSeats);
+      }
     }
   }, [selectedSeats, isPosMode, onSelectionChangeForPos]);
+
+  // Sincronizar selección interna con la del Punto de Venta POS externa si cambia fuera (ej: limpiar o quitar asiento)
+  useEffect(() => {
+    if (isPosMode && posSelectedSeats) {
+      const currentInternal = selectedSeatsRef.current;
+      const internalIds = currentInternal.map((s) => s.seatId).sort().join(',');
+      const externalIds = posSelectedSeats.map((s) => s.seatId).sort().join(',');
+      if (internalIds !== externalIds) {
+        // Identificar asientos eliminados externamente para liberar sus bloqueos en Firestore
+        const removedSeats = currentInternal.filter(
+          (s) => !posSelectedSeats.some((ext) => ext.seatId === s.seatId)
+        );
+        const userId = user?.uid || 'guest';
+        const clientToken = getClientLockToken();
+        removedSeats.forEach((s) => {
+          releaseSeatLockTransaction(s.seatId, userId, clientToken).catch(() => {});
+        });
+
+        lastNotifiedSeatsStr.current = externalIds;
+        setSelectedSeats(posSelectedSeats);
+        if (posSelectedSeats.length === 0) {
+          setLockExpiresAt(null);
+          try {
+            sessionStorage.removeItem(`vxp_seats_${event.id}`);
+            sessionStorage.removeItem(`vxp_seats_lock_${event.id}`);
+          } catch {}
+        }
+      }
+    }
+  }, [posSelectedSeats, isPosMode, event.id, user?.uid]);
 
   // Evitar ejecuciones duplicadas concurrentes por doble clic sobre el mismo asiento
   const pendingSeatLocks = useRef<Set<string>>(new Set());
@@ -358,15 +420,27 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
     if (!found) {
       found = sections.find((s) => normalizeSec(s.sectionNumber) === normTarget);
     }
-    if (found) return found;
+    if (found) {
+      if (!isEncanto) {
+        const canonicalZone = getMariscalSectionZone(found.sectionNumber) || getMariscalSectionZone(targetNumber);
+        if (canonicalZone) {
+          return { ...found, zoneName: canonicalZone };
+        }
+      }
+      return found;
+    }
 
     // 2. Coincidencia en catálogo maestro de la sede
     const masterSections = buildSectionsForVenue(event.venueId, event.type);
     const masterFound = masterSections.find((s) => normalizeSec(s.sectionNumber) === normTarget);
     if (masterFound) {
+      const canonicalZone = !isEncanto
+        ? getMariscalSectionZone(masterFound.sectionNumber) || masterFound.zoneName
+        : masterFound.zoneName;
       return {
         id: `${event.venueId}_sec_${masterFound.sectionNumber.replace(/\s+/g, '_')}`,
         ...masterFound,
+        zoneName: canonicalZone,
       };
     }
 
@@ -411,12 +485,16 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
       };
     }
 
-    // 4. Si no se encuentra en las anteriores, preservar estrictamente el targetNumber
+    // 4. Si no se encuentra en las anteriores, preservar estrictamente el targetNumber y zona oficial de Teodoro Mariscal
+    const fallbackZone = !isEncanto
+      ? getMariscalSectionZone(targetNumber) || sections[0]?.zoneName || 'Plus'
+      : sections[0]?.zoneName || 'General';
+
     return {
       id: `${event.venueId}_sec_${targetNumber.replace(/\s+/g, '_')}`,
       venueId: event.venueId,
       sectionNumber: targetNumber,
-      zoneName: sections[0]?.zoneName || 'General',
+      zoneName: fallbackZone,
       rows: 3,
       seatsPerRow: 10,
       totalSeats: 30,
@@ -473,7 +551,16 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
     const userId = user?.uid || 'guest';
     const clientToken = getClientLockToken();
     setPurchaseError(null);
-    const isAlreadySelected = selectedSeats.some((s) => s.seatId === seat.id);
+    const isAlreadySelected = selectedSeatsRef.current.some((s) => s.seatId === seat.id);
+
+    // Límite estricto de 5 boletos por compra (verificado sincronizadamente con ref y cola de pendientes)
+    const currentTotalAttempted = selectedSeatsRef.current.length + pendingSeatLocks.current.size;
+    if (!isAlreadySelected && currentTotalAttempted >= MAX_TICKETS_PER_PURCHASE) {
+      setPurchaseError(
+        `¡Límite alcanzado! Máximo ${MAX_TICKETS_PER_PURCHASE} boletos por aficionado en cada compra. Si deseas seleccionar este asiento, deselecciona uno previamente apartado.`
+      );
+      return;
+    }
 
     if (isAlreadySelected) {
       // Liberar bloqueo atómico en Firestore
@@ -515,6 +602,11 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
         };
         setSelectedSeats((prev) => {
           if (prev.some((s) => s.seatId === newItem.seatId)) {
+            return prev;
+          }
+          if (prev.length >= MAX_TICKETS_PER_PURCHASE) {
+            // Liberar en segundo plano si ya se alcanzó el límite por colisión concurrente
+            releaseSeatLockTransaction(seat.id, userId, clientToken).catch(() => {});
             return prev;
           }
           return [...prev, newItem];
@@ -703,23 +795,41 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
     );
   }
 
-  const activeZoneMeta = currentSection
-    ? isEncanto
-      ? stadiumZones[currentSection.zoneName]
-      : MARISCAL_ZONES[currentSection.zoneName]
-    : null;
+  const activeZoneMeta = useMemo(() => {
+    if (!currentSection) return null;
+    const cleanZone = currentSection.zoneName.trim().toLowerCase();
+    const zonesToSearch = isEncanto ? stadiumZones : MARISCAL_ZONES;
+    const foundKey = Object.keys(zonesToSearch).find(
+      (k) => k.trim().toLowerCase() === cleanZone
+    );
+    if (foundKey) return zonesToSearch[foundKey];
+
+    if (!isEncanto) {
+      const canonicalZone = getMariscalSectionZone(currentSection.sectionNumber);
+      if (canonicalZone && MARISCAL_ZONES[canonicalZone]) {
+        return MARISCAL_ZONES[canonicalZone];
+      }
+    }
+    return null;
+  }, [currentSection, isEncanto, stadiumZones]);
 
   return (
     <div className="space-y-4 pb-24">
       {/* 1. Header Estructurado Limpio con Fecha, Hora, Lugar y Asientos Disponibles */}
-      <div className="bg-[#0E1626] border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
+      <div className={`border rounded-2xl p-4 shadow-xl space-y-3 transition-colors ${
+        theme === 'light'
+          ? 'bg-white border-slate-200 text-slate-900 shadow-sm'
+          : 'bg-[#0E1626] border-slate-800 text-white shadow-xl'
+      }`}>
         {/* Fila 1: Botón Volver & Badge de Disponibilidad */}
         <div className="flex items-center justify-between gap-2">
           <button
             onClick={onCancel}
-            className="inline-flex items-center gap-1.5 text-xs font-sports font-bold tracking-wider uppercase text-slate-400 hover:text-white transition-colors cursor-pointer"
+            className={`inline-flex items-center gap-1.5 text-xs font-sports font-bold tracking-wider uppercase transition-colors cursor-pointer ${
+              theme === 'light' ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-white'
+            }`}
           >
-            <ArrowLeft className="w-4 h-4 text-slate-400" /> Volver a eventos
+            <ArrowLeft className="w-4 h-4" /> Volver a eventos
           </button>
 
           <span className="px-2.5 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-emerald-950/80 text-emerald-400 border border-emerald-500/50 font-sports flex items-center gap-1.5">
@@ -729,23 +839,27 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
         </div>
 
         {/* Fila 2: Título del Partido completo sin recortes */}
-        <h2 className="text-sm sm:text-lg font-black text-white font-sports uppercase tracking-wide leading-snug">
+        <h2 className={`text-sm sm:text-lg font-black font-sports uppercase tracking-wide leading-snug ${
+          theme === 'light' ? 'text-slate-900' : 'text-white'
+        }`}>
           {event.name}
         </h2>
 
         {/* Fila 3: Metadata - Fecha, Hora y Lugar */}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-300 pt-2 border-t border-slate-800/80 font-sans">
+        <div className={`flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs pt-2 border-t font-sans ${
+          theme === 'light' ? 'border-slate-200 text-slate-700' : 'border-slate-800/80 text-slate-300'
+        }`}>
           <div className="flex items-center gap-1.5">
-            <Calendar className={`w-3.5 h-3.5 ${isEncanto ? 'text-amber-400' : 'text-red-500'}`} />
-            <span className="font-semibold text-white">{event.date}</span>
+            <Calendar className={`w-3.5 h-3.5 ${isEncanto ? 'text-amber-500' : 'text-red-500'}`} />
+            <span className={`font-semibold ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>{event.date}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-slate-300">{event.time || '20:00 hrs'}</span>
+            <Clock className={`w-3.5 h-3.5 ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`} />
+            <span className={theme === 'light' ? 'text-slate-700' : 'text-slate-300'}>{event.time || '20:00 hrs'}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <MapPin className="w-3.5 h-3.5 text-amber-400" />
-            <span className="font-bold text-slate-200">{stadiumName}</span>
+            <MapPin className="w-3.5 h-3.5 text-amber-500" />
+            <span className={`font-bold ${theme === 'light' ? 'text-slate-800' : 'text-slate-200'}`}>{stadiumName}</span>
           </div>
         </div>
       </div>
@@ -761,17 +875,23 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
       )}
 
       {/* 2. Selección de Zona Minimalista-Dinámica (Grid Adaptativo sin scroll horizontal) */}
-      <div className="bg-[#0E1626] border border-slate-800/90 rounded-2xl p-3.5 shadow-lg space-y-2.5">
+      <div className={`border rounded-2xl p-3.5 shadow-lg space-y-2.5 transition-colors ${
+        theme === 'light'
+          ? 'bg-white border-slate-200 text-slate-900 shadow-sm'
+          : 'bg-[#0E1626] border-slate-800/90 text-white shadow-lg'
+      }`}>
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-black uppercase tracking-wider text-slate-300 flex items-center gap-1.5 font-sports">
-            <Layers className={`w-4 h-4 ${isEncanto ? 'text-amber-400' : 'text-red-500'}`} />
+          <span className={`text-xs font-black uppercase tracking-wider flex items-center gap-1.5 font-sports ${
+            theme === 'light' ? 'text-slate-800' : 'text-slate-300'
+          }`}>
+            <Layers className={`w-4 h-4 ${isEncanto ? 'text-amber-500' : 'text-red-500'}`} />
             Filtrar Zona del Estadio
           </span>
 
           {activeZoneFilter !== 'Todas' && (
             <button
               onClick={() => setActiveZoneFilter('Todas')}
-              className="text-[11px] font-bold text-red-400 hover:text-red-300 font-sports uppercase tracking-wider transition-colors cursor-pointer"
+              className="text-[11px] font-bold text-red-500 hover:text-red-600 font-sports uppercase tracking-wider transition-colors cursor-pointer"
             >
               Ver Todas ({sections.length})
             </button>
@@ -787,6 +907,8 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                 ? isEncanto
                   ? 'bg-amber-500 text-black border-amber-400 font-black shadow-md'
                   : 'bg-red-600 text-white border-red-500 font-black shadow-md'
+                : theme === 'light'
+                ? 'bg-slate-100 text-slate-800 border-slate-200 hover:bg-slate-200'
                 : 'bg-[#141E34] text-slate-300 border-slate-700/60 hover:border-slate-600'
             }`}
           >
@@ -806,20 +928,30 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                 onClick={() => setActiveZoneFilter(zName)}
                 className={`p-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between gap-1.5 cursor-pointer border ${
                   isZoneSoldOut
-                    ? 'border-slate-800/80 bg-[#101827]/60 text-slate-500 opacity-60'
+                    ? theme === 'light'
+                      ? 'border-slate-200 bg-slate-100 text-slate-400 opacity-60'
+                      : 'border-slate-800/80 bg-[#101827]/60 text-slate-500 opacity-60'
                     : isFilterActive
-                    ? 'ring-2 ring-red-500 text-white bg-red-950/70 border-red-500 shadow-md scale-[1.02]'
+                    ? 'ring-2 ring-red-500 text-white bg-red-600 border-red-500 shadow-md scale-[1.02]'
+                    : theme === 'light'
+                    ? 'border-slate-200 bg-slate-100 text-slate-800 hover:bg-slate-200'
                     : 'border-slate-800 bg-[#141E34] text-slate-300 hover:bg-[#1A2846] hover:border-slate-700'
                 }`}
               >
                 <div className="flex items-center gap-1.5 min-w-0">
                   <span
-                    className={`w-2.5 h-2.5 rounded-full shrink-0 shadow-xs ${isZoneSoldOut ? 'bg-slate-600' : ''}`}
+                    className={`w-2.5 h-2.5 rounded-full shrink-0 shadow-xs ${isZoneSoldOut ? 'bg-slate-400' : ''}`}
                     style={isZoneSoldOut ? undefined : { backgroundColor: zMeta.colorHex }}
                   />
-                  <span className={`truncate ${isZoneSoldOut ? 'line-through text-slate-500' : ''}`}>{zName}</span>
+                  <span className={`truncate ${isZoneSoldOut ? 'line-through opacity-70' : ''}`}>{zName}</span>
                 </div>
-                <span className={`text-[10px] font-mono font-black shrink-0 ${isZoneSoldOut ? 'text-red-400 font-sans uppercase' : 'text-emerald-400'}`}>
+                <span className={`text-[10px] font-mono font-black shrink-0 ${
+                  isZoneSoldOut
+                    ? 'text-red-500 font-sans uppercase'
+                    : theme === 'light'
+                    ? 'text-emerald-700 font-bold'
+                    : 'text-emerald-400'
+                }`}>
                   {isZoneSoldOut ? 'Agotado' : `$${price}`}
                 </span>
               </button>
@@ -831,14 +963,20 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
       {/* 3. Panel Principal: Mapa Interactivo SVG + Cuadrícula de Asientos */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* LADO IZQUIERDO: Mapa del Estadio (Herradura / Diamante de Béisbol o Cancha Fútbol Encanto) */}
-        <div className="lg:col-span-7 bg-[#0F1626] p-4 sm:p-5 rounded-3xl border border-slate-700/80 shadow-xl space-y-4 flex flex-col">
+        <div className={`lg:col-span-7 p-4 sm:p-5 rounded-3xl border shadow-xl space-y-4 flex flex-col transition-colors ${
+          theme === 'light'
+            ? 'bg-white border-slate-200 text-slate-900 shadow-sm'
+            : 'bg-[#0F1626] border-slate-700/80 text-white shadow-xl'
+        }`}>
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-black text-white flex items-center gap-2 font-sports tracking-wide uppercase">
-                <Maximize2 className={`w-4 h-4 ${isEncanto ? 'text-amber-400' : 'text-red-500'}`} />
+              <h3 className={`text-sm font-black flex items-center gap-2 font-sports tracking-wide uppercase ${
+                theme === 'light' ? 'text-slate-900' : 'text-white'
+              }`}>
+                <Maximize2 className={`w-4 h-4 ${isEncanto ? 'text-amber-500' : 'text-red-500'}`} />
                 {isEncanto ? `Distribución Oficial: ${stadiumName}` : 'Mapa Físico del Estadio'}
               </h3>
-              <p className="text-[11px] text-slate-400">
+              <p className={`text-[11px] ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
                 {isEncanto
                   ? 'Toca cualquier sección directamente en el mapa para ver sus butacas'
                   : 'Selecciona una sección directamente en el estadio o en el listado inferior'}
@@ -894,12 +1032,13 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
             >
               <div className="flex items-center gap-2">
                 <span
-                  className="w-3 h-3 rounded-full shrink-0"
+                  className="w-3.5 h-3.5 rounded-full shrink-0 shadow-xs border border-white/20"
                   style={{
                     backgroundColor:
                       activeZoneMeta?.colorHex ||
+                      activeZoneMeta?.fillColor ||
                       MARISCAL_ZONES[currentSection.zoneName]?.colorHex ||
-                      '#D97706',
+                      '#FA8E5C',
                   }}
                 />
                 <span>Ver y Elegir Butacas en Sec. #{currentSection.sectionNumber} ({currentSection.zoneName})</span>
@@ -914,65 +1053,105 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
         {/* LADO DERECHO: Cuadrícula de Asientos de la Sección Activa */}
         <div
           id="seat-grid-container"
-          className="lg:col-span-5 bg-[#0F1626] p-5 rounded-3xl border border-slate-700/80 shadow-xl flex flex-col justify-between space-y-5 scroll-mt-6"
+          className={`lg:col-span-5 p-5 rounded-3xl border shadow-xl flex flex-col justify-start space-y-5 scroll-mt-6 transition-colors ${
+            theme === 'light'
+              ? 'bg-white border-slate-200 text-slate-900 shadow-sm'
+              : 'bg-[#0F1626] border-slate-700/80 text-white shadow-xl'
+          }`}
         >
           {currentSection ? (
             <div className="space-y-4">
               {/* Header de la sección activa */}
-              <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-700/70">
+              <div className={`flex items-start justify-between gap-3 pb-3 border-b ${
+                theme === 'light' ? 'border-slate-200' : 'border-slate-700/70'
+              }`}>
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span
-                      className="w-3 h-3 rounded-full shrink-0"
+                      className="w-4 h-4 rounded-full shrink-0 shadow-sm border border-black/20 ring-2 ring-white/10"
                       style={{
                         backgroundColor:
                           activeZoneMeta?.colorHex ||
+                          activeZoneMeta?.fillColor ||
                           MARISCAL_ZONES[currentSection.zoneName]?.colorHex ||
-                          '#D97706',
+                          '#FA8E5C',
                       }}
                     ></span>
-                    <h3 className="text-base font-black text-white font-sports tracking-wide">
+                    <h3 className={`text-base font-black font-sports tracking-wide ${
+                      theme === 'light' ? 'text-slate-900' : 'text-white'
+                    }`}>
                       {isEncanto
                         ? `Sección ${currentSection.sectionNumber}`
                         : `Sección #${currentSection.sectionNumber} • ${currentSection.zoneName}`}
                     </h3>
-                    {isEncanto && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-[#0A0E17] text-slate-300 border border-slate-700">
-                        {currentSection.zoneName}
-                      </span>
-                    )}
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border uppercase tracking-wider ${
+                      activeZoneMeta?.badgeBg || 'bg-amber-500/15 text-amber-500 border-amber-500/30'
+                    }`}>
+                      {currentSection.zoneName}
+                    </span>
                   </div>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    {isEncanto
-                      ? (activeZoneMeta?.description || 'Excelente visibilidad del terreno de juego')
-                      : (MARISCAL_ZONES[currentSection.zoneName]?.description ||
-                        'Excelente visibilidad del diamante')}
+                  <p className={`text-xs mt-0.5 ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
+                    {activeZoneMeta?.description ||
+                      (isEncanto
+                        ? 'Excelente visibilidad del terreno de juego'
+                        : 'Excelente visibilidad del diamante')}
                   </p>
-                  {isEncanto && activeZoneMeta?.gate && (
-                    <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md bg-amber-950/60 text-[10px] font-bold text-amber-300 border border-amber-500/50">
-                      <DoorOpen className="w-3 h-3" /> Acceso: {activeZoneMeta.gate}
+                  {activeZoneMeta?.gate && (
+                    <span className="inline-flex items-center gap-1 mt-1 px-2.5 py-0.5 rounded-md bg-amber-950/60 text-[10px] font-bold text-amber-300 border border-amber-500/50">
+                      <DoorOpen className="w-3.5 h-3.5" /> Acceso: {activeZoneMeta.gate}
                     </span>
                   )}
                 </div>
 
                 <div className="text-right">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase block font-sports tracking-wider">Precio</span>
-                  <span className="text-base sm:text-lg font-black text-emerald-400 font-scoreboard">
+                  <span className={`text-[10px] font-bold uppercase block font-sports tracking-wider ${
+                    theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                  }`}>Precio</span>
+                  <span className={`text-base sm:text-lg font-black font-scoreboard ${
+                    theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'
+                  }`}>
                     ${getZonePrice(currentSection.zoneName, event)}{' '}
-                    <span className="text-[10px] font-normal text-slate-400 font-sans">MXN</span>
+                    <span className={`text-[10px] font-normal font-sans ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>MXN</span>
                   </span>
                 </div>
               </div>
 
+              {/* Notificación de límite de 5 boletos */}
+              <div className={`flex items-center justify-between text-xs px-3 py-2 rounded-xl border ${
+                selectedSeats.length >= MAX_TICKETS_PER_PURCHASE
+                  ? 'bg-amber-950/40 border-amber-500/50 text-amber-300'
+                  : theme === 'light'
+                  ? 'bg-slate-100 border-slate-200 text-slate-700'
+                  : 'bg-[#0A0E17] border-slate-700 text-slate-300'
+              }`}>
+                <div className="flex items-center gap-1.5 text-xs">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>
+                    Disponibilidad justa: <strong>Máximo {MAX_TICKETS_PER_PURCHASE} boletos</strong> por compra
+                  </span>
+                </div>
+                <span className={`px-2 py-0.5 rounded-md font-mono text-[11px] font-bold border ${
+                  selectedSeats.length >= MAX_TICKETS_PER_PURCHASE
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                    : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                }`}>
+                  {selectedSeats.length} / {MAX_TICKETS_PER_PURCHASE}
+                </span>
+              </div>
+
               {/* Indicador visual hacia el terreno de juego */}
-              <div className="w-full py-1.5 px-3 bg-[#0A0E17] rounded-xl text-center text-[10px] font-black uppercase tracking-widest text-slate-400 border border-slate-700/70 font-sports">
+              <div className={`w-full py-1.5 px-3 rounded-xl text-center text-[10px] font-black uppercase tracking-widest border font-sports ${
+                theme === 'light' ? 'bg-slate-100 border-slate-200 text-slate-700' : 'bg-[#0A0E17] border-slate-700/70 text-slate-400'
+              }`}>
                 ▲ FRENTE / TERRENO DE JUEGO ▲
               </div>
 
               {/* Leyenda de estado de butaca */}
-              <div className="flex flex-wrap items-center justify-center gap-3.5 text-[11px] text-slate-300 font-sports">
+              <div className={`flex flex-wrap items-center justify-center gap-3.5 text-[11px] font-sports ${
+                theme === 'light' ? 'text-slate-700' : 'text-slate-300'
+              }`}>
                 <div className="flex items-center gap-1.5">
-                  <div className="w-4 h-4 rounded-md border-2 border-emerald-500 bg-[#141C2E]"></div>
+                  <div className={`w-4 h-4 rounded-md border-2 border-emerald-500 ${theme === 'light' ? 'bg-emerald-50' : 'bg-[#141C2E]'}`}></div>
                   <span>Disponible</span>
                 </div>
                 <div className="flex items-center gap-1.5">
@@ -983,24 +1162,28 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                   >
                     ✓
                   </div>
-                  <span className="font-bold text-white">Tu Selección</span>
+                  <span className={`font-bold ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>Tu Selección</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <div className="w-4 h-4 rounded-md bg-amber-950/70 border border-amber-500/80 text-amber-300 flex items-center justify-center text-[9px] font-mono">
                     ⏳
                   </div>
-                  <span className="text-amber-300">Apartado (8 min)</span>
+                  <span className={theme === 'light' ? 'text-amber-700 font-bold' : 'text-amber-300'}>Apartado (8 min)</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <div className="w-4 h-4 rounded-md bg-slate-800 border border-slate-700 text-slate-500 flex items-center justify-center text-[10px]">
+                  <div className={`w-4 h-4 rounded-md border text-[10px] flex items-center justify-center ${
+                    theme === 'light' ? 'bg-slate-200 border-slate-300 text-slate-500' : 'bg-slate-800 border-slate-700 text-slate-500'
+                  }`}>
                     ✕
                   </div>
-                  <span className="text-slate-500">Vendido</span>
+                  <span className={theme === 'light' ? 'text-slate-500' : 'text-slate-500'}>Vendido</span>
                 </div>
               </div>
 
               {/* Cuadrícula de Asientos por Fila */}
-              <div className="space-y-3 bg-[#0A0E17] p-4 rounded-2xl border border-slate-700/80">
+              <div className={`space-y-3 p-4 rounded-2xl border ${
+                theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-[#0A0E17] border-slate-700/80'
+              }`}>
                 {(isEncanto
                   ? Array.from(
                       { length: currentSection.rows || 3 },
@@ -1030,7 +1213,11 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
 
                   return (
                     <div key={`row_${currentSection.sectionNumber}_${rowLabel}`} className="flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-lg bg-slate-800 text-amber-400 font-mono font-bold text-[11px] flex items-center justify-center shrink-0 border border-slate-700">
+                      <span className={`w-6 h-6 rounded-lg font-mono font-bold text-[11px] flex items-center justify-center shrink-0 border ${
+                        theme === 'light'
+                          ? 'bg-slate-200 text-slate-800 border-slate-300'
+                          : 'bg-slate-800 text-amber-400 border-slate-700'
+                      }`}>
                         {rowLabel}
                       </span>
 
@@ -1042,6 +1229,7 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                       >
                         {seatsList.map((seat, sIdx) => {
                           const isSelected = selectedSeats.some((s) => s.seatId === seat.id);
+                          const isLimitReached = !isSelected && selectedSeats.length >= MAX_TICKETS_PER_PURCHASE;
                           const isSold =
                             seat.status === 'vendido' &&
                             normalizeSec(seat.sectionNumber) === normalizeSec(currentSection.sectionNumber);
@@ -1057,7 +1245,7 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                               key={`seat_btn_${currentSection.sectionNumber}_${rowLabel}_${seat.seatNumber}_${seat.id || sIdx}`}
                               type="button"
                               onClick={() => handleToggleSeat(seat, currentSection)}
-                              disabled={isSold || isLockedByOther || isEventClosed}
+                              disabled={isSold || isLockedByOther || isEventClosed || isLimitReached}
                               title={
                                 isEventClosed
                                   ? 'Venta de boletos concluida'
@@ -1067,19 +1255,27 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                                   ? `Fila ${seat.rowLabel} Asiento ${seat.seatNumber} - Apartado por otro usuario (8 min)`
                                   : isSelected
                                   ? `Fila ${seat.rowLabel} Asiento ${seat.seatNumber} - Tu selección`
+                                  : isLimitReached
+                                  ? `Límite máximo de ${MAX_TICKETS_PER_PURCHASE} boletos alcanzado. Deselecciona uno si deseas cambiarlo.`
                                   : `Fila ${seat.rowLabel} Asiento ${seat.seatNumber} - Disponible`
                               }
                               className={`aspect-square rounded-lg text-[10px] font-extrabold transition-all flex items-center justify-center cursor-pointer ${
                                 isEventClosed
-                                  ? 'bg-slate-900/90 border border-slate-800 text-slate-600 cursor-not-allowed opacity-60'
+                                  ? 'bg-slate-200 border border-slate-300 text-slate-400 cursor-not-allowed opacity-60'
                                   : isSold
-                                  ? 'bg-slate-900 border border-slate-800 text-slate-600 cursor-not-allowed line-through'
+                                  ? 'bg-slate-300 dark:bg-slate-900 border border-slate-400 dark:border-slate-800 text-slate-500 cursor-not-allowed line-through'
                                   : isLockedByOther
-                                  ? 'bg-amber-950/70 border border-amber-500/80 text-amber-300 cursor-not-allowed shadow-inner font-mono'
+                                  ? 'bg-amber-100 dark:bg-amber-950/70 border border-amber-400 text-amber-800 dark:text-amber-300 cursor-not-allowed shadow-inner font-mono'
                                   : isSelected
                                   ? isEncanto
                                     ? 'bg-amber-500 text-black font-black shadow-md scale-105 ring-2 ring-amber-400'
                                     : 'bg-red-600 text-white shadow-md scale-105 ring-2 ring-red-400'
+                                  : isLimitReached
+                                  ? theme === 'light'
+                                    ? 'bg-slate-100 border border-slate-300 text-slate-400 cursor-not-allowed opacity-40'
+                                    : 'bg-[#0E1524] border border-slate-800 text-slate-600 cursor-not-allowed opacity-40'
+                                  : theme === 'light'
+                                  ? 'bg-white hover:bg-emerald-100 text-slate-900 border-2 border-emerald-600 hover:scale-105 font-bold shadow-xs'
                                   : 'bg-[#141C2E] hover:bg-emerald-950/60 text-slate-100 border-2 border-emerald-500/80 hover:scale-105 hover:border-emerald-400'
                               }`}
                             >
@@ -1093,10 +1289,12 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                 })}
               </div>
 
-              <div className="flex items-center justify-between text-xs text-slate-400 px-1 font-sports">
+              <div className={`flex items-center justify-between text-xs px-1 font-sports ${
+                theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+              }`}>
                 <span>
                   Disponibles en Sec. {currentSection.sectionNumber}:{' '}
-                  <strong className="text-emerald-400">
+                  <strong className={theme === 'light' ? 'text-emerald-700 font-bold' : 'text-emerald-400'}>
                     {
                       currentSectionSeats.filter(
                         (s) => s.status === 'disponible' && normalizeSec(s.sectionNumber) === normalizeSec(currentSection.sectionNumber)
@@ -1114,7 +1312,7 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                       (currentSection.rows || 3) * (currentSection.seatsPerRow || 10)}
                   </strong>
                 </span>
-                <span className="text-[11px] text-slate-500">
+                <span className={theme === 'light' ? 'text-slate-500' : 'text-slate-500'}>
                   {isEncanto
                     ? `${currentSection.rows || 3} filas × ${currentSection.seatsPerRow || 10} asientos`
                     : 'Filas A a la C (10 asientos c/u)'}
@@ -1122,20 +1320,20 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
               </div>
             </div>
           ) : (
-            <div className="p-8 text-center text-slate-400">
+            <div className={`p-8 text-center ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
               Selecciona una sección en el mapa para cargar su cuadrícula.
             </div>
           )}
 
           {/* 4. Panel de Resumen de Compra y Botón de Transacción Atómica */}
-          <div className="pt-4 border-t border-slate-700/70 space-y-4">
+          <div className={`pt-4 border-t space-y-4 mt-auto ${theme === 'light' ? 'border-slate-200' : 'border-slate-700/70'}`}>
             {/* Mensaje de error de transacción / Colisión de asientos */}
             {purchaseError && (
-              <div className="p-3.5 bg-red-950/60 border border-red-500/50 rounded-2xl flex items-start gap-2.5 text-xs text-red-200 font-semibold animate-in fade-in duration-150">
-                <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <div className="p-3.5 bg-red-100 dark:bg-red-950/60 border border-red-300 dark:border-red-500/50 rounded-2xl flex items-start gap-2.5 text-xs text-red-800 dark:text-red-200 font-semibold animate-in fade-in duration-150">
+                <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
                 <div className="space-y-1">
                   <p className="font-bold">No se pudo completar la compra:</p>
-                  <p className="font-normal text-red-300">{purchaseError}</p>
+                  <p className="font-normal text-red-700 dark:text-red-300">{purchaseError}</p>
                 </div>
               </div>
             )}
@@ -1143,11 +1341,22 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
             {/* Asientos Seleccionados (Chips) */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-slate-300 flex items-center gap-1 font-sports uppercase tracking-wide">
-                    <Users className={`w-3.5 h-3.5 ${isEncanto ? 'text-amber-400' : 'text-red-500'}`} />
-                    Asientos Seleccionados ({selectedSeats.length})
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`font-bold flex items-center gap-1 font-sports uppercase tracking-wide ${
+                    theme === 'light' ? 'text-slate-800' : 'text-slate-300'
+                  }`}>
+                    <Users className={`w-3.5 h-3.5 ${isEncanto ? 'text-amber-500' : 'text-red-500'}`} />
+                    Asientos ({selectedSeats.length}/{MAX_TICKETS_PER_PURCHASE})
                   </span>
+                  {selectedSeats.length >= MAX_TICKETS_PER_PURCHASE ? (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase font-sports bg-amber-500/20 text-amber-400 border border-amber-500/40">
+                      Límite 5/5
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-mono text-slate-400">
+                      (Máx. {MAX_TICKETS_PER_PURCHASE})
+                    </span>
+                  )}
                   {lockRemainingSeconds > 0 && selectedSeats.length > 0 && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-950/70 border border-amber-500/60 text-amber-300 text-[10px] font-bold font-mono animate-pulse">
                       <Clock className="w-3 h-3 text-amber-400" />
@@ -1166,26 +1375,46 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
               </div>
 
               {selectedSeats.length === 0 ? (
-                <div className="p-3 bg-[#0A0E17] rounded-xl text-center text-xs text-slate-400 border border-dashed border-slate-700">
+                <div className={`p-3 rounded-xl text-center text-xs border border-dashed ${
+                  theme === 'light'
+                    ? 'bg-slate-50 border-slate-300 text-slate-500'
+                    : 'bg-[#0A0E17] border-slate-700 text-slate-400'
+                }`}>
                   Toca uno o varios asientos arriba para agregarlos a tu compra.
                 </div>
               ) : (
-                <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1.5 bg-[#0A0E17] rounded-xl border border-slate-700/80">
+                <div className={`flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1.5 rounded-xl border ${
+                  theme === 'light'
+                    ? 'bg-slate-50 border-slate-200'
+                    : 'bg-[#0A0E17] border-slate-700/80'
+                }`}>
                   {selectedSeats.map((item, itemIdx) => (
                     <span
                       key={`selected_chip_${item.seatId}_${itemIdx}`}
-                      className="inline-flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg bg-[#141C2E] border border-slate-700 text-xs font-bold text-white shadow-xs font-sports"
+                      className={`inline-flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg text-xs font-bold shadow-xs font-sports border ${
+                        theme === 'light'
+                          ? 'bg-white border-slate-300 text-slate-900'
+                          : 'bg-[#141C2E] border-slate-700 text-white'
+                      }`}
                     >
+                      <span
+                        className="w-2.5 h-2.5 rounded-full shrink-0 border border-black/20"
+                        style={{
+                          backgroundColor:
+                            (isEncanto ? stadiumZones[item.zoneName] : MARISCAL_ZONES[item.zoneName])?.colorHex ||
+                            '#FA8E5C',
+                        }}
+                      />
                       <span>
-                        Sec. {item.sectionNumber} • {item.rowLabel}#{item.seatNumber}
+                        Sec. {item.sectionNumber} ({item.zoneName}) • {item.rowLabel}#{item.seatNumber}
                       </span>
-                      <span className="text-emerald-400 font-mono text-[11px]">
+                      <span className={theme === 'light' ? 'text-emerald-700 font-mono text-[11px]' : 'text-emerald-400 font-mono text-[11px]'}>
                         ${item.price}
                       </span>
                       <button
                         type="button"
                         onClick={() => handleRemoveSeat(item.seatId)}
-                        className="w-4 h-4 rounded-full hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-red-400 cursor-pointer"
+                        className="w-4 h-4 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-red-500 cursor-pointer"
                       >
                         <X className="w-3 h-3" />
                       </button>
@@ -1210,12 +1439,16 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
             ) : (
               <>
                 {/* Método de Pago (Exclusivo Tarjeta en Línea) */}
-                <div className="space-y-2 pt-2 border-t border-slate-700/70">
+                <div className={`space-y-2 pt-2 border-t ${theme === 'light' ? 'border-slate-200' : 'border-slate-700/70'}`}>
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 block font-sports">
+                    <span className={`text-[11px] font-black uppercase tracking-wider block font-sports ${
+                      theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                    }`}>
                       Método de Pago
                     </span>
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 font-sports">
+                    <span className={`inline-flex items-center gap-1 text-[10px] font-bold font-sports ${
+                      theme === 'light' ? 'text-emerald-700' : 'text-emerald-400'
+                    }`}>
                       <ShieldCheck className="w-3.5 h-3.5" />
                       Pasarela SSL Segura
                     </span>
@@ -1223,42 +1456,56 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
 
                   <div className={`p-3 rounded-xl border flex items-center justify-between ${
                     isEncanto
-                      ? 'border-amber-500/50 bg-amber-950/30 text-amber-200'
+                      ? theme === 'light'
+                        ? 'border-amber-300 bg-amber-50 text-amber-900'
+                        : 'border-amber-500/50 bg-amber-950/30 text-amber-200'
+                      : theme === 'light'
+                      ? 'border-red-200 bg-red-50 text-red-900'
                       : 'border-red-500/50 bg-red-950/30 text-red-200'
                   }`}>
                     <div className="flex items-center gap-2.5">
                       <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                        isEncanto ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400'
+                        isEncanto
+                          ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
+                          : 'bg-red-500/20 text-red-600 dark:text-red-400'
                       }`}>
                         <CreditCard className="w-4 h-4" />
                       </div>
                       <div>
-                        <p className="text-xs font-black uppercase tracking-wide text-white font-sports">
+                        <p className={`text-xs font-black uppercase tracking-wide font-sports ${
+                          theme === 'light' ? 'text-slate-900' : 'text-white'
+                        }`}>
                           Tarjeta en Línea
                         </p>
-                        <p className="text-[10px] text-slate-400 font-sans">
+                        <p className={`text-[10px] font-sans ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
                           Visa, Mastercard, Amex • Cobro directo Stripe
                         </p>
                       </div>
                     </div>
-                    <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                    <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/40">
                       Activo
                     </span>
                   </div>
                 </div>
 
                 {/* Total y Botón Atómico */}
-                <div className="pt-3 border-t border-slate-700/70 space-y-3">
+                <div className={`pt-3 border-t space-y-3 ${theme === 'light' ? 'border-slate-200' : 'border-slate-700/70'}`}>
                   <div className="flex items-center justify-between">
                     <div>
-                      <span className="text-[10px] text-slate-400 font-bold uppercase block font-sports tracking-wider">
+                      <span className={`text-[10px] font-bold uppercase block font-sports tracking-wider ${
+                        theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                      }`}>
                         Total ({selectedSeats.length} {selectedSeats.length === 1 ? 'boleto' : 'boletos'})
                       </span>
-                      <span className="text-xs text-slate-400">Impuestos y cargos incluidos</span>
+                      <span className={`text-xs ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>Impuestos y cargos incluidos</span>
                     </div>
                     <div className="text-right">
-                      <span className="text-xl sm:text-2xl font-black text-emerald-400 font-scoreboard">
-                        ${totalAmount} <span className="text-xs font-normal text-slate-400 font-sans">MXN</span>
+                      <span className={`text-xl sm:text-2xl font-black font-scoreboard ${
+                        theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'
+                      }`}>
+                        ${totalAmount} <span className={`text-xs font-normal font-sans ${
+                          theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                        }`}>MXN</span>
                       </span>
                     </div>
                   </div>

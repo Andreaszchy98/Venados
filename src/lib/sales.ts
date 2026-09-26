@@ -36,26 +36,33 @@ export async function recordSaleTransaction(
 }
 
 export function calculateMetricsFromTransactions(transactions: SaleTransaction[]) {
-  let totalGrossRevenue = 0;
   let ticketsRevenue = 0;
   let merchRevenue = 0;
   let foodRevenue = 0;
+  let validTransactionsCount = 0;
 
   for (const t of transactions) {
     if (t.status === 'reembolsada') continue;
     const amt = Number(t.amount) || 0;
-    totalGrossRevenue += amt;
-    if (t.channel === 'boletos') ticketsRevenue += amt;
-    else if (t.channel === 'tienda_merch') merchRevenue += amt;
-    else if (t.channel === 'concesion_alimentos') foodRevenue += amt;
+    if (t.channel === 'boletos') {
+      ticketsRevenue += amt;
+      validTransactionsCount++;
+    } else if (t.channel === 'tienda_merch') {
+      merchRevenue += amt;
+      validTransactionsCount++;
+    } else if (t.channel === 'concesion_alimentos') {
+      foodRevenue += amt;
+    }
   }
+
+  const totalGrossRevenue = ticketsRevenue + merchRevenue;
 
   return {
     totalGrossRevenue,
     ticketsRevenue,
     merchRevenue,
     foodRevenue,
-    totalTransactions: transactions.length,
+    totalTransactions: validTransactionsCount,
   };
 }
 

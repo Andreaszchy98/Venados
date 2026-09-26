@@ -13,7 +13,7 @@ import {
 import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
 import { getAllowedEventTypesForVenue } from '../../lib/venues';
 import { normalizeGoogleDriveImageUrl, isGoogleDriveUrl } from '../../lib/imageUtils';
-import { getOfficialPriceTiersForEvent, getOfficialPriceTiersForVenue, isLegacySection } from '../../lib/seatMap';
+import { getOfficialPriceTiersForEvent, getOfficialPriceTiersForVenue, isLegacySection, resetEventSeatsAndSales } from '../../lib/seatMap';
 import { ConfirmationModal } from '../../components/shared/ConfirmationModal';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import {
@@ -136,6 +136,8 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user, onOpenScoreb
   // Modal Eliminación
   const [eventToDelete, setEventToDelete] = useState<VenueEvent | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [eventToReset, setEventToReset] = useState<VenueEvent | null>(null);
+  const [resetting, setResetting] = useState(false);
   const [actionNotice, setActionNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   useEffect(() => {
@@ -425,6 +427,20 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user, onOpenScoreb
     }
   };
 
+  const handleConfirmReset = async () => {
+    if (!eventToReset) return;
+    setResetting(true);
+    try {
+      await resetEventSeatsAndSales(eventToReset.id);
+      showNotice('success', `Evento "${eventToReset.name}" reiniciado con éxito. Se liberaron los asientos y se eliminaron los registros de venta de prueba.`);
+      setEventToReset(null);
+    } catch (err: any) {
+      showNotice('error', err.message || 'No se pudo reiniciar el evento.');
+    } finally {
+      setResetting(false);
+    }
+  };
+
   const filteredEvents = events.filter((ev) => {
     const matchesSearch =
       ev.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -641,6 +657,13 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user, onOpenScoreb
                   </div>
 
                   <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setEventToReset(ev)}
+                      className="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-amber-950/40 rounded-lg transition-colors cursor-pointer"
+                      title="Reiniciar asientos y ventas (Empezar de cero)"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                    </button>
                     <button
                       onClick={() => handleOpenEditModal(ev)}
                       className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
@@ -1344,6 +1367,21 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user, onOpenScoreb
           isLoading={deleting}
           onConfirm={handleConfirmDelete}
           onCancel={() => setEventToDelete(null)}
+        />
+      )}
+
+      {/* Modal Confirmación de Reinicio */}
+      {eventToReset && (
+        <ConfirmationModal
+          isOpen={true}
+          title="¿Reiniciar Evento de Prueba?"
+          message={`¿Estás seguro de que deseas reiniciar "${eventToReset.name}"? Esto liberará todas las butacas reservadas/vendidas y eliminará todos los registros de boletos y transacciones de venta de prueba de Firestore para empezar en limpio.`}
+          confirmLabel="Sí, Reiniciar Evento"
+          cancelLabel="Cancelar"
+          isDestructive={true}
+          isLoading={resetting}
+          onConfirm={handleConfirmReset}
+          onCancel={() => setEventToReset(null)}
         />
       )}
     </div>

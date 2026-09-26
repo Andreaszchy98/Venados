@@ -2,8 +2,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { VenueEvent, Venue, EventType, UserProfile, EventPriceTier, GameScoreboard } from '../../types';
 import { DEFAULT_VENUES, DEFAULT_VENUE_ID, DEFAULT_FALLBACK_EVENT } from '../../lib/defaultVenue';
 import { subscribeVenues, getAllowedEventTypesForVenue } from '../../lib/venues';
-import { DEFAULT_FALLBACK_EVENTS } from '../../lib/venueEvents';
+import { DEFAULT_FALLBACK_EVENTS, isVenadosHomeSeasonGame, isVenadosPruebaMatch } from '../../lib/venueEvents';
 import { normalizeGoogleDriveImageUrl, getEventPosterPlaceholder } from '../../lib/imageUtils';
+import { VenadosSeasonPosterCard } from './VenadosSeasonPosterCard';
+import { VenadosSeasonPosterModal } from './VenadosSeasonPosterModal';
 import { SeatMapSelector } from '../../views/aficionado/SeatMapSelector';
 import { MarcadorEnVivo } from '../../views/aficionado/MarcadorEnVivo';
 import { HistorialJuegos } from '../../views/aficionado/HistorialJuegos';
@@ -108,6 +110,10 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
 
   // Visor de imagen promocional completa a pantalla completa (lightbox)
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
+
+  // Control de la carpeta oficial / póster de temporada de Venados en casa
+  const [isVenadosPosterModalOpen, setIsVenadosPosterModalOpen] = useState(false);
+  const [venadosViewMode, setVenadosViewMode] = useState<'carpeta' | 'desglosado'>('carpeta');
 
   // Fecha actual formateada para el recuadro de fecha
   const todayFormatted = useMemo(() => {
@@ -311,6 +317,23 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
     list.sort((a, b) => a.date.localeCompare(b.date));
     return list;
   }, [allEvents, venues, selectedCity, selectedVenueId, selectedCategory]);
+
+  // Particionar eventos para agrupar partidos de Venados en casa en su carpeta oficial
+  // (excluyendo el juego de prueba/demo vs Tomateros para mantenerlo como tarjeta individual independiente)
+  const { venadosSeasonGames, standaloneEvents } = useMemo(() => {
+    const seasonGames: VenueEvent[] = [];
+    const others: VenueEvent[] = [];
+
+    filteredEvents.forEach((e) => {
+      if (isVenadosHomeSeasonGame(e)) {
+        seasonGames.push(e);
+      } else {
+        others.push(e);
+      }
+    });
+
+    return { venadosSeasonGames: seasonGames, standaloneEvents: others };
+  }, [filteredEvents]);
 
   // Generar descripción / sinopsis atractiva
   const getEventSynopsis = (ev: VenueEvent) => {
@@ -573,7 +596,7 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
       {/* 2. FILA DE SELECCIÓN DE VISTA (CARTELERA VS MARCADORES FINALIZADOS) Y FILTROS */}
       <div className="max-w-6xl mx-auto mb-4 space-y-3">
         {/* Banner Publicitario Hero de Patrocinador Oficial */}
-        <HeroAdBanner venueId={selectedVenueId} />
+        <HeroAdBanner venueId={selectedVenueId} onSelectStore={() => onSelectStore?.('tienda')} />
 
         {/* Switcher de Vista: Cartelera vs Marcadores de Juegos Finalizados */}
         <div className="flex flex-wrap items-center justify-between gap-2.5">
@@ -631,26 +654,53 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
 
         {/* Chips de filtro deportivo compactos (Solo en modo Cartelera; respetan recinto seleccionado) */}
         {carteleraMode === 'cartelera' && (
-          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
-            {availableCategories.map((cat) => {
-              const isSelected = selectedCategory === cat.id;
-              return (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => setSelectedCategory(cat.id as any)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                    isSelected
-                      ? 'bg-red-600 text-white shadow-xs'
-                      : theme === 'light'
-                      ? 'bg-white text-slate-700 hover:text-slate-900 border border-slate-200 hover:border-slate-300 shadow-xs'
-                      : 'bg-[#101625] text-slate-400 hover:text-slate-200 border border-slate-800 hover:border-slate-700'
-                  }`}
-                >
-                  {cat.label}
-                </button>
-              );
-            })}
+          <div className="flex flex-wrap items-center justify-between gap-2 py-0.5">
+            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+              {availableCategories.map((cat) => {
+                const isSelected = selectedCategory === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setSelectedCategory(cat.id as any)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                      isSelected
+                        ? 'bg-red-600 text-white shadow-xs'
+                        : theme === 'light'
+                        ? 'bg-white text-slate-700 hover:text-slate-900 border border-slate-200 hover:border-slate-300 shadow-xs'
+                        : 'bg-[#101625] text-slate-400 hover:text-slate-200 border border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Alternador de vista Carpeta vs Desglosado para juegos de Venados */}
+            {venadosSeasonGames.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setVenadosViewMode(venadosViewMode === 'carpeta' ? 'desglosado' : 'carpeta')}
+                className={`px-2.5 py-1 rounded-xl text-[11px] font-sports font-bold flex items-center gap-1.5 transition-all cursor-pointer border ${
+                  venadosViewMode === 'carpeta'
+                    ? theme === 'light'
+                      ? 'bg-red-50 text-red-700 border-red-200 shadow-xs'
+                      : 'bg-red-950/60 text-red-300 border-red-500/40 shadow-xs'
+                    : theme === 'light'
+                    ? 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    : 'bg-[#101625] text-slate-400 border-slate-800 hover:text-slate-200'
+                }`}
+                title="Alternar entre ver partidos de Venados agrupados en póster/carpeta o desglosados"
+              >
+                <Layers className="w-3.5 h-3.5 text-red-500" />
+                <span>
+                  {venadosViewMode === 'carpeta'
+                    ? `Carpeta Venados Activa (${venadosSeasonGames.length} juegos)`
+                    : 'Ver en Carpeta Oficial'}
+                </span>
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -695,7 +745,18 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto px-4 py-6">
-            {filteredEvents.map((ev) => {
+            {/* Si está activo el modo carpeta y hay juegos oficiales de temporada en casa de Venados */}
+            {venadosViewMode === 'carpeta' && venadosSeasonGames.length > 0 && (
+              <VenadosSeasonPosterCard
+                games={venadosSeasonGames}
+                venue={venues.find((v) => v.id === DEFAULT_VENUE_ID)}
+                onOpenFolder={() => setIsVenadosPosterModalOpen(true)}
+                onOpenLightbox={(url, title) => setPreviewImage({ url, title })}
+              />
+            )}
+
+            {(venadosViewMode === 'carpeta' && venadosSeasonGames.length > 0 ? standaloneEvents : filteredEvents).map((ev) => {
+              const isPruebaMatch = isVenadosPruebaMatch(ev);
               const rating = getEventRatingBadge(ev.type);
               const minPrice = getMinPrice(ev);
               const posterSrc =
@@ -706,20 +767,31 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
                 <div
                   key={ev.id}
                   className={`group flex flex-col justify-between h-full rounded-2xl sm:rounded-3xl border overflow-hidden transition-all duration-300 ${
-                    theme === 'light'
+                    isPruebaMatch
+                      ? theme === 'light'
+                        ? 'bg-amber-50/20 border-amber-300 shadow-md hover:border-amber-500'
+                        : 'bg-[#121624] border-amber-500/40 shadow-xl hover:border-amber-400'
+                      : theme === 'light'
                       ? 'bg-white border-slate-200 shadow-xs hover:border-red-500/80 hover:shadow-lg'
                       : 'bg-[#101625] border-slate-800/80 shadow-lg hover:border-red-500/80 hover:shadow-xl hover:shadow-red-950/20'
                   }`}
                 >
                   {/* Cintillo de Recinto y Fecha sin invadir el arte del póster */}
                   <div className={`px-2.5 py-1.5 border-b flex items-center justify-between gap-1 text-[10px] ${
-                    theme === 'light' ? 'bg-slate-100 border-slate-200' : 'bg-[#0C121E] border-slate-800/80'
+                    isPruebaMatch
+                      ? theme === 'light' ? 'bg-amber-100/70 border-amber-200' : 'bg-amber-950/40 border-amber-500/30'
+                      : theme === 'light' ? 'bg-slate-100 border-slate-200' : 'bg-[#0C121E] border-slate-800/80'
                   }`}>
                     <span className={`font-bold truncate max-w-[58%] flex items-center gap-1 ${
                       theme === 'light' ? 'text-slate-700' : 'text-slate-300'
                     }`}>
                       <MapPin className="w-3 h-3 text-red-500 shrink-0" />
                       <span className="truncate">{ev.venueName || venueObj?.name || 'Estadio'}</span>
+                      {isPruebaMatch && (
+                        <span className="px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-500 border border-amber-500/40 text-[9px] font-black uppercase font-sports ml-1 shrink-0">
+                          Prueba
+                        </span>
+                      )}
                     </span>
                     <span className={`font-black shrink-0 flex items-center gap-1 ${
                       theme === 'light' ? 'text-red-700' : 'text-amber-400'
@@ -1002,179 +1074,197 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
 
       {/* 4. MODAL FLOTANTE DE SINOPSIS DEL EVENTO */}
       {synopsisEvent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className={`relative w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl space-y-4 p-5 sm:p-6 max-h-[90vh] overflow-y-auto border transition-colors ${
-            theme === 'light'
-              ? 'bg-white border-slate-200 text-slate-900'
-              : 'bg-[#101625] border-slate-800 text-slate-100'
-          }`}>
-            {/* Botón cerrar */}
+        <div 
+          onClick={() => setSynopsisEvent(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200 cursor-pointer"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className={`relative w-full max-w-lg rounded-3xl shadow-2xl border transition-colors flex flex-col max-h-[85vh] sm:max-h-[90vh] overflow-hidden cursor-default ${
+              theme === 'light'
+                ? 'bg-white border-slate-200 text-slate-900'
+                : 'bg-[#101625] border-slate-800 text-slate-100'
+            }`}
+          >
+            {/* Botón cerrar (Fijo en la esquina superior derecha, con fondo para visibilidad sobre la imagen) */}
             <button
               type="button"
               onClick={() => setSynopsisEvent(null)}
-              className={`absolute top-4 right-4 p-2 rounded-full transition-colors cursor-pointer ${
-                theme === 'light'
-                  ? 'bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900'
-                  : 'bg-[#182032] hover:bg-[#202B42] text-slate-400 hover:text-white'
-              }`}
+              className="absolute top-4 right-4 z-50 p-2 rounded-full transition-colors cursor-pointer bg-black/60 hover:bg-black/85 text-white border border-white/20 shadow-md flex items-center justify-center"
               title="Cerrar ficha técnica"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
 
-            {/* Encabezado con imagen promocional completa */}
-            <div className="relative w-full aspect-[16/9] sm:aspect-[21/9] rounded-2xl overflow-hidden bg-black flex items-center justify-center border border-slate-800">
-              <img
-                src={
-                  normalizeGoogleDriveImageUrl(synopsisEvent.posterUrl) ||
-                  getEventPosterPlaceholder(synopsisEvent.type)
-                }
-                alt=""
-                aria-hidden="true"
-                referrerPolicy="no-referrer"
-                className="absolute inset-0 w-full h-full object-cover blur-md opacity-40 scale-110 pointer-events-none"
-              />
-              <img
-                src={
-                  normalizeGoogleDriveImageUrl(synopsisEvent.posterUrl) ||
-                  getEventPosterPlaceholder(synopsisEvent.type)
-                }
-                alt={synopsisEvent.name}
-                referrerPolicy="no-referrer"
-                className="relative z-10 max-h-full max-w-full object-contain p-1 drop-shadow-xl"
-              />
-              <button
-                type="button"
-                onClick={() =>
-                  setPreviewImage({
-                    url:
-                      normalizeGoogleDriveImageUrl(synopsisEvent.posterUrl) ||
-                      getEventPosterPlaceholder(synopsisEvent.type),
-                    title: synopsisEvent.name,
-                  })
-                }
-                className="absolute bottom-2 right-2 z-20 p-2 rounded-xl bg-black/80 hover:bg-black text-white backdrop-blur-xs border border-white/20 text-xs font-bold flex items-center gap-1.5 transition-all shadow-md"
-              >
-                <Maximize2 className="w-3.5 h-3.5" />
-                <span>Ampliar imagen</span>
-              </button>
-            </div>
+            {/* Contenido Desplazable */}
+            <div className="overflow-y-auto p-5 sm:p-6 space-y-4 flex-1 custom-scrollbar pb-10">
+              {/* Encabezado con imagen promocional completa */}
+              <div className="relative w-full aspect-[16/9] sm:aspect-[21/9] rounded-2xl overflow-hidden bg-black flex items-center justify-center border border-slate-800">
+                <img
+                  src={
+                    normalizeGoogleDriveImageUrl(synopsisEvent.posterUrl) ||
+                    getEventPosterPlaceholder(synopsisEvent.type)
+                  }
+                  alt=""
+                  aria-hidden="true"
+                  referrerPolicy="no-referrer"
+                  className="absolute inset-0 w-full h-full object-cover blur-md opacity-40 scale-110 pointer-events-none"
+                />
+                <img
+                  src={
+                    normalizeGoogleDriveImageUrl(synopsisEvent.posterUrl) ||
+                    getEventPosterPlaceholder(synopsisEvent.type)
+                  }
+                  alt={synopsisEvent.name}
+                  referrerPolicy="no-referrer"
+                  className="relative z-10 max-h-full max-w-full object-contain p-1 drop-shadow-xl"
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPreviewImage({
+                      url:
+                        normalizeGoogleDriveImageUrl(synopsisEvent.posterUrl) ||
+                        getEventPosterPlaceholder(synopsisEvent.type),
+                      title: synopsisEvent.name,
+                    })
+                  }
+                  className="absolute bottom-2 right-2 z-20 p-2 rounded-xl bg-black/80 hover:bg-black text-white backdrop-blur-xs border border-white/20 text-xs font-bold flex items-center gap-1.5 transition-all shadow-md"
+                >
+                  <Maximize2 className="w-3.5 h-3.5" />
+                  <span>Ampliar imagen</span>
+                </button>
+              </div>
 
-            <div className="space-y-1.5">
-              <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border ${
-                theme === 'light'
-                  ? 'text-red-700 bg-red-50 border-red-200'
-                  : 'text-amber-400 bg-amber-400/10 border-amber-400/20'
-              }`}>
-                {synopsisEvent.type === 'baseball'
-                  ? 'Béisbol LMP'
-                  : synopsisEvent.type === 'football'
-                  ? 'Liga MX'
-                  : synopsisEvent.type === 'concert'
-                  ? 'Concierto'
-                  : 'Espectáculo'}
-              </span>
-              <h3 className={`text-base sm:text-lg font-black leading-tight ${
-                theme === 'light' ? 'text-slate-900' : 'text-white'
-              }`}>
-                {synopsisEvent.name}
-              </h3>
-              <p className={`text-xs font-medium flex items-center gap-1 ${
-                theme === 'light' ? 'text-slate-600' : 'text-slate-400'
-              }`}>
-                <MapPin className="w-3.5 h-3.5 text-red-500" />
-                {synopsisEvent.venueName || 'Recinto Oficial'}
-              </p>
-            </div>
-
-            {/* Ficha técnica y datos */}
-            <div className={`grid grid-cols-2 gap-2.5 p-3 rounded-2xl border text-xs ${
-              theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-[#151D30] border-slate-800'
-            }`}>
-              <div className="space-y-0.5">
-                <span className={`text-[10px] font-bold block uppercase ${
-                  theme === 'light' ? 'text-slate-500' : 'text-slate-400'
-                }`}>Fecha</span>
-                <span className={`font-extrabold flex items-center gap-1 ${
+              <div className="space-y-1.5">
+                <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border ${
+                  theme === 'light'
+                    ? 'text-red-700 bg-red-50 border-red-200'
+                    : 'text-amber-400 bg-amber-400/10 border-amber-400/20'
+                }`}>
+                  {synopsisEvent.type === 'baseball'
+                    ? 'Béisbol LMP'
+                    : synopsisEvent.type === 'football'
+                    ? 'Liga MX'
+                    : synopsisEvent.type === 'concert'
+                    ? 'Concierto'
+                    : 'Espectáculo'}
+                </span>
+                <h3 className={`text-base sm:text-lg font-black leading-tight ${
                   theme === 'light' ? 'text-slate-900' : 'text-white'
                 }`}>
-                  <Calendar className="w-3.5 h-3.5 text-red-500" />
-                  {synopsisEvent.date}
-                </span>
-              </div>
-              <div className="space-y-0.5">
-                <span className={`text-[10px] font-bold block uppercase ${
-                  theme === 'light' ? 'text-slate-500' : 'text-slate-400'
-                }`}>Horario</span>
-                <span className={`font-extrabold flex items-center gap-1 ${
-                  theme === 'light' ? 'text-slate-900' : 'text-white'
+                  {synopsisEvent.name}
+                </h3>
+                <p className={`text-xs font-medium flex items-center gap-1 ${
+                  theme === 'light' ? 'text-slate-600' : 'text-slate-400'
                 }`}>
-                  <Clock className={`w-3.5 h-3.5 ${theme === 'light' ? 'text-amber-600' : 'text-amber-400'}`} />
-                  {synopsisEvent.time || '20:00 hrs'}
-                </span>
+                  <MapPin className="w-3.5 h-3.5 text-red-500" />
+                  {synopsisEvent.venueName || 'Recinto Oficial'}
+                </p>
               </div>
-            </div>
 
-            {/* Sinopsis */}
-            <div className="space-y-1.5">
-              <h4 className={`text-xs font-black uppercase tracking-wider ${
-                theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+              {/* Ficha técnica y datos */}
+              <div className={`grid grid-cols-2 gap-2.5 p-3 rounded-2xl border text-xs ${
+                theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-[#151D30] border-slate-800'
               }`}>
-                Sinopsis del Encuentro
-              </h4>
-              <p className={`text-xs leading-relaxed ${
-                theme === 'light' ? 'text-slate-700' : 'text-slate-300'
-              }`}>
-                {getEventSynopsis(synopsisEvent)}
-              </p>
-            </div>
+                <div className="space-y-0.5">
+                  <span className={`text-[10px] font-bold block uppercase ${
+                    theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                  }`}>Fecha</span>
+                  <span className={`font-extrabold flex items-center gap-1 ${
+                    theme === 'light' ? 'text-slate-900' : 'text-white'
+                  }`}>
+                    <Calendar className="w-3.5 h-3.5 text-red-500" />
+                    {synopsisEvent.date}
+                  </span>
+                </div>
+                <div className="space-y-0.5">
+                  <span className={`text-[10px] font-bold block uppercase ${
+                    theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                  }`}>Horario</span>
+                  <span className={`font-extrabold flex items-center gap-1 ${
+                    theme === 'light' ? 'text-slate-900' : 'text-white'
+                  }`}>
+                    <Clock className={`w-3.5 h-3.5 ${theme === 'light' ? 'text-amber-600' : 'text-amber-400'}`} />
+                    {synopsisEvent.time || '20:00 hrs'}
+                  </span>
+                </div>
+              </div>
 
-            {/* Precios por sección */}
-            {synopsisEvent.priceTiers && synopsisEvent.priceTiers.length > 0 && (
-              <div className="space-y-1.5 pt-1">
+              {/* Sinopsis */}
+              <div className="space-y-1.5">
                 <h4 className={`text-xs font-black uppercase tracking-wider ${
                   theme === 'light' ? 'text-slate-600' : 'text-slate-400'
                 }`}>
-                  Zonas y Precios Disponibles
+                  Sinopsis del Encuentro
                 </h4>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  {synopsisEvent.priceTiers.map((tier, idx) => (
-                    <div
-                      key={idx}
-                      className={`p-2 rounded-xl border flex justify-between items-center ${
-                        theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-[#151D30] border-slate-800'
-                      }`}
-                    >
-                      <span className={`font-medium truncate pr-1 ${
-                        theme === 'light' ? 'text-slate-700' : 'text-slate-300'
-                      }`}>{tier.section}</span>
-                      <span className={`font-extrabold shrink-0 ${
-                        theme === 'light' ? 'text-red-600 font-black' : 'text-amber-400'
-                      }`}>${tier.price}</span>
-                    </div>
-                  ))}
-                </div>
+                <p className={`text-xs leading-relaxed ${
+                  theme === 'light' ? 'text-slate-700' : 'text-slate-300'
+                }`}>
+                  {getEventSynopsis(synopsisEvent)}
+                </p>
               </div>
-            )}
 
-            {/* Botón de acción: Elegir en Mapa */}
-            <div className="pt-3">
-              <button
-                type="button"
-                onClick={() => {
-                  const ev = synopsisEvent;
-                  setSynopsisEvent(null);
-                  setSelectedMapEvent(ev);
-                }}
-                className="w-full py-3.5 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-red-950/50 cursor-pointer transition-all active:scale-98"
-              >
-                <Ticket className="w-4 h-4" />
-                <span>Seleccionar Asientos en Mapa</span>
-              </button>
+              {/* Precios por sección */}
+              {synopsisEvent.priceTiers && synopsisEvent.priceTiers.length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                  <h4 className={`text-xs font-black uppercase tracking-wider ${
+                    theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                  }`}>
+                    Zonas y Precios Disponibles
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {synopsisEvent.priceTiers.map((tier, idx) => (
+                      <div
+                        key={idx}
+                        className={`p-2 rounded-xl border flex justify-between items-center ${
+                          theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-[#151D30] border-slate-800'
+                        }`}
+                      >
+                        <span className={`font-medium truncate pr-1 ${
+                          theme === 'light' ? 'text-slate-700' : 'text-slate-300'
+                        }`}>{tier.section}</span>
+                        <span className={`font-extrabold shrink-0 ${
+                          theme === 'light' ? 'text-red-600 font-black' : 'text-amber-400'
+                        }`}>${tier.price}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Botón de acción: Elegir en Mapa */}
+              <div className="pt-3 pb-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const ev = synopsisEvent;
+                    setSynopsisEvent(null);
+                    setSelectedMapEvent(ev);
+                  }}
+                  className="w-full py-3.5 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-red-950/50 cursor-pointer transition-all active:scale-98 uppercase tracking-wider font-sports"
+                >
+                  <Ticket className="w-4 h-4" />
+                  <span>Seleccionar Asientos en Mapa</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* Modal Interactivo: Póster Oficial y Rol de Juegos de Venados de Mazatlán en Casa Temporada 2026-2027 */}
+      <VenadosSeasonPosterModal
+        isOpen={isVenadosPosterModalOpen}
+        onClose={() => setIsVenadosPosterModalOpen(false)}
+        seasonGames={venadosSeasonGames}
+        onSelectGame={(game) => {
+          setSelectedMapEvent(game);
+          setIsVenadosPosterModalOpen(false);
+        }}
+        onViewSynopsis={(game) => setSynopsisEvent(game)}
+        onOpenLightbox={(url, title) => setPreviewImage({ url, title })}
+      />
 
       {/* 5. VISOR MODAL DE IMAGEN PROMOCIONAL COMPLETA (LIGHTBOX) */}
       {previewImage && (

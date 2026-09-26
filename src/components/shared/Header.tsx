@@ -53,7 +53,7 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <>
       <header
-        className={`sticky top-0 z-40 backdrop-blur-md border-b shadow-md transition-colors duration-200 ${
+        className={`sticky top-0 z-50 backdrop-blur-md border-b shadow-md transition-colors duration-200 ${
           theme === 'light'
             ? 'bg-white/95 text-slate-900 border-slate-200 shadow-slate-200/50'
             : 'bg-[#0B0F19]/95 text-white border-slate-800/80'

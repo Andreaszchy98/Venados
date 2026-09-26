@@ -381,14 +381,17 @@ export interface SaleTransaction {
   id: string;
   venueId?: string;
   eventId?: string;
-  channel: SaleChannel;
+  channel: SaleChannel | 'taquilla' | 'tienda' | 'web';
   referenceId: string;
   customerName: string;
   description: string;
+  concept?: string;
   amount: number;
   paymentMethod: string;
   date: string;
-  status: 'completada' | 'reembolsada' | 'pendiente';
+  timestamp?: any;
+  status: 'completada' | 'reembolsada' | 'pendiente' | 'completed' | 'failed' | string;
+  operatorName?: string;
 }
 
 export interface AuthState {

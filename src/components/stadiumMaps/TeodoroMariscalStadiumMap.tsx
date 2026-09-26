@@ -7,7 +7,7 @@ interface TeodoroMariscalStadiumMapProps {
   sections: SeatSection[];
   activeSectionNumber: string;
   activeZoneFilter: string | null;
-  onSelectSection: (sectionNumber: string) => void;
+  onSelectSection: (sectionNumber: string, zoneName?: string) => void;
   event?: VenueEvent | null;
   soldOutSectionsSet?: Set<string>;
 }
@@ -461,7 +461,7 @@ const TeodoroMariscalStadiumMapComponent = React.memo<TeodoroMariscalStadiumMapP
                   <g
                     key={sec.num}
                     className={isSoldOut ? 'cursor-not-allowed opacity-40' : 'cursor-pointer transition-transform duration-100'}
-                    onClick={() => onSelectSection(sec.num)}
+                    onClick={() => onSelectSection(sec.num, sec.zone)}
                     onMouseEnter={() => setHoveredSection(sec.num)}
                     onMouseLeave={() => setHoveredSection(null)}
                   >

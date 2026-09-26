@@ -7,6 +7,8 @@ import {
   collection,
   query,
   deleteDoc,
+  where,
+  getDocs,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import {
@@ -643,4 +645,26 @@ export async function updateMinute(
   await updateGameState(eventId, {
     footballState: fState,
   });
+}
+
+/**
+ * Elimina todos los marcadores con estado 'finalizado'
+ */
+export async function deleteAllFinalizedScoreboards(): Promise<number> {
+  try {
+    const q = query(
+      collection(db, 'gameScoreboards'),
+      where('status', '==', 'finalizado')
+    );
+    const snap = await getDocs(q);
+    let count = 0;
+    for (const docSnap of snap.docs) {
+      await deleteDoc(docSnap.ref);
+      count++;
+    }
+    return count;
+  } catch (error) {
+    console.error('Error al eliminar marcadores finalizados:', error);
+    throw error;
+  }
 }

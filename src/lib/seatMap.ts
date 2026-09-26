@@ -10,6 +10,7 @@ import {
   writeBatch,
   runTransaction,
   addDoc,
+  updateDoc,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { SeatSection, EventSeat, SeatStatus, VenueEvent, Ticket } from '../types';
@@ -30,16 +31,135 @@ export interface ZoneMeta {
   gate?: string;
 }
 
+/**
+ * Mapeo canónico exacto e incontrovertible de cada número de sección del Estadio Teodoro Mariscal
+ * a su zona oficial y color tal como aparecen en el mapa oficial.
+ */
+export const MARISCAL_SECTION_ZONE_MAP: Record<string, string> = {
+  // Deluxe Supreme (Blanco/Lavanda muy claro: Sec. 1-12)
+  '1': 'Deluxe Supreme',
+  '2': 'Deluxe Supreme',
+  '3': 'Deluxe Supreme',
+  '4': 'Deluxe Supreme',
+  '5': 'Deluxe Supreme',
+  '6': 'Deluxe Supreme',
+  '7': 'Deluxe Supreme',
+  '8': 'Deluxe Supreme',
+  '9': 'Deluxe Supreme',
+  '10': 'Deluxe Supreme',
+  '11': 'Deluxe Supreme',
+  '12': 'Deluxe Supreme',
+
+  // Oro (Azul Turquesa: Sec. 101-104 y 118-121)
+  '101': 'Oro',
+  '102': 'Oro',
+  '103': 'Oro',
+  '104': 'Oro',
+  '118': 'Oro',
+  '119': 'Oro',
+  '120': 'Oro',
+  '121': 'Oro',
+
+  // Platino (Rojo Intenso: Sec. 105-108 y 115-117)
+  '105': 'Platino',
+  '106': 'Platino',
+  '107': 'Platino',
+  '108': 'Platino',
+  '115': 'Platino',
+  '116': 'Platino',
+  '117': 'Platino',
+
+  // Fan (Celeste Bleachers Bajas: Sec. 122-133)
+  '122': 'Fan',
+  '123': 'Fan',
+  '124': 'Fan',
+  '125': 'Fan',
+  '126': 'Fan',
+  '127': 'Fan',
+  '128': 'Fan',
+  '129': 'Fan',
+  '130': 'Fan',
+  '131': 'Fan',
+  '132': 'Fan',
+  '133': 'Fan',
+
+  // Plus (Verde Lima Nivel 200 Lateral: Sec. 201-204 y 218-221)
+  '201': 'Plus',
+  '202': 'Plus',
+  '203': 'Plus',
+  '204': 'Plus',
+  '218': 'Plus',
+  '219': 'Plus',
+  '220': 'Plus',
+  '221': 'Plus',
+
+  // Diamante (Naranja Terracota Nivel 200 Central: Sec. 205-217)
+  '205': 'Diamante',
+  '206': 'Diamante',
+  '207': 'Diamante',
+  '208': 'Diamante',
+  '209': 'Diamante',
+  '210': 'Diamante',
+  '211': 'Diamante',
+  '212': 'Diamante',
+  '213': 'Diamante',
+  '214': 'Diamante',
+  '215': 'Diamante',
+  '216': 'Diamante',
+  '217': 'Diamante',
+
+  // Fan Plus (Gris Lavanda Bleachers Altas: Sec. 222-233)
+  '222': 'Fan Plus',
+  '223': 'Fan Plus',
+  '224': 'Fan Plus',
+  '225': 'Fan Plus',
+  '226': 'Fan Plus',
+  '227': 'Fan Plus',
+  '228': 'Fan Plus',
+  '229': 'Fan Plus',
+  '230': 'Fan Plus',
+  '231': 'Fan Plus',
+  '232': 'Fan Plus',
+  '233': 'Fan Plus',
+
+  // Sky (Morado Nivel 300 Lateral: Sec. 301-304 y 313-316)
+  '301': 'Sky',
+  '302': 'Sky',
+  '303': 'Sky',
+  '304': 'Sky',
+  '313': 'Sky',
+  '314': 'Sky',
+  '315': 'Sky',
+  '316': 'Sky',
+
+  // Sky Plus (Melocotón / Coral Cálido Nivel 300 Central: Sec. 305-307 y 310-312)
+  '305': 'Sky Plus',
+  '306': 'Sky Plus',
+  '307': 'Sky Plus',
+  '310': 'Sky Plus',
+  '311': 'Sky Plus',
+  '312': 'Sky Plus',
+};
+
+/**
+ * Obtiene la zona oficial de una sección en Estadio Teodoro Mariscal
+ */
+export function getMariscalSectionZone(sectionNumber?: string | null): string | null {
+  if (!sectionNumber) return null;
+  const clean = sectionNumber.trim().replace(/^sec(?:ci[oó]n)?[\s._#-]+/i, '');
+  return MARISCAL_SECTION_ZONE_MAP[clean] || null;
+}
+
 export const MARISCAL_ZONES: Record<string, ZoneMeta> = {
   'Deluxe Supreme': {
     name: 'Deluxe Supreme',
     defaultPrice: 950,
-    colorHex: '#E4DFF0',
-    badgeBg: 'bg-indigo-100 text-indigo-950 border-indigo-300',
-    badgeText: 'text-indigo-950',
-    fillColor: '#E4DFF0',
-    strokeColor: '#C4B5FD',
-    gate: 'Puerta Principal / VIP',
+    colorHex: '#F8FAFC',
+    badgeBg: 'bg-slate-100 text-slate-800 border-slate-300',
+    badgeText: 'text-slate-800',
+    fillColor: '#F8FAFC',
+    strokeColor: '#94A3B8',
+    gate: 'Puerta Principal / VIP Home Plate',
     description: 'Nivel central bajo exclusivo junto al Home Plate (Sec. 1-12)',
   },
   'Platino': {
@@ -56,10 +176,10 @@ export const MARISCAL_ZONES: Record<string, ZoneMeta> = {
   'Diamante': {
     name: 'Diamante',
     defaultPrice: 600,
-    colorHex: '#EA580C',
+    colorHex: '#ED6A26',
     badgeBg: 'bg-orange-500/15 text-orange-600 border-orange-500/30',
     badgeText: 'text-orange-500',
-    fillColor: '#EA580C',
+    fillColor: '#ED6A26',
     strokeColor: '#C2410C',
     gate: 'Puertas 1 y 2',
     description: 'Herraje central nivel 200 en color naranja terracota (Sec. 205-217)',
@@ -78,13 +198,13 @@ export const MARISCAL_ZONES: Record<string, ZoneMeta> = {
   'Sky Plus': {
     name: 'Sky Plus',
     defaultPrice: 400,
-    colorHex: '#FB923C',
-    badgeBg: 'bg-amber-500/15 text-amber-600 border-amber-500/30',
-    badgeText: 'text-amber-500',
-    fillColor: '#FB923C',
+    colorHex: '#FA8E5C',
+    badgeBg: 'bg-orange-500/15 text-orange-600 border-orange-500/30',
+    badgeText: 'text-orange-600',
+    fillColor: '#FA8E5C',
     strokeColor: '#EA580C',
     gate: 'Rampa Nivel 300',
-    description: 'Nivel 300 central en color melocotón (Sec. 305-307, 310-312)',
+    description: 'Nivel 300 central en color melocotón / coral (Sec. 305-307, 310-312)',
   },
   'Plus': {
     name: 'Plus',
@@ -122,11 +242,11 @@ export const MARISCAL_ZONES: Record<string, ZoneMeta> = {
   'Sky': {
     name: 'Sky',
     defaultPrice: 160,
-    colorHex: '#7C3AED',
+    colorHex: '#772582',
     badgeBg: 'bg-purple-500/15 text-purple-600 border-purple-500/30',
     badgeText: 'text-purple-600',
-    fillColor: '#7C3AED',
-    strokeColor: '#6D28D9',
+    fillColor: '#772582',
+    strokeColor: '#581c87',
     gate: 'Rampa Nivel 300',
     description: 'Nivel 300 lateral en color morado (Sec. 301-304, 313-316)',
   },
@@ -416,16 +536,34 @@ export function getOfficialPriceTiersForEvent(
  * Resuelve el precio por zona para un evento específico
  */
 export function getZonePrice(zoneName: string, event?: VenueEvent | null): number {
+  const cleanZoneName = (zoneName || '').trim().toLowerCase();
   if (event && event.priceTiers && event.priceTiers.length > 0) {
     const match = event.priceTiers.find(
       (t) =>
         !isLegacySection(t.section) &&
-        t.section.toLowerCase().trim() === zoneName.toLowerCase().trim()
+        t.section.toLowerCase().trim() === cleanZoneName
     );
     if (match) return match.price;
   }
   const zones = getStadiumZones(event?.venueId, event?.venueName, event?.type);
-  return zones[zoneName]?.defaultPrice || MARISCAL_ZONES[zoneName]?.defaultPrice || 350;
+  
+  // Búsqueda insensible a mayúsculas/minúsculas en zones
+  const foundZoneKey = Object.keys(zones).find(
+    (k) => k.trim().toLowerCase() === cleanZoneName
+  );
+  if (foundZoneKey) {
+    return zones[foundZoneKey].defaultPrice;
+  }
+
+  // Respaldo insensible a mayúsculas/minúsculas en MARISCAL_ZONES
+  const foundMariscalKey = Object.keys(MARISCAL_ZONES).find(
+    (k) => k.trim().toLowerCase() === cleanZoneName
+  );
+  if (foundMariscalKey) {
+    return MARISCAL_ZONES[foundMariscalKey].defaultPrice;
+  }
+
+  return 350;
 }
 
 /**
@@ -686,16 +824,25 @@ export function sanitizeVenueSections(venueId: string, rawSections: SeatSection[
     const master = buildEncantoSectionsData(venueId);
     return master.map((d) => ({ id: `${venueId}_sec_${d.sectionNumber.replace(/\s+/g, '_')}`, ...d }));
   } else {
-    const valid = rawSections.filter((s) => {
-      const num = (s.sectionNumber || '').trim().toUpperCase();
-      return (
-        !num.startsWith('PC-') &&
-        !num.startsWith('PL-') &&
-        !num.startsWith('TE-') &&
-        !num.startsWith('GN-') &&
-        !num.startsWith('GS-')
-      );
-    });
+    const valid = rawSections
+      .filter((s) => {
+        const num = (s.sectionNumber || '').trim().toUpperCase();
+        return (
+          !num.startsWith('PC-') &&
+          !num.startsWith('PL-') &&
+          !num.startsWith('TE-') &&
+          !num.startsWith('GN-') &&
+          !num.startsWith('GS-')
+        );
+      })
+      .map((s) => {
+        const clean = (s.sectionNumber || '').trim().replace(/^sec(?:ci[oó]n)?[\s._#-]+/i, '');
+        const officialZone = MARISCAL_SECTION_ZONE_MAP[clean];
+        if (officialZone) {
+          return { ...s, zoneName: officialZone };
+        }
+        return s;
+      });
     if (valid.length > 0) return valid;
     const master = buildMariscalSectionsData(venueId);
     return master.map((d) => ({ id: `${venueId}_sec_${d.sectionNumber.replace(/\s+/g, '_')}`, ...d }));
@@ -763,6 +910,18 @@ export function subscribeSeatSections(
         const sanitized = sanitizeVenueSections(venueId, raw);
         setCachedData(cacheKey, sanitized, 30);
         callback(sanitized);
+
+        // Sanación en segundo plano de cualquier discrepancia en Firestore
+        if (!isEncantoVenue(venueId)) {
+          snap.docs.forEach((docSnap) => {
+            const data = docSnap.data();
+            const clean = (data.sectionNumber || '').trim().replace(/^sec(?:ci[oó]n)?[\s._#-]+/i, '');
+            const canonicalZone = MARISCAL_SECTION_ZONE_MAP[clean];
+            if (canonicalZone && data.zoneName !== canonicalZone) {
+              updateDoc(docSnap.ref, { zoneName: canonicalZone }).catch(() => {});
+            }
+          });
+        }
       }
     },
     (err) => {
@@ -896,6 +1055,9 @@ export interface SeatPurchaseItem {
 }
 
 export const SEAT_LOCK_DURATION_MS = 8 * 60 * 1000; // 8 minutos
+
+/** Límite máximo oficial de boletos por aficionado en una misma compra */
+export const MAX_TICKETS_PER_PURCHASE = 5;
 
 /**
  * Helper para obtener o generar un identificador persistente de dispositivo/navegador.
@@ -1122,6 +1284,10 @@ export async function purchaseSeatsTransaction(params: PurchaseSeatsParams): Pro
     throw new Error('Debes seleccionar al menos un asiento.');
   }
 
+  if (selectedSeats.length > MAX_TICKETS_PER_PURCHASE) {
+    throw new Error(`LÍMITE EXCEDIDO: Solo se permite la compra de un máximo de ${MAX_TICKETS_PER_PURCHASE} boletos por aficionado.`);
+  }
+
   const purchaseId = `PURCHASE-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
   const now = new Date().toISOString();
   const totalAmount = selectedSeats.reduce((sum, s) => sum + s.price, 0);
@@ -1275,4 +1441,35 @@ export async function purchaseSeatsTransaction(params: PurchaseSeatsParams): Pro
   }
 
   return result;
+}
+
+/**
+ * Reinicia todos los asientos y elimina los registros de ventas y boletos para un evento específico
+ */
+export async function resetEventSeatsAndSales(eventId: string): Promise<void> {
+  const batch = writeBatch(db);
+
+  // 1. Obtener y eliminar asientos bloqueados/vendidos de 'eventSeats'
+  const eventSeatsQ = query(collection(db, 'eventSeats'), where('eventId', '==', eventId));
+  const eventSeatsSnap = await getDocs(eventSeatsQ);
+  eventSeatsSnap.docs.forEach((docSnap) => {
+    batch.delete(docSnap.ref);
+  });
+
+  // 2. Obtener y eliminar boletos emitidos de 'tickets'
+  const ticketsQ = query(collection(db, 'tickets'), where('eventId', '==', eventId));
+  const ticketsSnap = await getDocs(ticketsQ);
+  ticketsSnap.docs.forEach((docSnap) => {
+    batch.delete(docSnap.ref);
+  });
+
+  // 3. Obtener y eliminar registros de ventas de 'sales'
+  const salesQ = query(collection(db, 'sales'), where('eventId', '==', eventId));
+  const salesSnap = await getDocs(salesQ);
+  salesSnap.docs.forEach((docSnap) => {
+    batch.delete(docSnap.ref);
+  });
+
+  // Ejecutar el lote
+  await batch.commit();
 }

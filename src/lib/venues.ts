@@ -91,9 +91,10 @@ export function subscribeVenues(
       onUpdate(finalVenues);
     },
     (err) => {
-      console.warn('Error al escuchar sedes en tiempo real:', err);
+      console.warn('subscribeVenues: Modo offline / red lenta, usando sedes por defecto:', err);
+      const fallback = includeInactive ? DEFAULT_VENUES : DEFAULT_VENUES.filter((v) => v.active !== false);
+      onUpdate(fallback);
       if (onError) onError(err);
-      else handleFirestoreError(err, OperationType.LIST, VENUES_COLLECTION);
     }
   );
 }
@@ -123,7 +124,7 @@ export async function getAllVenues(options?: { includeInactive?: boolean }): Pro
 
     return includeInactive ? combined : combined.filter((v) => v.active !== false);
   } catch (err) {
-    handleFirestoreError(err, OperationType.LIST, VENUES_COLLECTION);
+    console.warn('getAllVenues: Error de red/offline, retornando DEFAULT_VENUES:', err);
     return includeInactive ? DEFAULT_VENUES : DEFAULT_VENUES.filter((v) => v.active !== false);
   }
 }
@@ -137,10 +138,12 @@ export async function getVenueById(venueId: string): Promise<Venue | null> {
     if (snap.exists()) {
       return { id: snap.id, ...snap.data() } as Venue;
     }
-    return null;
+    const fallback = DEFAULT_VENUES.find((v) => v.id === venueId);
+    return fallback || null;
   } catch (err) {
-    handleFirestoreError(err, OperationType.GET, `${VENUES_COLLECTION}/${venueId}`);
-    return null;
+    console.warn(`getVenueById: Documento no alcanzable en línea para '${venueId}', usando fallback:`, err);
+    const fallback = DEFAULT_VENUES.find((v) => v.id === venueId);
+    return fallback || (venueId === DEFAULT_VENUE_ID ? DEFAULT_VENUES[0] : null);
   }
 }
 

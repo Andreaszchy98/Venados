@@ -226,7 +226,7 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
 
               <div className="text-right">
                 {brand === 'visa' && (
-                  <span className="font-black text-xl tracking-wider text-blue-400 font-sans italic">
+                  <span className="font-black text-xl tracking-wider text-blue-400 font-sans italic drop-shadow-sm">
                     VISA
                   </span>
                 )}
@@ -242,31 +242,31 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
                   </span>
                 )}
                 {brand === 'generic' && (
-                  <span className="text-[10px] uppercase tracking-widest text-slate-300 font-bold">
+                  <span className="text-[10px] uppercase tracking-widest text-slate-200 font-bold">
                     Crédito / Débito
                   </span>
                 )}
               </div>
             </div>
 
-            <div className="relative z-10 font-mono text-sm sm:text-base tracking-[0.2em] font-bold text-slate-100 drop-shadow-md">
+            <div className="relative z-10 font-mono text-sm sm:text-base tracking-[0.2em] font-bold text-white drop-shadow-md">
               {cardNumber || '•••• •••• •••• ••••'}
             </div>
 
-            <div className="relative z-10 flex items-end justify-between text-xs">
+            <div className="relative z-10 flex items-end justify-between text-xs text-white">
               <div className="space-y-0.5">
-                <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-sans">
+                <span className="text-[9px] uppercase tracking-wider text-slate-300 block font-sans font-bold">
                   Titular
                 </span>
-                <span className="font-semibold tracking-wider uppercase truncate block max-w-[180px] sm:max-w-[220px]">
+                <span className="font-bold tracking-wider uppercase truncate block max-w-[180px] sm:max-w-[220px] text-white">
                   {cardHolder || 'NOMBRE DEL TITULAR'}
                 </span>
               </div>
               <div className="text-right space-y-0.5">
-                <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-sans">
+                <span className="text-[9px] uppercase tracking-wider text-slate-300 block font-sans font-bold">
                   Vence
                 </span>
-                <span className="font-mono font-bold tracking-wider">
+                <span className="font-mono font-bold tracking-wider text-white">
                   {expiry || 'MM/AA'}
                 </span>
               </div>

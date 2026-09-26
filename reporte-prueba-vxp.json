@@ -1,0 +1,82 @@
+[
+  {
+    "compraId": 1,
+    "statusCode": 200,
+    "success": true,
+    "response": {
+      "success": true,
+      "paymentIntentId": "pi_3UJhMaQ829qkCcY32HL7VWwi",
+      "authCode": "VXP-615792",
+      "amount": 1500,
+      "currency": "MXN",
+      "cardLast4": "4242",
+      "cardBrand": "Visa",
+      "timestamp": "2026-09-25T22:13:04.613Z"
+    },
+    "timestamp": "2026-09-25T22:13:05.040Z"
+  },
+  {
+    "compraId": 2,
+    "statusCode": 200,
+    "success": true,
+    "response": {
+      "success": true,
+      "paymentIntentId": "pi_3UJhMaQ829qkCcY309TilMpx",
+      "authCode": "VXP-523217",
+      "amount": 1600,
+      "currency": "MXN",
+      "cardLast4": "4242",
+      "cardBrand": "Visa",
+      "timestamp": "2026-09-25T22:13:04.915Z"
+    },
+    "timestamp": "2026-09-25T22:13:05.165Z"
+  },
+  {
+    "compraId": 3,
+    "statusCode": 200,
+    "success": true,
+    "response": {
+      "success": true,
+      "paymentIntentId": "pi_3UJhMaQ829qkCcY30aC9Z9DI",
+      "authCode": "VXP-198061",
+      "amount": 2000,
+      "currency": "MXN",
+      "cardLast4": "4242",
+      "cardBrand": "Visa",
+      "timestamp": "2026-09-25T22:13:04.913Z"
+    },
+    "timestamp": "2026-09-25T22:13:05.099Z"
+  },
+  {
+    "compraId": 4,
+    "statusCode": 200,
+    "success": true,
+    "response": {
+      "success": true,
+      "paymentIntentId": "pi_3UJhMaQ829qkCcY32t8BkpN1",
+      "authCode": "VXP-554070",
+      "amount": 900,
+      "currency": "MXN",
+      "cardLast4": "4242",
+      "cardBrand": "Visa",
+      "timestamp": "2026-09-25T22:13:04.917Z"
+    },
+    "timestamp": "2026-09-25T22:13:05.211Z"
+  },
+  {
+    "compraId": 5,
+    "statusCode": 200,
+    "success": true,
+    "response": {
+      "success": true,
+      "paymentIntentId": "pi_3UJhMaQ829qkCcY32j1to3W2",
+      "authCode": "VXP-709771",
+      "amount": 1200,
+      "currency": "MXN",
+      "cardLast4": "4242",
+      "cardBrand": "Visa",
+      "timestamp": "2026-09-25T22:13:04.956Z"
+    },
+    "timestamp": "2026-09-25T22:13:05.264Z"
+  }
+]

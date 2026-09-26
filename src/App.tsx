@@ -289,7 +289,7 @@ function MainLayout() {
 
       {/* Banner Flotante Informativo de Modo Vista Simulada para Administradores */}
       {userProfile && (userProfile.role === 'admin' || userProfile.role === 'superadmin') && activeView && activeView !== userProfile.role && (
-        <div className="bg-gradient-to-r from-amber-500 via-amber-600 to-amber-500 text-black px-4 py-2 text-xs font-bold shadow-xl flex flex-wrap items-center justify-between gap-2 z-30 sticky top-14 font-sports border-b border-amber-400">
+        <div className="bg-gradient-to-r from-amber-500 via-amber-600 to-amber-500 text-black px-4 py-2 text-xs font-bold shadow-xl flex flex-wrap items-center justify-between gap-2 z-40 sticky top-14 sm:top-16 font-sports border-b border-amber-400">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-black animate-ping shrink-0" />
             <span>
@@ -306,7 +306,7 @@ function MainLayout() {
       )}
 
       {/* Contenido Principal */}
-      <main className={`flex-1 w-full ${!activeUserProfile || activeUserProfile?.role === 'aficionado' ? 'p-0 max-w-none' : 'max-w-7xl mx-auto p-3 sm:p-6 lg:p-8'}`}>
+      <main className={`flex-1 w-full ${!activeUserProfile || activeUserProfile?.role === 'aficionado' || activeUserProfile?.role === 'taquillera' || activeUserProfile?.role === 'taquilla' ? 'p-0 max-w-none' : 'max-w-7xl mx-auto p-3 sm:p-6 lg:p-8'}`}>
         {/* Banner de cancelación de Stripe si el usuario canceló el checkout */}
         {stripeCancelledNotice && (
           <div className="bg-amber-950/90 border-b border-amber-600/50 text-amber-200 px-4 py-3 flex items-center justify-between text-xs transition-all">

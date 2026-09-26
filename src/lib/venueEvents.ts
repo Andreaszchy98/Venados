@@ -57,6 +57,47 @@ export function isDeletedMazatlanFCEvent(e: { id?: string; name?: string }): boo
   return name.includes('mazatlán fc') || name.includes('mazatlan fc');
 }
 
+export const VENADOS_SEASON_POSTER_IMAGE = '/src/assets/images/venados_season_poster_1790443386072.jpg';
+
+/**
+ * Determina si un evento es el partido de prueba / demo vs Tomateros
+ */
+export function isVenadosPruebaMatch(e: { id?: string; name?: string; opponent?: string; date?: string }): boolean {
+  if (!e) return false;
+  const id = (e.id || '').toLowerCase();
+  const name = (e.name || '').toLowerCase();
+  const opponent = (e.opponent || '').toLowerCase();
+  
+  // Coincidencias explícitas de prueba / demo
+  if (name.includes('prueba') || name.includes('demo') || name.includes('test') || id.includes('prueba') || id.includes('demo')) {
+    return true;
+  }
+  // Coincidencias del evento inicial de prueba de pretemporada / inaugural demo
+  if (id === 'event-default-venados-2026' || id === 'demo-event' || id === 'demo-ticket-123') {
+    return true;
+  }
+  if (e.date === '2026-10-15' && (name.includes('tomateros') || opponent.includes('tomateros') || name.includes('temporada regular venados 2026'))) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Determina si un evento pertenece a los juegos oficiales en casa de Venados de Mazatlán para la temporada 2026-2027
+ * (excluyendo el juego de prueba vs Tomateros)
+ */
+export function isVenadosHomeSeasonGame(e: { id?: string; venueId?: string; name?: string; opponent?: string; type?: string; date?: string }): boolean {
+  if (!e) return false;
+  if (isVenadosPruebaMatch(e)) return false;
+  
+  const isVenadosVenue = !e.venueId || e.venueId === DEFAULT_VENUE_ID;
+  const isBaseball = e.type === 'baseball';
+  const name = (e.name || '').toLowerCase();
+  const isVenadosTeam = name.includes('venados');
+  
+  return (isVenadosVenue || isVenadosTeam) && isBaseball;
+}
+
 /**
  * Obtiene el objeto Date correspondiente al inicio del evento combinando date y time
  */

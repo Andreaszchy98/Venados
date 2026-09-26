@@ -1,96 +1,163 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { SponsorAd } from '../../types';
 import { getActiveSponsorAds, trackAdImpression, trackAdClick } from '../../lib/sponsorAds';
-import { normalizeGoogleDriveImageUrl } from '../../lib/imageUtils';
-import { ExternalLink, Sparkles } from 'lucide-react';
+import { getVenueById } from '../../lib/venues';
+import { normalizeGoogleDriveImageUrl, DEFAULT_STORE_PROMO_BANNER } from '../../lib/imageUtils';
+import { ExternalLink, Sparkles, ShoppingBag } from 'lucide-react';
 
 interface HeroAdBannerProps {
   venueId: string;
+  onSelectStore?: () => void;
 }
 
-export const HeroAdBanner: React.FC<HeroAdBannerProps> = ({ venueId }) => {
-  const [ads, setAds] = useState<SponsorAd[]>([]);
+interface CarouselItem {
+  id: string;
+  title: string;
+  subtitle?: string;
+  imageUrl: string;
+  badgeLabel: string;
+  isStorePromo?: boolean;
+  targetUrl?: string;
+  adId?: string;
+}
+
+export const HeroAdBanner: React.FC<HeroAdBannerProps> = ({ venueId, onSelectStore }) => {
+  const [items, setItems] = useState<CarouselItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const trackedImpressions = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    getActiveSponsorAds(venueId, 'hero').then((fetched) => {
-      setAds(fetched);
-      if (fetched.length > 0 && !trackedImpressions.current.has(fetched[0].id)) {
-        trackedImpressions.current.add(fetched[0].id);
-        trackAdImpression(fetched[0].id);
+    let isMounted = true;
+    async function loadContent() {
+      const combined: CarouselItem[] = [];
+
+      // 1. Cargar promoción de tienda oficial de la sede si está configurada
+      try {
+        const venue = await getVenueById(venueId);
+        if (venue && venue.storePromoActive !== false) {
+          const banner = venue.storePromoBannerUrl
+            ? normalizeGoogleDriveImageUrl(venue.storePromoBannerUrl)
+            : (venueId === 'venue-teodoro-mariscal' ? DEFAULT_STORE_PROMO_BANNER : null);
+
+          if (banner) {
+            combined.push({
+              id: `store-promo-${venue.id}`,
+              title: venue.storePromoTitle || 'Tienda Oficial Venados Store',
+              subtitle: venue.storePromoSubtitle || 'Jerseys oficiales, gorras y souvenirs con entrega en tu butaca',
+              imageUrl: banner,
+              badgeLabel: '🛍️ TIENDA OFICIAL',
+              isStorePromo: true,
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Error cargando banner de tienda para hero:', e);
       }
-    });
+
+      // 2. Cargar anuncios de patrocinadores activos
+      try {
+        const ads = await getActiveSponsorAds(venueId, 'hero');
+        ads.forEach((ad) => {
+          combined.push({
+            id: ad.id,
+            title: ad.sponsorName,
+            imageUrl: normalizeGoogleDriveImageUrl(ad.imageUrl),
+            badgeLabel: 'Patrocinador Oficial',
+            targetUrl: ad.targetUrl,
+            adId: ad.id,
+          });
+        });
+      } catch (e) {
+        console.warn('Error cargando anuncios de patrocinadores:', e);
+      }
+
+      if (isMounted) {
+        setItems(combined);
+        if (combined.length > 0 && combined[0].adId && !trackedImpressions.current.has(combined[0].adId)) {
+          trackedImpressions.current.add(combined[0].adId);
+          trackAdImpression(combined[0].adId);
+        }
+      }
+    }
+
+    loadContent();
+    return () => {
+      isMounted = false;
+    };
   }, [venueId]);
 
   useEffect(() => {
-    if (ads.length <= 1) return;
+    if (items.length <= 1) return;
     const interval = setInterval(() => {
       setCurrentIndex((prev) => {
-        const next = (prev + 1) % ads.length;
-        const currentAd = ads[next];
-        if (currentAd && !trackedImpressions.current.has(currentAd.id)) {
-          trackedImpressions.current.add(currentAd.id);
-          trackAdImpression(currentAd.id);
+        const next = (prev + 1) % items.length;
+        const currentItem = items[next];
+        if (currentItem && currentItem.adId && !trackedImpressions.current.has(currentItem.adId)) {
+          trackedImpressions.current.add(currentItem.adId);
+          trackAdImpression(currentItem.adId);
         }
         return next;
       });
     }, 6000);
     return () => clearInterval(interval);
-  }, [ads]);
+  }, [items]);
 
-  if (ads.length === 0) return null;
+  if (items.length === 0) return null;
 
-  const currentAd = ads[currentIndex];
-  if (!currentAd) return null;
+  const currentItem = items[currentIndex];
+  if (!currentItem) return null;
 
   const handleClick = () => {
-    trackAdClick(currentAd.id);
-    if (currentAd.targetUrl) {
-      window.open(currentAd.targetUrl, '_blank', 'noopener,noreferrer');
+    if (currentItem.isStorePromo) {
+      onSelectStore?.();
+    } else if (currentItem.targetUrl) {
+      if (currentItem.adId) trackAdClick(currentItem.adId);
+      window.open(currentItem.targetUrl, '_blank', 'noopener,noreferrer');
     }
   };
 
   return (
     <div
       onClick={handleClick}
-      className={`relative w-full rounded-2xl overflow-hidden shadow-lg border border-slate-700/60 transition-all ${
-        currentAd.targetUrl ? 'cursor-pointer group hover:border-red-500/60' : ''
-      }`}
+      className="relative w-full rounded-2xl overflow-hidden shadow-lg border border-slate-700/60 transition-all cursor-pointer group hover:border-red-500/60"
     >
       <div className="relative h-28 sm:h-36 md:h-44 w-full bg-black/40 overflow-hidden">
         <img
-          src={normalizeGoogleDriveImageUrl(currentAd.imageUrl)}
-          alt={currentAd.sponsorName}
+          src={currentItem.imageUrl}
+          alt={currentItem.title}
           className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-500"
+          referrerPolicy="no-referrer"
         />
         <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/30 to-transparent" />
 
-        {/* Badge de Patrocinador Oficial */}
+        {/* Badge superior */}
         <div className="absolute top-2.5 left-3 flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-black/60 backdrop-blur-xs border border-white/10 text-[10px] font-sports font-bold tracking-wider uppercase text-amber-400">
           <Sparkles className="w-3 h-3 text-amber-400" />
-          <span>Patrocinador Oficial</span>
+          <span>{currentItem.badgeLabel}</span>
         </div>
 
-        {/* Info */}
+        {/* Info inferior */}
         <div className="absolute bottom-2.5 left-3 right-3 flex items-end justify-between">
           <div>
-            <span className="text-xs sm:text-base font-black font-sports uppercase tracking-wide text-white drop-shadow-md">
-              {currentAd.sponsorName}
+            <span className="text-xs sm:text-base font-black font-sports uppercase tracking-wide text-white drop-shadow-md block">
+              {currentItem.title}
             </span>
+            {currentItem.subtitle && (
+              <p className="text-[10px] sm:text-xs text-slate-300 font-medium line-clamp-1 drop-shadow-xs mt-0.5">
+                {currentItem.subtitle}
+              </p>
+            )}
           </div>
-          {currentAd.targetUrl && (
-            <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-600/90 group-hover:bg-red-600 text-white text-[10px] font-sports font-bold uppercase tracking-wider shadow-md">
-              <span>Visitar</span>
-              <ExternalLink className="w-3 h-3" />
-            </div>
-          )}
+          <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-600/90 group-hover:bg-red-600 text-white text-[10px] font-sports font-bold uppercase tracking-wider shadow-md shrink-0">
+            <span>{currentItem.isStorePromo ? 'Ver Tienda' : 'Visitar'}</span>
+            {currentItem.isStorePromo ? <ShoppingBag className="w-3 h-3" /> : <ExternalLink className="w-3 h-3" />}
+          </div>
         </div>
 
         {/* Indicadores de carrusel si hay más de uno */}
-        {ads.length > 1 && (
+        {items.length > 1 && (
           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1">
-            {ads.map((_, idx) => (
+            {items.map((_, idx) => (
               <span
                 key={idx}
                 className={`h-1.5 rounded-full transition-all ${

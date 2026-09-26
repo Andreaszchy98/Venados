@@ -22,6 +22,8 @@ import {
   removeCard,
   advanceHalf,
   updateMinute,
+  deleteScoreboard,
+  deleteAllFinalizedScoreboards,
 } from '../../lib/scoreboard';
 import {
   Radio,
@@ -305,7 +307,7 @@ export const MarcadorControl: React.FC<MarcadorControlProps> = ({
               value={selectedEventId || ''}
               onChange={(e) => setSelectedEventId(e.target.value)}
               disabled={loadingEvents || events.length === 0}
-              className={`py-2 px-3 rounded-xl text-xs font-bold border cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500 ${
+              className={`py-2 px-3 rounded-xl text-xs font-bold border cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500 w-full sm:w-auto max-w-[240px] sm:max-w-xs truncate ${
                 theme === 'light'
                   ? 'bg-slate-50 border-slate-300 text-slate-900'
                   : 'bg-[#182235] border-slate-700 text-slate-100'
@@ -333,6 +335,29 @@ export const MarcadorControl: React.FC<MarcadorControlProps> = ({
                 <span className="hidden sm:inline">Vista Aficionado</span>
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={async () => {
+                if (window.confirm('¿Estás seguro de que deseas BORRAR TODOS los marcadores de juegos finalizados? Esto limpiará el historial de marcadores de todos los partidos para empezar pruebas limpias.')) {
+                  try {
+                    const deletedCount = await deleteAllFinalizedScoreboards();
+                    showToast(`🗑️ Se eliminaron ${deletedCount} marcadores finalizados.`);
+                    if (scoreboard?.status === 'finalizado') {
+                      setScoreboard(null);
+                    }
+                  } catch (err) {
+                    console.error('Error al borrar marcadores finalizados:', err);
+                    showToast('Error al limpiar el historial de marcadores.');
+                  }
+                }
+              }}
+              className="px-3 py-2 rounded-xl bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-500/30 font-sports font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+              title="Borrar marcadores de juegos finalizados"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-red-500 shrink-0" />
+              <span>Limpiar Historial</span>
+            </button>
           </div>
         </div>
       </div>
@@ -442,14 +467,37 @@ export const MarcadorControl: React.FC<MarcadorControlProps> = ({
               )}
 
               {scoreboard.status === 'finalizado' && (
-                <button
-                  type="button"
-                  onClick={handleSetProgramado}
-                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold border border-slate-700 flex items-center gap-1 cursor-pointer"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                  <span>Reabrir</span>
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={handleSetProgramado}
+                    className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold border border-slate-700 flex items-center gap-1 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Reabrir</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (window.confirm('¿Estás seguro de que deseas eliminar este marcador finalizado? Esto borrará el resultado permanentemente.')) {
+                        try {
+                          await deleteScoreboard(scoreboard.eventId);
+                          setScoreboard(null);
+                          showToast('🗑️ Marcador eliminado con éxito.');
+                        } catch (err) {
+                          console.error('Error al eliminar marcador:', err);
+                          showToast('Error al eliminar el marcador.');
+                        }
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-red-600/20 hover:bg-red-600/30 text-red-300 text-xs font-bold border border-red-500/40 flex items-center gap-1 cursor-pointer"
+                    title="Eliminar este marcador"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                    <span>Eliminar Marcador</span>
+                  </button>
+                </>
               )}
             </div>
           </div>
