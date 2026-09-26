@@ -24,8 +24,7 @@
     "qrcode": "^1.5.4",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
-    "stripe": "^22.6.2",
-    "vite": "^6.2.3"
+    "stripe": "^22.6.2"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",

@@ -1,13 +1,9 @@
 import express from 'express';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
-import app from './src/server/app.js';
+import app from './src/server/app';
 
-const resolvedFilename = (typeof import.meta !== 'undefined' && (import.meta as any).url)
-  ? fileURLToPath((import.meta as any).url)
-  : process.argv[1];
-const __dirname = path.dirname(resolvedFilename);
+const rootDir = process.cwd();
 
 const PORT = 3000;
 
@@ -20,7 +16,7 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    const distPath = path.join(rootDir, 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
