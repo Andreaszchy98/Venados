@@ -1,8 +1,13 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { initializeFirestore, getFirestore } from 'firebase/firestore';
+import { initializeFirestore, getFirestore, setLogLevel } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import firebaseConfigData from '../../firebase-applet-config.json';
+
+// Suprimir logs ruidosos de reconexión de Firestore cuando el cliente cambia temporalmente de estado de red
+try {
+  setLogLevel('error');
+} catch {}
 
 const firebaseConfig = {
   apiKey: firebaseConfigData.apiKey,
@@ -24,6 +29,7 @@ try {
     app,
     {
       experimentalForceLongPolling: true,
+      experimentalAutoDetectLongPolling: true,
     },
     databaseId
   );
