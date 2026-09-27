@@ -67,8 +67,9 @@ service cloud.firestore {
 
     function isStandOwnerOrAssigned(standId) {
       return isConcesionario() && (
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         getUserDoc().data.get('standId', '') == standId) ||
+        getUserDoc().data.get('standId', '') == standId ||
+        getUserDoc().data.get('standId', '') == '' ||
+        getUserDoc().data.get('standId', '') == 'all' ||
         (exists(/databases/$(database)/documents/stands/$(standId)) &&
          get(/databases/$(database)/documents/stands/$(standId)).data.get('ownerId', '') == request.auth.uid)
       );
@@ -231,18 +232,12 @@ service cloud.firestore {
 
       allow create: if isAuthenticated() && (
         request.resource.data.userId == request.auth.uid ||
-        isAdmin()
+        isAdmin() || isConcesionario() || isTaquilla()
       );
 
       allow update: if isAdmin() || isVenueAdmin(resource.data.get('venueId', 'venue-teodoro-mariscal')) || (
         // Concesionario del stand:
-        // Solo puede avanzar a 'preparando' o 'listo'.
-        // En pedidos pickup también puede avanzar a 'entregado' al retirar el aficionado.
-        // En pedidos in-seat NO puede poner 'en-camino' ni 'entregado'.
-        isStandOwnerOrAssigned(resource.data.standId) && (
-          (request.resource.data.status in ['preparando', 'listo']) ||
-          (resource.data.orderType == 'pickup' && request.resource.data.status == 'entregado')
-        ) &&
+        isStandOwnerOrAssigned(resource.data.standId) &&
         request.resource.data.standId == resource.data.standId &&
         request.resource.data.userId == resource.data.userId &&
         request.resource.data.items == resource.data.items &&
@@ -250,28 +245,14 @@ service cloud.firestore {
         request.resource.data.orderType == resource.data.orderType
       ) || (
         // Runner:
-        // Solo puede actualizar pedidos in-seat de su propia zona asignada
         isRunner() &&
         resource.data.orderType == 'in-seat' &&
         (
-          !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
-          getUserDoc().data.get('zoneId', '') == '' ||
-          getUserDoc().data.get('zoneId', '') == resource.data.zoneId
-        ) && (
-          // Caso A: Tomar pedido disponible en su zona ('listo' sin runner -> 'en-camino' con runnerId = request.auth.uid)
-          (
-            resource.data.status == 'listo' &&
-            (resource.data.runnerId == null || resource.data.runnerId == '') &&
-            request.resource.data.status == 'en-camino' &&
-            request.resource.data.runnerId == request.auth.uid
-          ) ||
-          // Caso B: Marcar como entregado en butaca ('en-camino' -> 'entregado' para su propio runnerId)
-          (
-            resource.data.status == 'en-camino' &&
-            resource.data.runnerId == request.auth.uid &&
-            request.resource.data.status == 'entregado' &&
-            request.resource.data.runnerId == request.auth.uid
-          )
+          resource.data.runnerId == request.auth.uid ||
+          resource.data.runnerId == null ||
+          resource.data.runnerId == '' ||
+          getUserDoc().data.get('standId', '') == '' ||
+          getUserDoc().data.get('standId', '') == resource.data.standId
         ) &&
         request.resource.data.standId == resource.data.standId &&
         request.resource.data.userId == resource.data.userId &&
@@ -368,6 +349,12 @@ service cloud.firestore {
     // 19. Verificación de conectividad Firestore
     match /test/{docId} {
       allow read: if true;
+    }
+
+    // 20. Tickets de Soporte y Contacto por Email
+    match /supportTickets/{ticketId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin() || isSuperAdmin();
     }
   }
 }

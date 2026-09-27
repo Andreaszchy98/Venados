@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { UserProfile, UserRole } from '../../types';
 import { RoleBadge } from './RoleBadge';
 import { signOutUser, updateUserRole } from '../../lib/auth';
+import { HelpModal } from './HelpModal';
 import {
   LogOut,
   User,
@@ -16,6 +17,7 @@ import {
   ChevronRight,
   Shield,
   Layers,
+  HelpCircle,
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -36,6 +38,7 @@ export const Header: React.FC<HeaderProps> = ({
   onActiveViewChange,
 }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
   const { language, setLanguage, t, isTranslating } = useLanguage();
   const { theme, setTheme } = useTheme();
 
@@ -84,8 +87,8 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             </div>
 
-            {/* Controles de Usuario: Avatar interactivo para abrir la barra lateral */}
-            <div className="flex items-center gap-2 shrink-0">
+            {/* Controles de Usuario: Avatar/Login */}
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               {user ? (
                 <div className="flex items-center gap-1.5 sm:gap-2.5">
                   {/* Botón de Avatar con efecto hover para abrir el sidebar lateral */}
@@ -423,6 +426,30 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             </div>
           )}
+          {/* SECCIÓN 3: CENTRO DE AYUDA Y SOPORTE */}
+          <div className="space-y-2 pt-2 border-t border-slate-800/60">
+            <button
+              type="button"
+              onClick={() => {
+                setIsSidebarOpen(false);
+                setIsHelpOpen(true);
+              }}
+              className={`w-full p-3 rounded-2xl border text-left flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                theme === 'light'
+                  ? 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-900'
+                  : 'bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/40 text-amber-200'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <HelpCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                <div>
+                  <span className="block text-xs font-black uppercase font-sports">Centro de Ayuda / FAQ</span>
+                  <span className="block text-[10px] opacity-80">Preguntas frecuentes sobre boletos y pedidos</span>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 opacity-70" />
+            </button>
+          </div>
         </div>
 
         {/* Footer del Sidebar con botón de Cerrar Sesión */}
@@ -455,6 +482,14 @@ export const Header: React.FC<HeaderProps> = ({
           </p>
         </div>
       </aside>
+
+      {/* Modal de Ayuda y Preguntas Frecuentes */}
+      <HelpModal
+        isOpen={isHelpOpen}
+        onClose={() => setIsHelpOpen(false)}
+        userDefaultName={user?.displayName || ''}
+        userDefaultEmail={user?.email || ''}
+      />
     </>
   );
 };
