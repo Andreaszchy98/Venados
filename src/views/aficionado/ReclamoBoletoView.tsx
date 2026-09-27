@@ -19,6 +19,7 @@ import {
   Check,
   Share2,
   Compass,
+  RefreshCw,
 } from 'lucide-react';
 import { collection, query, where, getDocs, doc, getDoc, onSnapshot, limit } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
@@ -37,6 +38,7 @@ export const ReclamoBoletoView: React.FC<ReclamoBoletoViewProps> = ({ claimToken
   const [currentTime, setCurrentTime] = useState<string>(new Date().toLocaleTimeString());
   const [totpCode, setTotpCode] = useState<string>('');
   const [copied, setCopied] = useState(false);
+  const secondsRemaining = 30 - (Math.floor(Date.now() / 1000) % 30);
 
   // Cargar boleto en tiempo real con resolución multi-criterio robusta
   useEffect(() => {
@@ -106,11 +108,8 @@ export const ReclamoBoletoView: React.FC<ReclamoBoletoViewProps> = ({ claimToken
 
         const ticketData = { id: foundDoc.id, ...(foundDoc.data() as Omit<Ticket, 'id'>) };
         setTicket(ticketData);
-        setTotpCode(
-          ticketData.secretSeed
-            ? `${ticketData.qrId}-${generateTotpCode(ticketData.secretSeed)}`
-            : ticketData.qrId
-        );
+        const seed = ticketData.secretSeed || ticketData.qrId || ticketData.id;
+        setTotpCode(`${ticketData.qrId}-${generateTotpCode(seed)}`);
 
         // Escuchar cambios en tiempo real (ej. si el validador del estadio lo marca como usado en molinete)
         unsubscribe = onSnapshot(doc(db, 'tickets', foundDoc.id), (docSnap) => {
@@ -138,12 +137,13 @@ export const ReclamoBoletoView: React.FC<ReclamoBoletoViewProps> = ({ claimToken
     const timer = setInterval(() => {
       const now = new Date();
       setCurrentTime(now.toLocaleTimeString());
-      if (ticket?.secretSeed) {
-        setTotpCode(`${ticket.qrId}-${generateTotpCode(ticket.secretSeed)}`);
+      if (ticket) {
+        const seed = ticket.secretSeed || ticket.qrId || ticket.id;
+        setTotpCode(`${ticket.qrId}-${generateTotpCode(seed)}`);
       }
     }, 1000);
     return () => clearInterval(timer);
-  }, [ticket?.secretSeed, ticket?.qrId]);
+  }, [ticket]);
 
   const handleCopySeatData = async () => {
     if (!ticket) return;
@@ -284,11 +284,30 @@ Muestra este pase en los torniquetes del estadio.
               </div>
             </div>
 
-            {/* Reloj digital anti-captura */}
-            <div className="w-full bg-[#141C2E] border border-slate-700/80 rounded-xl px-3 py-1.5 text-center shadow-xs">
-              <div className="flex items-center justify-center gap-2 text-xs font-mono font-bold text-amber-400">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-spin" />
-                <span>RELOJ EN VIVO: {currentTime}</span>
+            {/* Contador de 30 segundos y Reloj digital anti-captura */}
+            <div className="w-full bg-[#141C2E] border border-slate-700/80 rounded-xl px-3 py-2 text-center space-y-1.5 shadow-xs">
+              <div className="flex items-center justify-between text-xs font-sports uppercase tracking-wider">
+                <span className="flex items-center gap-1 text-emerald-400 font-bold text-[11px]">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Código Dinámico Anti-Captura</span>
+                </span>
+                <span className="font-mono text-amber-400 font-black text-xs flex items-center gap-1">
+                  <RefreshCw className="w-3 h-3 animate-spin text-amber-400" />
+                  <span>{secondsRemaining}s</span>
+                </span>
+              </div>
+
+              {/* Barra de progreso de 30s */}
+              <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-emerald-500 via-amber-400 to-red-500 transition-all duration-1000 ease-linear rounded-full"
+                  style={{ width: `${(secondsRemaining / 30) * 100}%` }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 pt-0.5">
+                <span>Reloj Estadio: {currentTime}</span>
+                <span>Rotación: Cada 30 seg</span>
               </div>
             </div>
 

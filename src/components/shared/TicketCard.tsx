@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Ticket } from '../../types';
-import { Calendar, MapPin, CheckCircle2, Clock, XCircle, ShieldCheck, Share2, Sparkles } from 'lucide-react';
+import { Calendar, MapPin, CheckCircle2, Clock, XCircle, ShieldCheck, Share2, Sparkles, RefreshCw } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { QRCodeDisplay } from './QRCodeDisplay';
 import { generateTotpCode } from '../../lib/tickets';
@@ -22,17 +22,18 @@ export const TicketCard: React.FC<TicketCardProps> = ({
   const [totpCode, setTotpCode] = useState<string>(ticket.qrId);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
+  const secondsRemaining = 30 - (Math.floor(Date.now() / 1000) % 30);
+
   // Live clock and TOTP dynamic refresh
   useEffect(() => {
     const timer = setInterval(() => {
       const now = new Date();
       setCurrentTime(now.toLocaleTimeString());
-      if (ticket.secretSeed) {
-        setTotpCode(`${ticket.qrId}-${generateTotpCode(ticket.secretSeed)}`);
-      }
+      const seed = ticket.secretSeed || ticket.qrId || ticket.id;
+      setTotpCode(`${ticket.qrId}-${generateTotpCode(seed)}`);
     }, 1000);
     return () => clearInterval(timer);
-  }, [ticket.secretSeed, ticket.qrId]);
+  }, [ticket.secretSeed, ticket.qrId, ticket.id]);
 
   const handleOpenShare = () => {
     setIsShareModalOpen(true);
@@ -254,11 +255,22 @@ export const TicketCard: React.FC<TicketCardProps> = ({
           </div>
         </div>
 
-        {/* Reloj digital animado en tiempo real (anti-captura) */}
-        <div className="w-full bg-[#141C2E] border border-slate-700 rounded-lg px-2 py-1 text-center shadow-inner">
-          <div className="flex items-center justify-center gap-1.5 text-[10px] font-mono font-bold text-amber-400">
-            <Sparkles className="w-3 h-3 text-amber-400 animate-spin" />
-            <span>EN VIVO: {currentTime}</span>
+        {/* Reloj digital animado en tiempo real + Contador de 30s anti-captura */}
+        <div className="w-full bg-[#141C2E] border border-slate-700 rounded-lg p-1.5 text-center space-y-1 shadow-inner">
+          <div className="flex items-center justify-between text-[10px] font-mono font-bold">
+            <span className="text-amber-400 flex items-center gap-1 font-sports font-extrabold uppercase">
+              <RefreshCw className="w-2.5 h-2.5 animate-spin text-amber-400" />
+              <span>{secondsRemaining}s</span>
+            </span>
+            <span className="text-slate-300">{currentTime}</span>
+          </div>
+
+          {/* Barra de progreso de 30s */}
+          <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-emerald-500 via-amber-400 to-red-500 transition-all duration-1000 ease-linear rounded-full"
+              style={{ width: `${(secondsRemaining / 30) * 100}%` }}
+            />
           </div>
         </div>
 

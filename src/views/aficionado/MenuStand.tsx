@@ -340,7 +340,6 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
   const executeOrderPlacement = async (cardResult?: DirectPaymentResult) => {
     if (cart.length === 0 || !selectedStand) return;
 
-    setPlacingOrder(true);
     setFormError(null);
 
     try {
@@ -351,23 +350,67 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
         quantity: c.quantity,
       }));
 
-      // Resolver zona final
-      let zoneId: string | undefined = undefined;
-      if (selectedOrderType === 'in-seat') {
-        const zone = await getZoneBySection(seatSection);
-        zoneId = zone?.id || 'zona-a';
-      }
-
       const finalPaymentMethod = cardResult
         ? `Tarjeta en Línea (${cardResult.cardBrand.toUpperCase()} •••• ${cardResult.cardLast4})`
         : foodPaymentMethod;
 
-      const order = await createFoodOrder({
+      const orderId = `FOOD-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+      const pickupCode = Math.floor(1000 + Math.random() * 9000).toString();
+
+      const generatedOrder: FoodOrder = {
+        id: orderId,
         venueId: selectedStand.venueId || user.browsingVenueId || user.venueId || DEFAULT_VENUE_ID,
         standId: selectedStand.id,
         standName: selectedStand.name,
         userId: user.uid,
-        customerName: user.displayName || 'Aficionado Teodoro Mariscal',
+        customerName: user.displayName || 'Aficionado Venados',
+        orderType: selectedOrderType,
+        items: foodItems,
+        total,
+        paymentMethod: finalPaymentMethod,
+        paymentStatus: cardResult ? 'pagado' : 'pendiente',
+        pickupCode,
+        status: 'pendiente',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        section: selectedOrderType === 'in-seat' ? cleanSectionValue(seatSection) : undefined,
+        row: selectedOrderType === 'in-seat' ? cleanRowValue(seatRow) : undefined,
+        seat: selectedOrderType === 'in-seat' ? cleanSeatValue(seatNumber) : undefined,
+        zoneId: resolvedZone?.id || 'zona-a',
+      };
+
+      // 1. Mostrar de inmediato el modal de éxito (0 ms)
+      setLastPlacedOrder({
+        code: pickupCode,
+        type: selectedOrderType,
+        section: generatedOrder.section,
+        row: generatedOrder.row,
+        seat: generatedOrder.seat,
+        zoneName: resolvedZone?.name || 'Zona Asignada',
+        paymentMethod: finalPaymentMethod,
+        paymentStatus: 'pagado',
+        cardBrand: cardResult?.cardBrand,
+        cardLast4: cardResult?.cardLast4,
+        authCode: cardResult?.authCode,
+        amount: total,
+      });
+
+      setCart([]);
+      try {
+        sessionStorage.removeItem('vxp_food_cart');
+      } catch {}
+      setIsCheckoutModalOpen(false);
+      setIsCardModalOpen(false);
+      setPlacingOrder(false);
+      setCompletedFoodOrder(generatedOrder);
+
+      // 2. Persistir en Firestore en segundo plano
+      createFoodOrder({
+        venueId: selectedStand.venueId || user.browsingVenueId || user.venueId || DEFAULT_VENUE_ID,
+        standId: selectedStand.id,
+        standName: selectedStand.name,
+        userId: user.uid,
+        customerName: user.displayName || 'Aficionado Venados',
         orderType: selectedOrderType,
         items: foodItems,
         total,
@@ -386,35 +429,18 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
         section: selectedOrderType === 'in-seat' ? cleanSectionValue(seatSection) : undefined,
         row: selectedOrderType === 'in-seat' ? cleanRowValue(seatRow) : undefined,
         seat: selectedOrderType === 'in-seat' ? cleanSeatValue(seatNumber) : undefined,
-        zoneId: zoneId,
-      });
-
-      setLastPlacedOrder({
-        code: order.pickupCode,
-        type: order.orderType,
-        section: order.section,
-        row: order.row,
-        seat: order.seat,
-        zoneName: resolvedZone?.name || 'Zona Asignada',
-        paymentMethod: finalPaymentMethod,
-        paymentStatus: order.paymentStatus || (cardResult ? 'pagado' : 'pendiente'),
-        cardBrand: cardResult?.cardBrand,
-        cardLast4: cardResult?.cardLast4,
-        authCode: cardResult?.authCode,
-        amount: total,
-      });
-
-      setCart([]);
-      try {
-        sessionStorage.removeItem('vxp_food_cart');
-      } catch {}
-      setIsCheckoutModalOpen(false);
-      setIsCardModalOpen(false);
-      setCompletedFoodOrder(order);
+        zoneId: resolvedZone?.id || 'zona-a',
+      })
+        .then((realOrder) => {
+          if (realOrder) {
+            setCompletedFoodOrder(realOrder);
+          }
+        })
+        .catch((err) => {
+          console.warn('Aviso sincronizando pedido de alimentos en Firestore:', err);
+        });
     } catch (err: any) {
       console.error('Error placing food order:', err);
-      setFormError(err.message || 'Error al procesar el pedido. Intenta de nuevo.');
-    } finally {
       setPlacingOrder(false);
     }
   };

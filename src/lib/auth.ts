@@ -62,75 +62,90 @@ export async function syncUserProfile(
   initialRole: UserRole = 'aficionado'
 ): Promise<UserProfile> {
   const userDocRef = doc(db, 'users', fbUser.uid);
-  const userSnapshot = await getDoc(userDocRef);
-  if (userSnapshot.exists()) {
-    const data = userSnapshot.data();
-    const currentRole: UserRole = data.role || 'aficionado';
-    let venueId = data.venueId || undefined;
-    let venueName = data.venueName || undefined;
-    let browsingVenueId = data.browsingVenueId || undefined;
-    let browsingVenueName = data.browsingVenueName || undefined;
+  try {
+    const userSnapshot = await getDoc(userDocRef);
+    if (userSnapshot.exists()) {
+      const data = userSnapshot.data();
+      const currentRole: UserRole = data.role || 'aficionado';
+      let venueId = data.venueId || undefined;
+      let venueName = data.venueName || undefined;
+      let browsingVenueId = data.browsingVenueId || undefined;
+      let browsingVenueName = data.browsingVenueName || undefined;
 
-    // Sanitización activa: Si el perfil tiene asignada la sede inexistente 'venue-chevron' o 'Estadio Chevron'
-    // (no registrada en Superadmin), reasignar de inmediato a la sede oficial 'Estadio Teodoro Mariscal'
-    if (
-      venueId === 'venue-chevron' ||
-      venueName === 'Estadio Chevron' ||
-      browsingVenueId === 'venue-chevron' ||
-      browsingVenueName === 'Estadio Chevron'
-    ) {
-      venueId = 'venue-teodoro-mariscal';
-      venueName = 'Estadio Teodoro Mariscal';
-      browsingVenueId = 'venue-teodoro-mariscal';
-      browsingVenueName = 'Estadio Teodoro Mariscal';
+      // Sanitización activa: Si el perfil tiene asignada la sede inexistente 'venue-chevron' o 'Estadio Chevron'
+      // (no registrada en Superadmin), reasignar de inmediato a la sede oficial 'Estadio Teodoro Mariscal'
+      if (
+        venueId === 'venue-chevron' ||
+        venueName === 'Estadio Chevron' ||
+        browsingVenueId === 'venue-chevron' ||
+        browsingVenueName === 'Estadio Chevron'
+      ) {
+        venueId = 'venue-teodoro-mariscal';
+        venueName = 'Estadio Teodoro Mariscal';
+        browsingVenueId = 'venue-teodoro-mariscal';
+        browsingVenueName = 'Estadio Teodoro Mariscal';
 
-      try {
-        await updateDoc(userDocRef, {
-          venueId: 'venue-teodoro-mariscal',
-          venueName: 'Estadio Teodoro Mariscal',
-          browsingVenueId: 'venue-teodoro-mariscal',
-          browsingVenueName: 'Estadio Teodoro Mariscal',
-          updatedAt: new Date().toISOString(),
-        });
-      } catch (err) {
-        console.warn('Auto-corrección de sede Chevron en perfil de usuario:', err);
+        try {
+          await updateDoc(userDocRef, {
+            venueId: 'venue-teodoro-mariscal',
+            venueName: 'Estadio Teodoro Mariscal',
+            browsingVenueId: 'venue-teodoro-mariscal',
+            browsingVenueName: 'Estadio Teodoro Mariscal',
+            updatedAt: new Date().toISOString(),
+          }).catch(() => {});
+        } catch (err) {
+          console.warn('Auto-corrección de sede Chevron en perfil de usuario:', err);
+        }
       }
-    }
 
+      return {
+        uid: fbUser.uid,
+        email: data.email || fbUser.email,
+        displayName: data.displayName || fbUser.displayName || 'Aficionado Venados',
+        role: currentRole,
+        photoURL: data.photoURL || fbUser.photoURL,
+        phoneNumber: data.phoneNumber || fbUser.phoneNumber,
+        browsingVenueId,
+        browsingVenueName,
+        venueId,
+        venueName,
+        standId: data.standId,
+        standName: data.standName,
+        assignedZone: data.assignedZone,
+        runnerStatus: data.runnerStatus,
+        createdAt: data.createdAt || new Date().toISOString(),
+        updatedAt: data.updatedAt,
+      };
+    } else {
+      // Crear nuevo perfil en Firestore (siempre con rol seguro 'aficionado' y sede de navegación inicial)
+      const newProfile: UserProfile = {
+        uid: fbUser.uid,
+        email: fbUser.email,
+        displayName: fbUser.displayName || (fbUser.email ? fbUser.email.split('@')[0] : 'Aficionado Venados'),
+        role: 'aficionado',
+        photoURL: fbUser.photoURL || null,
+        phoneNumber: fbUser.phoneNumber || null,
+        browsingVenueId: 'venue-teodoro-mariscal',
+        browsingVenueName: 'Estadio Teodoro Mariscal',
+        createdAt: new Date().toISOString(),
+      };
+
+      await setDoc(userDocRef, sanitizeFirestoreData(newProfile)).catch(() => {});
+      return newProfile;
+    }
+  } catch (err: any) {
+    console.warn('Modo offline / reintento de conexión en syncUserProfile:', err?.message || err);
     return {
-      uid: fbUser.uid,
-      email: data.email || fbUser.email,
-      displayName: data.displayName || fbUser.displayName || 'Aficionado Venados',
-      role: currentRole,
-      photoURL: data.photoURL || fbUser.photoURL,
-      phoneNumber: data.phoneNumber || fbUser.phoneNumber,
-      browsingVenueId,
-      browsingVenueName,
-      venueId,
-      venueName,
-      standId: data.standId,
-      standName: data.standName,
-      assignedZone: data.assignedZone,
-      runnerStatus: data.runnerStatus,
-      createdAt: data.createdAt || new Date().toISOString(),
-      updatedAt: data.updatedAt,
-    };
-  } else {
-    // Crear nuevo perfil en Firestore (siempre con rol seguro 'aficionado' y sede de navegación inicial)
-    const newProfile: UserProfile = {
       uid: fbUser.uid,
       email: fbUser.email,
       displayName: fbUser.displayName || (fbUser.email ? fbUser.email.split('@')[0] : 'Aficionado Venados'),
-      role: 'aficionado',
+      role: initialRole || 'aficionado',
       photoURL: fbUser.photoURL || null,
       phoneNumber: fbUser.phoneNumber || null,
       browsingVenueId: 'venue-teodoro-mariscal',
       browsingVenueName: 'Estadio Teodoro Mariscal',
       createdAt: new Date().toISOString(),
     };
-
-    await setDoc(userDocRef, sanitizeFirestoreData(newProfile));
-    return newProfile;
   }
 }
 

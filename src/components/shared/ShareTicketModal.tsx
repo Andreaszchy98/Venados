@@ -44,7 +44,7 @@ export const ShareTicketModal: React.FC<ShareTicketModalProps> = ({
   const loadClaimData = (overrideDomain?: string) => {
     if (!ticket) return;
     setLoading(true);
-    generateTicketClaimData(ticket.id, overrideDomain || customDomain || undefined)
+    generateTicketClaimData(ticket, overrideDomain || customDomain || undefined)
       .then((data) => {
         setClaimData(data);
         setLoading(false);
@@ -131,10 +131,14 @@ export const ShareTicketModal: React.FC<ShareTicketModalProps> = ({
               <Share2 className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-sm sm:text-base font-black font-sports uppercase tracking-wide">
+              <h3 className={`text-sm sm:text-base font-black font-sports uppercase tracking-wide ${
+                theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
+              }`}>
                 Compartir Butaca
               </h3>
-              <p className="text-[11px] text-slate-400">
+              <p className={`text-[11px] ${
+                theme === 'light' ? 'text-slate-600 font-medium' : 'text-slate-400'
+              }`}>
                 Pase de invitado directo sin registro ni cuenta
               </p>
             </div>

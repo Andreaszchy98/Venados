@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Ticket, VenueEvent } from '../../types';
 import { QRCodeDisplay } from '../../components/shared/QRCodeDisplay';
-import { generateTicketClaimLink, generateTicketClaimData } from '../../lib/tickets';
+import { generateTicketClaimLink, generateTicketClaimData, generateTotpCode } from '../../lib/tickets';
 import { ShareTicketModal } from '../../components/shared/ShareTicketModal';
 import {
   cleanRowValue,
@@ -23,6 +23,8 @@ import {
   XCircle,
   Ticket as TicketIcon,
   Sparkles,
+  ShieldCheck,
+  RefreshCw,
   Users,
 } from 'lucide-react';
 
@@ -51,7 +53,22 @@ export const BoletoDetalle: React.FC<BoletoDetalleProps> = ({
   const isJoint = allTickets.length > 1;
 
   // El código QR oficial usa el purchaseId si está disponible, o el qrId como fallback
-  const displayQrCode = ticket.purchaseId || ticket.qrId;
+  const baseQrCode = ticket.purchaseId || ticket.qrId;
+  const [totpCode, setTotpCode] = useState<string>(baseQrCode);
+  const [currentTime, setCurrentTime] = useState<string>(new Date().toLocaleTimeString());
+  const secondsRemaining = 30 - (Math.floor(Date.now() / 1000) % 30);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date();
+      setCurrentTime(now.toLocaleTimeString());
+      const seed = ticket.secretSeed || ticket.qrId || ticket.id;
+      setTotpCode(`${baseQrCode}-${generateTotpCode(seed)}`);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [ticket.secretSeed, ticket.qrId, ticket.id, baseQrCode]);
+
+  const displayQrCode = totpCode;
 
   // Total acumulado de la compra
   const totalAmount = allTickets.reduce((sum, t) => sum + (Number(t.price) || 0), 0);
@@ -320,6 +337,33 @@ Presenta este código en los molinetes del estadio.
                 size={160}
                 alt={`Código QR ${displayQrCode}`}
               />
+            </div>
+
+            {/* Contador de 30 segundos y Reloj digital anti-captura */}
+            <div className="w-full max-w-xs mt-3 bg-[#141C2E] border border-slate-700/80 rounded-xl px-3 py-2 text-center space-y-1.5 shadow-xs">
+              <div className="flex items-center justify-between text-xs font-sports uppercase tracking-wider">
+                <span className="flex items-center gap-1 text-emerald-400 font-bold text-[11px]">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Código Dinámico Anti-Captura</span>
+                </span>
+                <span className="font-mono text-amber-400 font-black text-xs flex items-center gap-1">
+                  <RefreshCw className="w-3 h-3 animate-spin text-amber-400" />
+                  <span>{secondsRemaining}s</span>
+                </span>
+              </div>
+
+              {/* Barra de progreso de 30s */}
+              <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-emerald-500 via-amber-400 to-red-500 transition-all duration-1000 ease-linear rounded-full"
+                  style={{ width: `${(secondsRemaining / 30) * 100}%` }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 pt-0.5">
+                <span>Reloj Estadio: {currentTime}</span>
+                <span>Rotación: Cada 30s</span>
+              </div>
             </div>
 
             <div className="mt-2.5 text-center space-y-1">

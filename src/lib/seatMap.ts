@@ -1341,6 +1341,8 @@ export async function purchaseSeatsTransaction(params: PurchaseSeatsParams): Pro
     for (const { ref: seatRef, seat, isNew } of seatSnapshots) {
       const ticketDocRef = doc(collection(db, 'tickets'));
       const qrId = `${qrPrefix}${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+      const claimToken = `CLAIM-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+      const secretSeed = `SEED-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
       const zoneMeta = stadiumZones[seat.zoneName];
       const gateResolved = zoneMeta?.gate || event.gate || 'Puertas Generales';
 
@@ -1362,6 +1364,8 @@ export async function purchaseSeatsTransaction(params: PurchaseSeatsParams): Pro
         price: seat.price,
         status: 'activo',
         qrId,
+        claimToken,
+        secretSeed,
         gate: gateResolved,
         createdAt: now,
         stripePaymentIntentId: params.stripePaymentIntentId || undefined,

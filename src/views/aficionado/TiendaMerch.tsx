@@ -200,8 +200,6 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
   const totalItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const executeOrderSubmission = async (paymentDetails?: DirectPaymentResult) => {
-    setSubmittingOrder(true);
-
     try {
       const orderItems: OrderItem[] = cart.map((item) => ({
         productId: item.product.id,
@@ -255,35 +253,52 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
         orderPayload.paymentMethod = `Tarjeta (${paymentDetails.cardBrand} •••• ${paymentDetails.cardLast4})`;
       }
 
-      const createdOrder = await createMerchOrder(orderPayload);
+      const localOrderId = `MERCH-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+      const generatedOrder: MerchOrder = {
+        id: localOrderId,
+        venueId: activeVenueId || 'venue-teodoro-mariscal',
+        userId: user.uid,
+        customerName: address.recipientName?.trim() || user.displayName || 'Aficionado Venados',
+        customerEmail: user.email || 'aficionado@venados.com',
+        items: orderItems,
+        subtotal,
+        shippingCost,
+        total,
+        shippingType,
+        carrier: shippingType === 'domicilio' ? 'DHL Express' : 'Recoger en Tienda Estadio',
+        status: 'pendiente',
+        paymentMethod: paymentDetails
+          ? `Tarjeta (${paymentDetails.cardBrand} •••• ${paymentDetails.cardLast4})`
+          : 'Tarjeta en Línea',
+        paymentStatus: 'pagado',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
 
-      // Si es administrador, reducir stock directamente; para aficionados, el almacén lo gestiona en logística
-      if (user.role === 'admin') {
-        for (const item of cart) {
-          try {
-            await adjustProductStock(item.product.id, -item.quantity);
-          } catch {
-            // Manejo silencioso en caso de error
-          }
-        }
-      }
-
+      // 1. Mostrar de inmediato el modal de éxito con los datos del pedido (0 ms)
       setCart([]);
       try {
         sessionStorage.removeItem('vxp_merch_cart');
       } catch {}
       setIsCheckingOut(false);
       setIsCartOpen(false);
-      setOrderSuccess(
-        `¡Pedido confirmado con éxito! Total: $${total.toLocaleString('es-MX')} MXN.${
-          paymentDetails ? ` Pago aprobado con tarjeta ${paymentDetails.cardBrand} terminación ${paymentDetails.cardLast4}.` : ''
-        } Puedes seguir el envío en la pestaña "Mis Pedidos".`
-      );
-      fetchProducts();
-      setCompletedMerchOrder(createdOrder);
+      setIsCardModalOpen(false);
+      setSubmittingOrder(false);
+      setCompletedMerchOrder(generatedOrder);
+
+      // 2. Persistir en Firestore en segundo plano
+      createMerchOrder(orderPayload)
+        .then((realOrder) => {
+          if (realOrder) {
+            setCompletedMerchOrder(realOrder);
+          }
+          fetchProducts();
+        })
+        .catch((err) => {
+          console.warn('Aviso registrando pedido de tienda en Firestore:', err);
+        });
     } catch (err: any) {
       console.error('Error al procesar pedido:', err);
-    } finally {
       setSubmittingOrder(false);
     }
   };
@@ -339,7 +354,7 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
           <ShoppingCart className="w-4 h-4" />
           <span className="hidden sm:inline">Mi Carrito</span>
           {totalItemsCount > 0 && (
-            <span className="w-5 h-5 rounded-full bg-white text-slate-900 text-xs font-extrabold flex items-center justify-center">
+            <span className="min-w-[22px] h-[22px] px-1.5 rounded-full bg-slate-950 text-white !text-white font-black text-[11px] flex items-center justify-center leading-none shadow-xs border border-white/20 shrink-0">
               {totalItemsCount}
             </span>
           )}

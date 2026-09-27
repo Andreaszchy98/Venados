@@ -467,36 +467,38 @@ export interface ClaimLinkDetails {
 /**
  * Desglosar y generar enlace completo de reclamo (URL directa, WhatsApp, texto)
  */
-export async function generateTicketClaimData(ticketId: string, customDomain?: string): Promise<ClaimLinkDetails> {
-  const ticketRef = doc(db, 'tickets', ticketId);
-  const ticketSnap = await getDoc(ticketRef);
-  
-  let claimToken = '';
-  let matchTitle = 'Partido Oficial';
-  let seatDesc = '';
-
-  if (ticketSnap.exists()) {
-    const data = ticketSnap.data() as Ticket;
-    matchTitle = data.matchTitle || 'Partido Oficial';
-    seatDesc = `${data.section || ''} - ${data.row || ''} - ${data.seat || ''}`.trim();
-    // Si ya tenía un claimToken asignado, reutilizarlo para no invalidar enlaces previos
-    if (data.claimToken) {
-      claimToken = data.claimToken;
-    }
-  }
+export async function generateTicketClaimData(ticketInput: string | Ticket, customDomain?: string): Promise<ClaimLinkDetails> {
+  const isTicketObj = typeof ticketInput !== 'string';
+  const ticketId = isTicketObj ? ticketInput.id : ticketInput;
+  let claimToken = isTicketObj && ticketInput.claimToken ? ticketInput.claimToken : '';
+  let matchTitle = isTicketObj && ticketInput.matchTitle ? ticketInput.matchTitle : 'Partido Oficial';
+  let seatDesc = isTicketObj
+    ? `${ticketInput.section || ''} - ${ticketInput.row || ''} - ${ticketInput.seat || ''}`.trim()
+    : '';
 
   if (!claimToken) {
     claimToken = `CLAIM-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
-    await updateDoc(ticketRef, {
-      claimToken,
-      purchaseId: '', // Desvincula del grupo principal si era parte de una compra grupal
-    });
+  }
+
+  // Desvincular y separar de la compra grupal en Firestore para que tenga su código individual
+  if (ticketId) {
+    try {
+      const ticketRef = doc(db, 'tickets', ticketId);
+      await updateDoc(ticketRef, {
+        claimToken,
+        purchaseId: '', // Separado de la compra conjunta
+        isShared: true,
+        sharedAt: new Date().toISOString(),
+      }).catch(() => {});
+    } catch (err) {
+      console.warn('Advertencia desvinculando boleto compartido:', err);
+    }
   }
 
   const baseUrl = getPublicAppBaseUrl(customDomain);
   const claimUrl = `${baseUrl}/reclamo/${claimToken}`;
   const shareTitle = `🎟️ Tu Boleto Oficial: ${matchTitle}`;
-  const shareText = `¡Hola! Te comparto tu boleto oficial para ${matchTitle} (${seatDesc}). Puedes abrirlo y mostrar tu código QR de acceso en los torniquetes sin necesidad de registrarte aquí: ${claimUrl}`;
+  const shareText = `¡Hola! Te comparto tu boleto oficial para ${matchTitle}${seatDesc ? ` (${seatDesc})` : ''}. Puedes abrirlo y mostrar tu código QR de acceso en los torniquetes sin necesidad de registrarte aquí: ${claimUrl}`;
   const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
 
   return {
