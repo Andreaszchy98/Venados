@@ -2,6 +2,7 @@ import {
   signInWithPopup,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   signOut as fbSignOut,
   updateProfile,
   User as FirebaseUser,
@@ -150,10 +151,28 @@ export async function syncUserProfile(
 }
 
 /**
- * Obtener miembros de personal y aficionados elegibles para una sede deportiva específica.
- * NUNCA devuelve usuarios con rol 'admin' o 'superadmin' — ni de la propia sede ni de otras.
- * Sólo trae usuarios asignados a la sede del admin actual, más aficionados sin sede asignada aún.
+ * Obtener lista de runners asignados a un puesto o disponibles en la sede
  */
+export async function getRunnersForStand(standId?: string, venueId?: string): Promise<UserProfile[]> {
+  try {
+    const q = query(
+      collection(db, 'users'),
+      where('role', '==', 'runner'),
+      limit(100)
+    );
+    const snap = await getDocs(q);
+    const allRunners = snap.docs.map((d) => ({ uid: d.id, ...d.data() })) as UserProfile[];
+    
+    return allRunners.filter((r) => {
+      if (standId && r.standId === standId) return true;
+      if (!r.standId) return true; // Runner multinegocio/general
+      return false;
+    });
+  } catch (err) {
+    console.warn('Error al obtener runners para el puesto:', err);
+    return [];
+  }
+}
 export async function getVenueStaff(venueId: string): Promise<UserProfile[]> {
   try {
     // 1. Usuarios asignados a esta sede específica
@@ -285,6 +304,21 @@ export async function registerWithEmail(
 }
 
 /**
+ * Enviar correo de restablecimiento de contraseña
+ */
+export async function resetPassword(email: string): Promise<void> {
+  try {
+    if (!email || !email.trim()) {
+      throw new Error('Por favor ingresa tu correo electrónico.');
+    }
+    await sendPasswordResetEmail(auth, email.trim());
+  } catch (error: any) {
+    const message = getFriendlyAuthErrorMessage(error?.code || '');
+    throw new Error(message || 'No se pudo enviar el correo de recuperación. Revisa el correo ingresado.');
+  }
+}
+
+/**
  * Actualizar rol y asignaciones de un usuario (Admin declara roles, puestos o runners)
  */
 export async function updateUserRoleAndDetails(
@@ -319,10 +353,10 @@ export async function updateUserRoleAndDetails(
       payload.assignedZone = null;
       payload.runnerStatus = null;
     } else if (updates.role === 'runner') {
-      payload.assignedZone = updates.assignedZone || 'Zona Central & Palcos';
+      payload.standId = updates.standId || null;
+      payload.standName = updates.standName || null;
+      payload.assignedZone = updates.assignedZone || 'Todas las Zonas';
       payload.runnerStatus = updates.runnerStatus || 'disponible';
-      payload.standId = null;
-      payload.standName = null;
     } else {
       payload.standId = null;
       payload.standName = null;

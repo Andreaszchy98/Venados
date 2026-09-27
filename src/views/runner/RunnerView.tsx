@@ -1,17 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { UserProfile, MerchOrder } from '../../types';
-import { getAllMerchOrders, updateOrderStatus } from '../../lib/logistics';
+import React, { useState } from 'react';
+import { UserProfile } from '../../types';
 import { updateRunnerStatus } from '../../lib/auth';
 import { RunnerOrdersQueue } from './RunnerOrdersQueue';
-import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import {
   Bike,
-  MapPin,
+  Store,
   Clock,
-  CheckCircle2,
-  ShoppingBag,
   Utensils,
-  Sparkles,
+  MapPin,
 } from 'lucide-react';
 
 interface RunnerViewProps {
@@ -23,23 +19,6 @@ export const RunnerView: React.FC<RunnerViewProps> = ({ user }) => {
     user.runnerStatus || 'disponible'
   );
   const [updatingStatus, setUpdatingStatus] = useState(false);
-  const [activeTab, setActiveTab] = useState<'alimentos' | 'tienda'>('alimentos');
-
-  // Pedidos de Mercancía
-  const [merchOrders, setMerchOrders] = useState<MerchOrder[]>([]);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-
-  useEffect(() => {
-    const loadMerch = async () => {
-      try {
-        const data = await getAllMerchOrders();
-        setMerchOrders(data);
-      } catch (err) {
-        console.warn('Error cargando pedidos merch:', err);
-      }
-    };
-    loadMerch();
-  }, []);
 
   const handleStatusChange = async (newStatus: 'disponible' | 'en_entrega' | 'inactivo') => {
     setUpdatingStatus(true);
@@ -53,20 +32,6 @@ export const RunnerView: React.FC<RunnerViewProps> = ({ user }) => {
     }
   };
 
-  const handleAdvanceMerchStatus = async (orderId: string) => {
-    setActionLoading(orderId);
-    try {
-      await updateOrderStatus(orderId, 'entregado');
-      setMerchOrders((prev) =>
-        prev.map((o) => (o.id === orderId ? { ...o, status: 'entregado' } : o))
-      );
-    } catch (err) {
-      console.error('Error entregando mercancía:', err);
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
   return (
     <div className="space-y-6">
       {/* Banner de Estado del Runner */}
@@ -75,20 +40,26 @@ export const RunnerView: React.FC<RunnerViewProps> = ({ user }) => {
 
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-blue-600/30 text-blue-300 border border-blue-500/40">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-blue-600/30 text-blue-300 border border-blue-500/40 font-sports">
               <Bike className="w-3.5 h-3.5" />
-              Runner Oficial • Estadio Teodoro Mariscal
+              Despacho de Comandas a Butaca • Estadio Teodoro Mariscal
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
               {user.displayName || 'Runner Venados'}
             </h1>
-            <div className="flex items-center gap-4 text-xs text-slate-300 font-medium">
-              <span className="flex items-center gap-1.5 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700">
-                <MapPin className="w-3.5 h-3.5 text-blue-400" />
-                Zona Asignada: <strong>{user.assignedZone || 'Todas las Zonas'}</strong>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs text-slate-300 font-medium">
+              <span className="flex items-center gap-1.5 bg-slate-800/90 px-3 py-1.5 rounded-xl border border-amber-500/30 text-amber-300 font-bold">
+                <Store className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                Negocio Asignado: <strong>{user.standName || 'Todos los Negocios'}</strong>
               </span>
+              {user.assignedZone && (
+                <span className="flex items-center gap-1.5 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700">
+                  <MapPin className="w-3.5 h-3.5 text-blue-400" />
+                  Zona: <strong>{user.assignedZone}</strong>
+                </span>
+              )}
               <span className="flex items-center gap-1.5 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700">
-                <Clock className="w-3.5 h-3.5 text-amber-400" />
+                <Clock className="w-3.5 h-3.5 text-emerald-400" />
                 Turno en Curso
               </span>
             </div>
@@ -96,7 +67,7 @@ export const RunnerView: React.FC<RunnerViewProps> = ({ user }) => {
 
           {/* Selector de Estado Operativo */}
           <div className="bg-slate-800/90 p-3 rounded-2xl border border-slate-700 space-y-2">
-            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider font-sports">
               Tu Estado en Vivo:
             </div>
             <div className="flex items-center gap-2">
@@ -123,95 +94,19 @@ export const RunnerView: React.FC<RunnerViewProps> = ({ user }) => {
         </div>
       </div>
 
-      {/* Selector de Pestañas Deportivo: Alimentos vs Mercancía */}
-      <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
-        <button
-          onClick={() => setActiveTab('alimentos')}
-          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs sm:text-sm uppercase tracking-wide transition-all cursor-pointer font-sports ${
-            activeTab === 'alimentos'
-              ? 'bg-red-700 text-white shadow-lg shadow-red-950/40 border border-red-500/50'
-              : 'bg-[#101625] text-slate-300 hover:bg-[#162035] border border-slate-700/80 hover:text-white'
-          }`}
-        >
+      {/* Indicador de Tipo de Servicio: Solo Comandas de Comida en Butaca */}
+      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="inline-flex items-center gap-2 px-4 py-2.5 bg-red-700 text-white rounded-xl font-black text-xs sm:text-sm uppercase tracking-wide font-sports border border-red-500/50 shadow-md">
           <Utensils className="w-4 h-4 text-amber-400" />
-          Comandas a Butaca (In-Seat Delivery)
-        </button>
-
-        <button
-          onClick={() => setActiveTab('tienda')}
-          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs sm:text-sm uppercase tracking-wide transition-all cursor-pointer font-sports ${
-            activeTab === 'tienda'
-              ? 'bg-red-700 text-white shadow-lg shadow-red-950/40 border border-red-500/50'
-              : 'bg-[#101625] text-slate-300 hover:bg-[#162035] border border-slate-700/80 hover:text-white'
-          }`}
-        >
-          <ShoppingBag className="w-4 h-4 text-red-400" />
-          Entregas de Tienda Oficial ({merchOrders.filter((m) => m.shippingType === 'tienda').length})
-        </button>
+          Comandas de Alimentos y Bebidas a Butaca (In-Seat Delivery)
+        </div>
+        <span className="text-xs text-slate-400 hidden sm:inline-block">
+          Entregas exclusivas de alimentos asignadas a tu negocio
+        </span>
       </div>
 
-      {/* Tab 1: Comandas de Alimentos con cola de Runners en tiempo real */}
-      {activeTab === 'alimentos' && (
-        <RunnerOrdersQueue user={user} />
-      )}
-
-      {/* Tab 2: Entregas de Tienda Oficial en Estadio */}
-      {activeTab === 'tienda' && (
-        <div className="bg-[#0F1626] rounded-2xl sm:rounded-3xl border border-slate-700/80 shadow-xl p-5 sm:p-6 space-y-4 relative overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-600 via-amber-500 to-red-600" />
-          <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-            <h3 className="font-black text-base sm:text-lg text-white flex items-center gap-2 font-sports tracking-wide">
-              <ShoppingBag className="w-5 h-5 text-red-500" />
-              Entregas de Mercancía en Estadio
-            </h3>
-            <span className="text-xs text-slate-400">Retiro en tienda o entrega en butaca</span>
-          </div>
-
-          <div className="divide-y divide-slate-800">
-            {merchOrders.length === 0 ? (
-              <div className="py-10 text-center text-slate-400 text-xs">
-                No hay entregas de mercancía pendientes.
-              </div>
-            ) : (
-              merchOrders.map((order) => (
-                <div key={order.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-white text-sm">Pedido #{order.id.slice(0, 7)}</span>
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                          order.status === 'entregado'
-                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                            : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                        }`}
-                      >
-                        {order.status}
-                      </span>
-                    </div>
-                    <div className="text-xs text-slate-400 mt-1">
-                      Cliente: <strong className="text-slate-200">{order.customerName}</strong> ({order.customerEmail})
-                    </div>
-                    <div className="text-xs text-slate-300 mt-0.5 font-medium">
-                      {order.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')} • <strong className="text-emerald-400">${order.total} MXN</strong>
-                    </div>
-                  </div>
-
-                  {order.status !== 'entregado' && (
-                    <button
-                      onClick={() => handleAdvanceMerchStatus(order.id)}
-                      disabled={actionLoading === order.id}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition-all self-start sm:self-auto cursor-pointer font-sports"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                      Entregar a Cliente
-                    </button>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
+      {/* Cola de Comandas en Tiempo Real */}
+      <RunnerOrdersQueue user={user} />
     </div>
   );
 };

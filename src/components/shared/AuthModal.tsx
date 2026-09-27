@@ -3,9 +3,10 @@ import {
   signInWithGoogle,
   signInWithEmail,
   registerWithEmail,
+  resetPassword,
 } from '../../lib/auth';
 import { ErrorMessage } from './ErrorMessage';
-import { LogIn, UserPlus, Mail, Lock, User, X } from 'lucide-react';
+import { LogIn, UserPlus, Mail, Lock, User, X, KeyRound, CheckCircle2 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 
 interface AuthModalProps {
@@ -24,14 +25,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   customSubtitle,
 }) => {
   const [isRegister, setIsRegister] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [resetSuccessMessage, setResetSuccessMessage] = useState<string | null>(null);
   const { t } = useLanguage();
 
   if (!isOpen) return null;
+
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setErrorMessage(null);
+    setResetSuccessMessage(null);
+
+    try {
+      if (!email.trim()) {
+        throw new Error('Por favor ingresa tu correo electrónico.');
+      }
+      await resetPassword(email);
+      setResetSuccessMessage('¡Correo enviado! Revisa tu bandeja de entrada o carpeta de SPAM para restablecer tu contraseña.');
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Error al enviar el correo de recuperación.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
@@ -92,10 +114,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <span className="text-xl sm:text-2xl font-black tracking-wider text-amber-400 font-scoreboard">V</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-black tracking-wide uppercase font-sports">
-            {customTitle || (isRegister ? t('auth.title_register', 'Crear Cuenta en VXP') : t('auth.title_login', 'Iniciar Sesión en VXP'))}
+            {customTitle ||
+              (isForgotPassword
+                ? 'Recuperar Contraseña'
+                : isRegister
+                ? t('auth.title_register', 'Crear Cuenta en VXP')
+                : t('auth.title_login', 'Iniciar Sesión en VXP'))}
           </h2>
           <p className="text-[11px] sm:text-xs text-white/80 mt-1 font-medium">
-            {customSubtitle || t('auth.subtitle', 'Accede a tus boletos, pedidos y membresía')}
+            {customSubtitle ||
+              (isForgotPassword
+                ? 'Te enviaremos un correo oficial para restablecer tu cuenta'
+                : t('auth.subtitle', 'Accede a tus boletos, pedidos y membresía'))}
           </p>
         </div>
 
@@ -108,147 +138,226 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             />
           )}
 
-          {/* Botón de Google */}
-          <button
-            id="google-signin-btn"
-            type="button"
-            onClick={handleGoogleSignIn}
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-3 py-2.5 px-4 bg-[#161F30] border border-slate-700/80 hover:bg-[#1C283E] text-slate-200 font-bold text-sm rounded-xl shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24">
-              <path
-                fill="#4285F4"
-                d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.14z"
-              />
-              <path
-                fill="#34A853"
-                d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.35 24 12 24z"
-              />
-              <path
-                fill="#FBBC05"
-                d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.97 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
-              />
-              <path
-                fill="#EA4335"
-                d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.35 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-              />
-            </svg>
-            {t('auth.google_btn', 'Continuar con Google')}
-          </button>
-
-          <div className="flex items-center gap-3">
-            <div className="flex-1 border-t border-slate-800"></div>
-            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider font-sports">{t('auth.or_email', 'o con correo')}</span>
-            <div className="flex-1 border-t border-slate-800"></div>
-          </div>
-
-          <form onSubmit={handleEmailSubmit} className="space-y-3">
-            {isRegister && (
-              <div>
-                <label className="block text-xs font-black text-slate-300 mb-1 font-sports uppercase tracking-wider">
-                  {t('auth.name', 'Nombre completo')}
-                </label>
-                <div className="relative">
-                  <User className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                  <input
-                    type="text"
-                    required
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder={t('auth.name_placeholder', 'Ej. Carlos Mendoza')}
-                    className="w-full pl-9 pr-3 py-2 bg-[#131A28] border border-slate-700 text-white placeholder-slate-500 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-red-500 focus:border-red-500 font-medium"
-                  />
+          {isForgotPassword ? (
+            <form onSubmit={handleResetPasswordSubmit} className="space-y-3.5">
+              {resetSuccessMessage ? (
+                <div className="p-3.5 rounded-xl bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-xs flex items-start gap-2.5 shadow-md">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold">{resetSuccessMessage}</p>
+                  </div>
                 </div>
-              </div>
-            )}
-
-            <div>
-              <label className="block text-xs font-black text-slate-300 mb-1 font-sports uppercase tracking-wider">
-                {t('auth.email', 'Correo electrónico')}
-              </label>
-              <div className="relative">
-                <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder={t('auth.email_placeholder', 'ejemplo@correo.com')}
-                  className="w-full pl-9 pr-3 py-2 bg-[#131A28] border border-slate-700 text-white placeholder-slate-500 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-red-500 focus:border-red-500 font-medium"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-black text-slate-300 mb-1 font-sports uppercase tracking-wider">
-                {t('auth.password', 'Contraseña')}
-              </label>
-              <div className="relative">
-                <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full pl-9 pr-3 py-2 bg-[#131A28] border border-slate-700 text-white placeholder-slate-500 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-red-500 focus:border-red-500 font-medium"
-                />
-              </div>
-            </div>
-
-            <button
-              id="submit-auth-btn"
-              type="submit"
-              disabled={loading}
-              className="w-full py-2.5 px-4 bg-red-600 hover:bg-red-500 text-white font-black text-sm uppercase tracking-wider rounded-xl shadow-md shadow-red-950/40 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 mt-2 cursor-pointer active:scale-98 font-sports border border-red-500/40"
-            >
-              {loading ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              ) : isRegister ? (
-                <>
-                  <UserPlus className="w-4 h-4" /> {t('auth.submit_register', 'Registrarme')}
-                </>
               ) : (
                 <>
-                  <LogIn className="w-4 h-4" /> {t('auth.submit_login', 'Iniciar Sesión')}
+                  <p className="text-xs text-slate-300">
+                    Ingresa el correo electrónico asociado a tu cuenta de Venados VXP y te enviaremos un enlace oficial de restablecimiento.
+                  </p>
+                  <div>
+                    <label className="block text-xs font-black text-slate-300 mb-1 font-sports uppercase tracking-wider">
+                      {t('auth.email', 'Correo electrónico')}
+                    </label>
+                    <div className="relative">
+                      <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder={t('auth.email_placeholder', 'ejemplo@correo.com')}
+                        className="w-full pl-9 pr-3 py-2 bg-[#131A28] border border-slate-700 text-white placeholder-slate-500 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-red-500 focus:border-red-500 font-medium"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    id="submit-reset-btn"
+                    type="submit"
+                    disabled={loading}
+                    className="w-full py-2.5 px-4 bg-red-600 hover:bg-red-500 text-white font-black text-sm uppercase tracking-wider rounded-xl shadow-md shadow-red-950/40 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 mt-2 cursor-pointer active:scale-98 font-sports border border-red-500/40"
+                  >
+                    {loading ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                      <>
+                        <KeyRound className="w-4 h-4" /> Enviar Correo de Recuperación
+                      </>
+                    )}
+                  </button>
                 </>
               )}
-            </button>
-          </form>
 
-          {/* Selector de Alternancia Login/Registro */}
-          <div className="pt-2 text-center text-xs text-slate-400">
-            {isRegister ? (
-              <span>
-                {t('auth.switch_to_login', '¿Ya tienes una cuenta? Inicia sesión')}{' '}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsForgotPassword(false);
+                  setErrorMessage(null);
+                  setResetSuccessMessage(null);
+                }}
+                className="w-full py-2 text-xs text-slate-300 hover:text-white font-bold text-center block mt-2 cursor-pointer hover:underline"
+              >
+                ← Volver al Inicio de Sesión
+              </button>
+            </form>
+          ) : (
+            <>
+              {/* Botón de Google */}
+              <button
+                id="google-signin-btn"
+                type="button"
+                onClick={handleGoogleSignIn}
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-3 py-2.5 px-4 bg-[#161F30] border border-slate-700/80 hover:bg-[#1C283E] text-slate-200 font-bold text-sm rounded-xl shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.14z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.35 24 12 24z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.97 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.35 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                  />
+                </svg>
+                {t('auth.google_btn', 'Continuar con Google')}
+              </button>
+
+              <div className="flex items-center gap-3">
+                <div className="flex-1 border-t border-slate-800"></div>
+                <span className="text-xs text-slate-400 font-bold uppercase tracking-wider font-sports">{t('auth.or_email', 'o con correo')}</span>
+                <div className="flex-1 border-t border-slate-800"></div>
+              </div>
+
+              <form onSubmit={handleEmailSubmit} className="space-y-3">
+                {isRegister && (
+                  <div>
+                    <label className="block text-xs font-black text-slate-300 mb-1 font-sports uppercase tracking-wider">
+                      {t('auth.name', 'Nombre completo')}
+                    </label>
+                    <div className="relative">
+                      <User className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                      <input
+                        type="text"
+                        required
+                        value={displayName}
+                        onChange={(e) => setDisplayName(e.target.value)}
+                        placeholder={t('auth.name_placeholder', 'Ej. Carlos Mendoza')}
+                        className="w-full pl-9 pr-3 py-2 bg-[#131A28] border border-slate-700 text-white placeholder-slate-500 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-red-500 focus:border-red-500 font-medium"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-black text-slate-300 mb-1 font-sports uppercase tracking-wider">
+                    {t('auth.email', 'Correo electrónico')}
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                    <input
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder={t('auth.email_placeholder', 'ejemplo@correo.com')}
+                      className="w-full pl-9 pr-3 py-2 bg-[#131A28] border border-slate-700 text-white placeholder-slate-500 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-red-500 focus:border-red-500 font-medium"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-black text-slate-300 font-sports uppercase tracking-wider">
+                      {t('auth.password', 'Contraseña')}
+                    </label>
+                    {!isRegister && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsForgotPassword(true);
+                          setErrorMessage(null);
+                          setResetSuccessMessage(null);
+                        }}
+                        className="text-[11px] text-amber-400 hover:text-amber-300 font-bold hover:underline cursor-pointer"
+                      >
+                        ¿Olvidaste tu contraseña?
+                      </button>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                    <input
+                      type="password"
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full pl-9 pr-3 py-2 bg-[#131A28] border border-slate-700 text-white placeholder-slate-500 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-red-500 focus:border-red-500 font-medium"
+                    />
+                  </div>
+                </div>
+
                 <button
-                  type="button"
-                  onClick={() => {
-                    setIsRegister(false);
-                    setErrorMessage(null);
-                  }}
-                  className="text-red-400 font-bold hover:underline cursor-pointer"
+                  id="submit-auth-btn"
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-2.5 px-4 bg-red-600 hover:bg-red-500 text-white font-black text-sm uppercase tracking-wider rounded-xl shadow-md shadow-red-950/40 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 mt-2 cursor-pointer active:scale-98 font-sports border border-red-500/40"
                 >
-                  {t('auth.title_login', 'Iniciar sesión')}
+                  {loading ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : isRegister ? (
+                    <>
+                      <UserPlus className="w-4 h-4" /> {t('auth.submit_register', 'Registrarme')}
+                    </>
+                  ) : (
+                    <>
+                      <LogIn className="w-4 h-4" /> {t('auth.submit_login', 'Iniciar Sesión')}
+                    </>
+                  )}
                 </button>
-              </span>
-            ) : (
-              <span>
-                {t('auth.switch_to_register', '¿No tienes cuenta todavía? Regístrate aquí')}{' '}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsRegister(true);
-                    setErrorMessage(null);
-                  }}
-                  className="text-red-400 font-bold hover:underline cursor-pointer"
-                >
-                  {t('auth.submit_register', 'Regístrate aquí')}
-                </button>
-              </span>
-            )}
-          </div>
+              </form>
+
+              {/* Selector de Alternancia Login/Registro */}
+              <div className="pt-2 text-center text-xs text-slate-400">
+                {isRegister ? (
+                  <span>
+                    {t('auth.switch_to_login', '¿Ya tienes una cuenta? Inicia sesión')}{' '}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsRegister(false);
+                        setErrorMessage(null);
+                      }}
+                      className="text-red-400 font-bold hover:underline cursor-pointer"
+                    >
+                      {t('auth.title_login', 'Iniciar sesión')}
+                    </button>
+                  </span>
+                ) : (
+                  <span>
+                    {t('auth.switch_to_register', '¿No tienes cuenta todavía? Regístrate aquí')}{' '}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsRegister(true);
+                        setErrorMessage(null);
+                      }}
+                      className="text-red-400 font-bold hover:underline cursor-pointer"
+                    >
+                      {t('auth.submit_register', 'Regístrate aquí')}
+                    </button>
+                  </span>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

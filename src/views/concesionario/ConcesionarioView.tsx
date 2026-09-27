@@ -18,7 +18,9 @@ import {
 import {
   listenToStandFoodOrders,
   advanceFoodOrderStatus,
+  assignRunnerToOrder,
 } from '../../lib/foodOrders';
+import { getRunnersForStand } from '../../lib/auth';
 import {
   getActiveOrderingEvent,
   getNextUpcomingEvent,
@@ -52,6 +54,7 @@ import {
   Flame,
   Calendar,
   AlertTriangle,
+  Bike,
 } from 'lucide-react';
 
 const PRESET_FOOD_IMAGES = [
@@ -105,11 +108,34 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
   const [selectedStand, setSelectedStand] = useState<StadiumStand | null>(null);
   const [activeTab, setActiveTab] = useState<'comanda' | 'menu'>('comanda');
 
-  // Comanda en tiempo real
+  // Comanda en tiempo real y runners del negocio
   const [orders, setOrders] = useState<FoodOrder[]>([]);
+  const [runners, setRunners] = useState<UserProfile[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (selectedStand) {
+      getRunnersForStand(selectedStand.id, user.venueId)
+        .then((list) => setRunners(list))
+        .catch(() => {});
+    }
+  }, [selectedStand, user.venueId]);
+
+  const handleAssignRunner = async (orderId: string, runnerUid: string) => {
+    setActionLoading(orderId);
+    try {
+      const selectedRunner = runners.find((r) => r.uid === runnerUid);
+      const runnerName = selectedRunner?.displayName || 'Runner';
+      await assignRunnerToOrder(orderId, runnerUid, runnerName);
+    } catch (err: any) {
+      console.error('Error asignando runner:', err);
+      alert(err.message || 'No se pudo asignar el runner a la orden');
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   // Filtros de menú
   const [menuSearch, setMenuSearch] = useState('');
@@ -619,6 +645,41 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
                           <span className="text-[10px] text-slate-400">Retiro Express en mostrador</span>
                         )}
                       </div>
+
+                      {/* Selector de Runner para Entregas a Butaca */}
+                      {order.orderType === 'in-seat' && !isDelivered && (
+                        <div className="bg-[#0A0E17] p-2.5 rounded-xl border border-blue-500/40 space-y-1.5 mt-2">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="font-black text-blue-400 font-sports flex items-center gap-1.5 uppercase">
+                              <Bike className="w-3.5 h-3.5 text-blue-400" /> Asignar Runner de Entrega:
+                            </span>
+                            {order.runnerId && (
+                              <span className="text-[10px] font-black text-emerald-400 bg-emerald-950/90 px-2 py-0.5 rounded border border-emerald-500/50 uppercase">
+                                ✓ {order.runnerName || 'Asignado'}
+                              </span>
+                            )}
+                          </div>
+
+                          <select
+                            id={`select-runner-${order.id}`}
+                            value={order.runnerId || ''}
+                            onChange={(e) => handleAssignRunner(order.id, e.target.value)}
+                            disabled={actionLoading === order.id}
+                            className="w-full px-3 py-2 bg-[#141C2E] border border-blue-800/70 text-white rounded-xl text-xs font-bold focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-sm font-sans"
+                          >
+                            <option value="">-- Asignar Runner para Despacho --</option>
+                            {runners.length === 0 ? (
+                              <option value="" disabled>No hay runners asignados a este negocio</option>
+                            ) : (
+                              runners.map((r) => (
+                                <option key={r.uid} value={r.uid}>
+                                  🚴 {r.displayName || 'Runner'} {r.runnerStatus ? `(${r.runnerStatus})` : ''}
+                                </option>
+                              ))
+                            )}
+                          </select>
+                        </div>
+                      )}
 
                       {/* Lista de platillos */}
                       <div className="mt-3 bg-[#0A0E17]/90 p-2.5 rounded-xl border border-slate-800 space-y-1.5 text-xs">

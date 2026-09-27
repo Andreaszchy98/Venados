@@ -287,3 +287,57 @@ export async function deliverInSeatOrder(
     handleFirestoreError(err, OperationType.UPDATE, `${COLLECTION_NAME}/${orderId}`);
   }
 }
+
+/**
+ * Concesionario asigna o reasigna explícitamente un runner a una orden de entrega
+ */
+export async function assignRunnerToOrder(
+  orderId: string,
+  runnerId: string,
+  runnerName: string
+): Promise<void> {
+  const now = new Date().toISOString();
+  try {
+    const docRef = doc(db, COLLECTION_NAME, orderId);
+    const snap = await getDoc(docRef);
+    if (!snap.exists()) throw new Error('Orden no encontrada');
+
+    const data = snap.data() as FoodOrder;
+    const history = data.statusHistory || [];
+    
+    // Si la orden estaba en preparando o pendiente, pasa a 'en-camino' con el runner asignado
+    const newStatus = data.status === 'entregado' ? 'entregado' : 'en-camino';
+
+    history.push({
+      status: newStatus,
+      timestamp: now,
+      note: runnerId ? `Asignado por el concesionario al runner ${runnerName}` : 'Runner desasignado por el negocio',
+    });
+
+    await updateDoc(docRef, {
+      status: newStatus,
+      runnerId: runnerId || null,
+      statusHistory: history,
+      updatedAt: now,
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `${COLLECTION_NAME}/${orderId}`);
+  }
+}
+export async function collectOrderPayment(
+  orderId: string,
+  method: 'efectivo' | 'terminal' = 'efectivo'
+): Promise<void> {
+  const now = new Date().toISOString();
+  try {
+    const docRef = doc(db, COLLECTION_NAME, orderId);
+    await updateDoc(docRef, {
+      paymentStatus: 'pagado',
+      paymentMethod: method === 'terminal' ? 'terminal_pos' : 'efectivo',
+      paidAt: now,
+      updatedAt: now,
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `${COLLECTION_NAME}/${orderId}`);
+  }
+}

@@ -10,6 +10,7 @@ interface TeodoroMariscalStadiumMapProps {
   onSelectSection: (sectionNumber: string, zoneName?: string) => void;
   event?: VenueEvent | null;
   soldOutSectionsSet?: Set<string>;
+  highlightOnlyActiveSection?: boolean;
 }
 
 interface SectorDef {
@@ -246,6 +247,7 @@ const TeodoroMariscalStadiumMapComponent = React.memo<TeodoroMariscalStadiumMapP
   onSelectSection,
   event,
   soldOutSectionsSet,
+  highlightOnlyActiveSection = false,
 }) => {
   const [hoveredSection, setHoveredSection] = useState<string | null>(null);
   const [zoomLevel, setZoomLevel] = useState<number>(1);
@@ -255,12 +257,39 @@ const TeodoroMariscalStadiumMapComponent = React.memo<TeodoroMariscalStadiumMapP
   const CX = 500;
   const CY = 480;
 
-  const isDimmed = (zoneName: string) => {
-    if (!activeZoneFilter || activeZoneFilter === 'Todas') return false;
-    return activeZoneFilter !== zoneName;
+  const isSelected = (secNumber: string) => {
+    if (!activeSectionNumber) return false;
+
+    const activeRaw = activeSectionNumber.toString().trim().toLowerCase();
+    const secRaw = secNumber.toString().trim().toLowerCase();
+
+    // 1. Coincidencia exacta directa
+    if (activeRaw === secRaw) return true;
+
+    // 2. Extraer dígitos numéricos si existen (evita que "310" incluya falsamente a "10", "3" o "1")
+    const activeDigits = activeRaw.match(/\d+/g);
+    const secDigits = secRaw.match(/\d+/g);
+
+    if (activeDigits && secDigits) {
+      const lastActiveNum = activeDigits[activeDigits.length - 1];
+      const lastSecNum = secDigits[secDigits.length - 1];
+      return lastActiveNum === lastSecNum;
+    }
+
+    // 3. Comparación limpia para nombres no numéricos sin prefijos
+    const cleanActive = activeRaw.replace(/^(sky\s+plus\s*-\s*|secci[oó]n\s*:?\s*|sec\.?\s*)/gi, '').trim();
+    const cleanSec = secRaw.replace(/^(secci[oó]n\s*:?\s*|sec\.?\s*)/gi, '').trim();
+
+    return cleanActive === cleanSec;
   };
 
-  const isSelected = (secNumber: string) => activeSectionNumber === secNumber;
+  const isDimmed = (secNumber: string, zoneName: string) => {
+    if (highlightOnlyActiveSection && activeSectionNumber && activeSectionNumber.trim()) {
+      return !isSelected(secNumber);
+    }
+    if (!activeZoneFilter || activeZoneFilter === 'Todas' || activeZoneFilter === 'todos') return false;
+    return activeZoneFilter !== zoneName;
+  };
 
   // Mapa de secciones para rápido acceso
   const sectionMetaMap = useMemo(() => {
@@ -453,7 +482,7 @@ const TeodoroMariscalStadiumMapComponent = React.memo<TeodoroMariscalStadiumMapP
 
                 const selected = isSelected(sec.num);
                 const hovered = hoveredSection === sec.num;
-                const dimmed = isDimmed(sec.zone);
+                const dimmed = isDimmed(sec.num, sec.zone);
                 const price = getZonePrice(sec.zone, event);
                 const isSoldOut = soldOutSectionsSet ? (soldOutSectionsSet.has(sec.num) || soldOutSectionsSet.has(sec.num.toLowerCase())) : false;
 
