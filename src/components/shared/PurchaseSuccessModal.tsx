@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Ticket, FoodOrder, MerchOrder } from '../../types';
 import { CinemaTicketSummary } from './CinemaTicketSummary';
 import { QRCodeDisplay } from './QRCodeDisplay';
@@ -22,6 +22,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Receipt,
+  Store,
 } from 'lucide-react';
 
 export type PurchaseSuccessType = 'ticket' | 'food' | 'merch';
@@ -35,6 +36,7 @@ interface PurchaseSuccessModalProps {
   onNavigateToTickets?: () => void;
   // Para comida
   foodOrder?: FoodOrder;
+  foodOrders?: FoodOrder[];
   onNavigateToOrders?: () => void;
   // Para tienda
   merchOrder?: MerchOrder;
@@ -51,6 +53,7 @@ export const PurchaseSuccessModal: React.FC<PurchaseSuccessModalProps> = ({
   tickets = [],
   onNavigateToTickets,
   foodOrder,
+  foodOrders,
   onNavigateToOrders,
   merchOrder,
   storeName,
@@ -59,7 +62,16 @@ export const PurchaseSuccessModal: React.FC<PurchaseSuccessModalProps> = ({
 }) => {
   const { theme } = useTheme();
   const [selectedTicketIndex, setSelectedTicketIndex] = useState(0);
+  const [selectedFoodOrderIndex, setSelectedFoodOrderIndex] = useState(0);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const allFoodOrders: FoodOrder[] = useMemo(() => {
+    if (foodOrders && foodOrders.length > 0) return foodOrders;
+    if (foodOrder) return [foodOrder];
+    return [];
+  }, [foodOrders, foodOrder]);
+
+  const activeFoodOrder = allFoodOrders[selectedFoodOrderIndex] || allFoodOrders[0] || foodOrder;
 
   if (!isOpen) return null;
 
@@ -85,18 +97,20 @@ export const PurchaseSuccessModal: React.FC<PurchaseSuccessModalProps> = ({
 
   // Acciones para orden de comida
   const handleShareFood = async () => {
-    if (!foodOrder) return;
-    const itemsText = foodOrder.items.map((i) => `• ${i.quantity}x ${i.name}`).join('\n');
-    const shareText = `¡Pedido de Comida Confirmado!\nStand: ${foodOrder.standName}\nCódigo de Retiro: ${foodOrder.pickupCode}\nTipo: ${
-      foodOrder.orderType === 'in-seat'
-        ? `Entrega a Butaca (Sec. ${foodOrder.section || 'General'}, Fila ${foodOrder.row || '-'}, Asiento ${foodOrder.seat || '-'})`
+    if (!activeFoodOrder) return;
+    const itemsText = activeFoodOrder.items.map((i) => `• ${i.quantity}x ${i.name}`).join('\n');
+    const shareText = `¡Pedido de Comida Confirmado!\nStand: ${activeFoodOrder.standName}\nCódigo de Retiro: ${activeFoodOrder.pickupCode}\nTipo: ${
+      activeFoodOrder.orderType === 'in-seat'
+        ? `Entrega a Butaca (Sec. ${activeFoodOrder.section || 'General'}, Fila ${activeFoodOrder.row || '-'}, Asiento ${activeFoodOrder.seat || '-'})`
         : 'Pick Up Express en Barra'
-    }\nTotal: $${foodOrder.total} MXN\n\nArtículos:\n${itemsText}`;
+    }\nTotal: $${activeFoodOrder.total} MXN\n\nArtículos:\n${itemsText}${
+      allFoodOrders.length > 1 ? `\n(Comanda ${selectedFoodOrderIndex + 1} de ${allFoodOrders.length} del pedido multi-negocio)` : ''
+    }`;
 
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
         await navigator.share({
-          title: `Pedido ${foodOrder.pickupCode} — ${foodOrder.standName}`,
+          title: `Pedido ${activeFoodOrder.pickupCode} — ${activeFoodOrder.standName}`,
           text: shareText,
         });
         showToast('¡Pedido compartido con éxito!');
@@ -109,40 +123,42 @@ export const PurchaseSuccessModal: React.FC<PurchaseSuccessModalProps> = ({
   };
 
   const handleDownloadFood = () => {
-    if (!foodOrder) return;
-    const itemsText = foodOrder.items
-      .map((i) => `  ${i.quantity}x ${i.name.padEnd(25, ' ')} $${(i.price * i.quantity).toFixed(2)} MXN`)
-      .join('\n');
+    if (!activeFoodOrder) return;
+    const allOrdersText = allFoodOrders.length > 1
+      ? allFoodOrders
+          .map((ord, idx) => {
+            const itText = ord.items
+              .map((i) => `    ${i.quantity}x ${i.name.padEnd(23, ' ')} $${(i.price * i.quantity).toFixed(2)} MXN`)
+              .join('\n');
+            return `--- COMANDA #${idx + 1}: ${ord.standName} (${ord.pickupCode}) ---\nSubtotal Negocio: $${ord.total} MXN\nModalidad: ${ord.orderType === 'in-seat' ? `Entrega Butaca (Sec. ${ord.section}, Fila ${ord.row}, As. ${ord.seat})` : 'Pickup en Mostrador'}\nArtículos:\n${itText}`;
+          })
+          .join('\n\n')
+      : activeFoodOrder.items
+          .map((i) => `  ${i.quantity}x ${i.name.padEnd(25, ' ')} $${(i.price * i.quantity).toFixed(2)} MXN`)
+          .join('\n');
+
+    const totalDivided = allFoodOrders.reduce((s, o) => s + o.total, 0);
 
     const content = `
 ========================================
      COMPROBANTE OFICIAL DE CONSUMO
           ESTADIO DEPORTIVO
 ========================================
-Stand:       ${foodOrder.standName}
-Código:      ${foodOrder.pickupCode}
-Modalidad:   ${
-      foodOrder.orderType === 'in-seat'
-        ? `Entrega a Butaca (Sec. ${foodOrder.section}, Fila ${foodOrder.row}, As. ${foodOrder.seat})`
-        : 'Pick Up Express en Barra'
-    }
-Cliente:     ${foodOrder.customerName}
+${allFoodOrders.length > 1 ? `PEDIDO MULTI-NEGOCIO (${allFoodOrders.length} COMANDAS)\nTotal Consolidado Pagado: $${totalDivided} MXN\n` : `Stand:       ${activeFoodOrder.standName}\nCódigo:      ${activeFoodOrder.pickupCode}\n`}Cliente:     ${activeFoodOrder.customerName}
 ----------------------------------------
-Artículos:
-${itemsText}
+${allOrdersText}
 ----------------------------------------
-Total:       $${foodOrder.total} MXN
-Pago:        ${foodOrder.paymentMethod}
+Pago:        ${activeFoodOrder.paymentMethod}
 Estado:      PAGO CONFIRMADO (STRIPE SSL)
-Ref ID:      ${foodOrder.id}
+Fecha:       ${new Date().toLocaleString('es-MX')}
 ========================================
-Presenta este código en el stand o al runner.
+Presenta cada código en el stand correspondiente o al runner.
 `;
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Comprobante-Comida-${foodOrder.pickupCode}.txt`;
+    link.download = `Comprobante-Comida-${activeFoodOrder.pickupCode}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -253,7 +269,9 @@ Conserva este comprobante para seguimiento o retiro.
         ? '¡Tus Boletos Están Listos!'
         : '¡Tu Boleto Está Listo!'
       : type === 'food'
-      ? '¡Tu Pedido de Comida Está Listo!'
+      ? allFoodOrders.length > 1
+        ? `¡Tus ${allFoodOrders.length} Pedidos Están Confirmados!`
+        : '¡Tu Pedido de Comida Está Listo!'
       : '¡Tu Compra de Tienda Está Confirmada!');
 
   const modalSubtitle =
@@ -261,8 +279,12 @@ Conserva este comprobante para seguimiento o retiro.
     (type === 'ticket'
       ? 'Presenta este resumen de acceso digital en el molinete de ingreso al estadio.'
       : type === 'food'
-      ? foodOrder?.orderType === 'in-seat'
-        ? 'Llevaremos tu pedido directamente a tu asiento durante el evento.'
+      ? activeFoodOrder?.orderType === 'in-seat'
+        ? allFoodOrders.length > 1
+          ? 'Llevaremos cada orden a tu butaca. El pago único fue distribuido entre tus negocios seleccionados.'
+          : 'Llevaremos tu pedido directamente a tu asiento durante el evento.'
+        : allFoodOrders.length > 1
+        ? 'Se generó un código de retiro independiente para cada negocio. Muestra el código respectivo al llegar al mostrador.'
         : 'Muestra este código al llegar a la barra express para retirar tu pedido.'
       : merchOrder?.shippingType === 'domicilio'
       ? 'Hemos recibido tu orden y estamos preparando el envío a tu domicilio.'
@@ -383,7 +405,7 @@ Conserva este comprobante para seguimiento o retiro.
           {/* ======================================================== */}
           {/* CASO 2: PEDIDO DE COMIDA Y BEBIDAS                       */}
           {/* ======================================================== */}
-          {type === 'food' && foodOrder && (
+          {type === 'food' && activeFoodOrder && (
             <div
               id="food-receipt-card"
               className={`rounded-3xl shadow-2xl border overflow-hidden ${
@@ -392,6 +414,46 @@ Conserva este comprobante para seguimiento o retiro.
                   : 'bg-[#0B111E] text-white border-slate-800'
               }`}
             >
+              {/* Barra de pestañas si hay múltiples comandas generadas por negocio */}
+              {allFoodOrders.length > 1 && (
+                <div className={`p-3 border-b text-xs ${
+                  theme === 'light' ? 'bg-amber-500/10 border-slate-200' : 'bg-slate-900/90 border-slate-800'
+                }`}>
+                  <div className="flex items-center justify-between font-sports font-bold mb-2">
+                    <span className="text-amber-500 flex items-center gap-1.5 uppercase tracking-wide text-[11px]">
+                      <Store className="w-3.5 h-3.5" />
+                      {allFoodOrders.length} Comandas Generadas • Puesto {selectedFoodOrderIndex + 1} de {allFoodOrders.length}
+                    </span>
+                    <span className={`text-[11px] font-scoreboard ${theme === 'light' ? 'text-slate-800 font-bold' : 'text-slate-200'}`}>
+                      Total Pagado: ${allFoodOrders.reduce((sum, o) => sum + o.total, 0).toLocaleString('es-MX')} MXN
+                    </span>
+                  </div>
+                  <div className="flex gap-2 overflow-x-auto no-scrollbar pb-0.5">
+                    {allFoodOrders.map((ord, idx) => (
+                      <button
+                        key={ord.id}
+                        type="button"
+                        onClick={() => setSelectedFoodOrderIndex(idx)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-sports font-bold tracking-wide transition-all border shrink-0 flex items-center gap-2 cursor-pointer ${
+                          selectedFoodOrderIndex === idx
+                            ? 'bg-red-600 text-white border-red-500 shadow-md font-black ring-2 ring-red-500/30'
+                            : theme === 'light'
+                            ? 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'
+                            : 'bg-[#141C2E] border-slate-700 text-slate-300 hover:bg-[#1A2438]'
+                        }`}
+                      >
+                        <span className="truncate max-w-[130px]">{ord.standName}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${
+                          selectedFoodOrderIndex === idx ? 'bg-black/30 text-white' : 'bg-slate-200 dark:bg-slate-800 text-emerald-600 dark:text-emerald-400'
+                        }`}>
+                          ${ord.total}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Cabecera del pedido */}
               <div className="p-5 pb-3 text-center relative bg-gradient-to-b from-amber-600/15 via-transparent to-transparent">
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-500 text-[10px] font-black uppercase tracking-wider font-sports mb-2">
@@ -402,17 +464,17 @@ Conserva este comprobante para seguimiento o retiro.
                 <h3 className={`text-xl sm:text-2xl font-black font-sports tracking-wide leading-tight px-2 ${
                   theme === 'light' ? 'text-slate-950' : 'text-white'
                 }`}>
-                  {foodOrder.standName || 'Stand Estadio Teodoro Mariscal'}
+                  {activeFoodOrder.standName || 'Stand Estadio Teodoro Mariscal'}
                 </h3>
                 <div className="mt-1 flex items-center justify-center gap-2">
                   <span
                     className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                      foodOrder.orderType === 'in-seat'
+                      activeFoodOrder.orderType === 'in-seat'
                         ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
                         : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                     }`}
                   >
-                    {foodOrder.orderType === 'in-seat' ? (
+                    {activeFoodOrder.orderType === 'in-seat' ? (
                       <>
                         <Armchair className="w-3 h-3" />
                         <span>Entrega Directa a Butaca</span>
@@ -430,9 +492,9 @@ Conserva este comprobante para seguimiento o retiro.
                 <div className="mt-4 flex flex-col items-center justify-center">
                   <div className="p-3 bg-white rounded-2xl shadow-xl border border-slate-200 inline-block">
                     <QRCodeDisplay
-                      value={`FOOD:${foodOrder.pickupCode || foodOrder.id}`}
+                      value={`FOOD:${activeFoodOrder.pickupCode || activeFoodOrder.id}`}
                       size={135}
-                      alt={`QR Pedido ${foodOrder.pickupCode}`}
+                      alt={`QR Pedido ${activeFoodOrder.pickupCode}`}
                     />
                   </div>
                   <div className="mt-3 text-center">
@@ -441,12 +503,12 @@ Conserva este comprobante para seguimiento o retiro.
                         ? 'bg-slate-200 text-amber-600 border-slate-300'
                         : 'bg-slate-900/90 text-amber-400 border-slate-800'
                     }`}>
-                      {foodOrder.pickupCode || foodOrder.id.slice(-6).toUpperCase()}
+                      {activeFoodOrder.pickupCode || activeFoodOrder.id.slice(-6).toUpperCase()}
                     </span>
                     <p className={`text-[10px] uppercase tracking-wider font-bold mt-1.5 ${
                       theme === 'light' ? 'text-slate-600' : 'text-slate-400'
                     }`}>
-                      {foodOrder.orderType === 'in-seat'
+                      {activeFoodOrder.orderType === 'in-seat'
                         ? 'Muestra este código al Runner que lleve tu orden'
                         : 'Muestra este código en la barra express para retirar'}
                     </p>
@@ -470,7 +532,7 @@ Conserva este comprobante para seguimiento o retiro.
               {/* Contenido inferior */}
               <div className="p-5 pt-3 space-y-4">
                 {/* Punto de entrega / Butaca */}
-                {foodOrder.orderType === 'in-seat' ? (
+                {activeFoodOrder.orderType === 'in-seat' ? (
                   <div>
                     <span className={`text-[10px] uppercase font-black tracking-wider block font-sports mb-1 ${
                       theme === 'light' ? 'text-slate-600' : 'text-slate-400'
@@ -486,7 +548,7 @@ Conserva este comprobante para seguimiento o retiro.
                         }`}>
                           Sección
                         </span>
-                        <span className={`font-black ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>{foodOrder.section || '-'}</span>
+                        <span className={`font-black ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>{activeFoodOrder.section || '-'}</span>
                       </div>
                       <div className={`border-x ${theme === 'light' ? 'border-slate-200' : 'border-slate-800'}`}>
                         <span className={`text-[9px] block uppercase font-sports ${
@@ -495,7 +557,7 @@ Conserva este comprobante para seguimiento o retiro.
                           Fila
                         </span>
                         <span className="font-mono font-bold text-amber-500">
-                          {foodOrder.row || '-'}
+                          {activeFoodOrder.row || '-'}
                         </span>
                       </div>
                       <div>
@@ -505,7 +567,7 @@ Conserva este comprobante para seguimiento o retiro.
                           Butaca
                         </span>
                         <span className="font-mono font-bold text-red-500">
-                          {foodOrder.seat || '-'}
+                          {activeFoodOrder.seat || '-'}
                         </span>
                       </div>
                     </div>
@@ -522,24 +584,24 @@ Conserva este comprobante para seguimiento o retiro.
                         Punto de Retiro
                       </span>
                       <strong className={theme === 'light' ? 'text-slate-900' : 'text-white'}>
-                        Barra Express de {foodOrder.standName || 'Concesión'}
+                        Barra Express de {activeFoodOrder.standName || 'Concesión'}
                       </strong>
                     </div>
                   </div>
                 )}
 
-                {/* Desglose de platillos */}
+                {/* Desglose de platillos de esta comanda */}
                 <div>
                   <span className={`text-[10px] uppercase font-black tracking-wider block font-sports mb-1.5 ${
                     theme === 'light' ? 'text-slate-600' : 'text-slate-400'
                   }`}>
-                    Detalle del Pedido ({foodOrder.items.reduce((s, i) => s + i.quantity, 0)}{' '}
+                    Detalle de Comanda ({activeFoodOrder.items.reduce((s, i) => s + i.quantity, 0)}{' '}
                     artículos)
                   </span>
                   <div className={`max-h-36 overflow-y-auto custom-scrollbar space-y-1.5 p-2.5 rounded-xl border text-xs ${
                     theme === 'light' ? 'bg-white border-slate-200 shadow-xs' : 'bg-[#121929] border-slate-800'
                   }`}>
-                    {foodOrder.items.map((item, idx) => (
+                    {activeFoodOrder.items.map((item, idx) => (
                       <div key={idx} className={`flex items-center justify-between ${
                         theme === 'light' ? 'text-slate-900 font-semibold' : 'text-slate-300'
                       }`}>
@@ -587,21 +649,33 @@ Conserva este comprobante para seguimiento o retiro.
                   </button>
                 </div>
 
-                {/* Total y método */}
-                <div className={`p-2.5 rounded-xl border flex items-center justify-between text-xs ${
+                {/* Total de este puesto y desglose multi-orden */}
+                <div className={`p-3 rounded-xl border space-y-1.5 text-xs ${
                   theme === 'light' ? 'bg-emerald-50 border-emerald-200 text-slate-900 shadow-xs' : 'bg-[#080D18] border-slate-800'
                 }`}>
-                  <span className={theme === 'light' ? 'text-slate-700 font-bold' : 'text-slate-400'}>Total Pagado:</span>
-                  <strong className="text-emerald-600 font-black text-base font-mono">
-                    ${foodOrder.total.toLocaleString('es-MX')} MXN
-                  </strong>
+                  <div className="flex items-center justify-between">
+                    <span className={theme === 'light' ? 'text-slate-700 font-bold' : 'text-slate-400'}>
+                      Monto Asignado a {activeFoodOrder.standName}:
+                    </span>
+                    <strong className="text-emerald-600 font-black text-base font-mono">
+                      ${activeFoodOrder.total.toLocaleString('es-MX')} MXN
+                    </strong>
+                  </div>
+                  {allFoodOrders.length > 1 && (
+                    <div className="pt-1 border-t border-emerald-500/20 flex items-center justify-between text-[11px] text-slate-500">
+                      <span>Total de la Transacción Unificada ({allFoodOrders.length} negocios):</span>
+                      <span className="font-bold text-slate-900 dark:text-slate-200 font-mono">
+                        ${allFoodOrders.reduce((sum, o) => sum + o.total, 0).toLocaleString('es-MX')} MXN
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Pie de seguridad */}
                 <div className={`flex items-center justify-between text-[10px] pt-0.5 ${
                   theme === 'light' ? 'text-slate-500 font-medium' : 'text-slate-500'
                 }`}>
-                  <span>Ref: #{foodOrder.id.slice(-8).toUpperCase()}</span>
+                  <span>Ref: #{activeFoodOrder.id.slice(-8).toUpperCase()}</span>
                   <span className="inline-flex items-center gap-1 text-emerald-600 font-medium">
                     <ShieldCheck className="w-3 h-3" />
                     Autenticado por Stripe

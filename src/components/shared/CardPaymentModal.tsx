@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   CreditCard,
   Lock,
@@ -23,7 +23,7 @@ export interface CardPaymentModalProps {
   orderType: 'boletos' | 'tienda' | 'comida';
   metadata?: Record<string, string>;
   externalSessionUrl?: string | null;
-  onSuccess: (result: DirectPaymentResult) => void;
+  onSuccess: (result: DirectPaymentResult) => void | Promise<void>;
 }
 
 type CardBrand = 'visa' | 'mastercard' | 'amex' | 'generic';
@@ -48,7 +48,17 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
   const [cvc, setCvc] = useState('');
   const [zipCode, setZipCode] = useState('82000');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isCompleted, setIsCompleted] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Reiniciar estado cada vez que se abra el modal
+  useEffect(() => {
+    if (isOpen) {
+      setIsProcessing(false);
+      setIsCompleted(false);
+      setErrorMessage(null);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -110,6 +120,7 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isProcessing || isCompleted) return;
     setErrorMessage(null);
 
     const cleanNum = cardNumber.replace(/\D/g, '');
@@ -155,12 +166,14 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
         },
       });
 
-      setIsProcessing(false);
-      onSuccess(result);
+      // Pago autorizado: pasamos a estado completado y mantenemos el bloqueo para evitar segundo cobro
+      setIsCompleted(true);
+      await onSuccess(result);
     } catch (err: any) {
       console.error('Error procesando pago con tarjeta:', err);
       setErrorMessage(err.message || 'Error al procesar el pago. Por favor intenta de nuevo.');
       setIsProcessing(false);
+      setIsCompleted(false);
     }
   };
 
@@ -169,7 +182,7 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
       id="card-payment-modal"
       className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-fadeIn"
       onClick={(e) => {
-        if (e.target === e.currentTarget && !isProcessing) onClose();
+        if (e.target === e.currentTarget && !isProcessing && !isCompleted) onClose();
       }}
     >
       <div
@@ -200,8 +213,8 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              disabled={isProcessing}
-              className="p-1.5 rounded-full hover:bg-white/20 text-white/80 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
+              disabled={isProcessing || isCompleted}
+              className="p-1.5 rounded-full hover:bg-white/20 text-white/80 hover:text-white transition-colors cursor-pointer disabled:opacity-30 disabled:pointer-events-none disabled:cursor-not-allowed"
               title="Cerrar"
             >
               <X className="w-5 h-5" />
@@ -309,7 +322,8 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
             <button
               type="button"
               onClick={handleFillTestCard}
-              className="text-[11px] font-bold text-red-500 hover:text-red-400 flex items-center gap-1 cursor-pointer underline underline-offset-2"
+              disabled={isProcessing || isCompleted}
+              className="text-[11px] font-bold text-red-500 hover:text-red-400 flex items-center gap-1 cursor-pointer underline underline-offset-2 disabled:opacity-40 disabled:pointer-events-none"
             >
               <Sparkles className="w-3 h-3" />
               <span>Llenar tarjeta de prueba Stripe</span>
@@ -343,7 +357,7 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
                   placeholder="4242 4242 4242 4242"
                   value={cardNumber}
                   onChange={handleCardNumberChange}
-                  disabled={isProcessing}
+                  disabled={isProcessing || isCompleted}
                   required
                   className={`w-full pl-10 pr-4 py-2 rounded-xl border text-sm font-mono tracking-wider font-semibold focus:outline-hidden focus:ring-2 focus:ring-red-500 transition-all ${
                     theme === 'light'
@@ -370,7 +384,7 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
                 placeholder="Como aparece en la tarjeta"
                 value={cardHolder}
                 onChange={(e) => setCardHolder(e.target.value.toUpperCase())}
-                disabled={isProcessing}
+                disabled={isProcessing || isCompleted}
                 required
                 className={`w-full px-3.5 py-2 rounded-xl border text-xs sm:text-sm font-semibold tracking-wide uppercase focus:outline-hidden focus:ring-2 focus:ring-red-500 transition-all ${
                   theme === 'light'
@@ -397,7 +411,7 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
                   placeholder="MM/AA"
                   value={expiry}
                   onChange={handleExpiryChange}
-                  disabled={isProcessing}
+                  disabled={isProcessing || isCompleted}
                   required
                   className={`w-full px-2.5 py-2 rounded-xl border text-xs sm:text-sm font-mono text-center font-bold tracking-wider focus:outline-hidden focus:ring-2 focus:ring-red-500 transition-all ${
                     theme === 'light'
@@ -423,7 +437,7 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
                     placeholder="123"
                     value={cvc}
                     onChange={handleCvcChange}
-                    disabled={isProcessing}
+                    disabled={isProcessing || isCompleted}
                     required
                     className={`w-full pl-8 pr-2 py-2 rounded-xl border text-xs sm:text-sm font-mono text-center font-bold tracking-widest focus:outline-hidden focus:ring-2 focus:ring-red-500 transition-all ${
                       theme === 'light'
@@ -450,7 +464,7 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
                   maxLength={5}
                   value={zipCode}
                   onChange={(e) => setZipCode(e.target.value.replace(/\D/g, '').slice(0, 5))}
-                  disabled={isProcessing}
+                  disabled={isProcessing || isCompleted}
                   required
                   className={`w-full px-2.5 py-2 rounded-xl border text-xs sm:text-sm font-mono text-center font-bold tracking-wider focus:outline-hidden focus:ring-2 focus:ring-red-500 transition-all ${
                     theme === 'light'
@@ -473,17 +487,44 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
               <span>Tus datos viajan tokenizados y encriptados de extremo a extremo conforme a PCI-DSS.</span>
             </div>
 
+            {/* Aviso informativo mientras se procesa y se crea la orden */}
+            {(isProcessing || isCompleted) && (
+              <div
+                className={`p-3 rounded-xl border text-center space-y-1 animate-in fade-in duration-200 text-xs font-sans ${
+                  theme === 'light'
+                    ? 'bg-amber-50/90 border-amber-300 text-amber-950'
+                    : 'bg-amber-950/40 border-amber-500/40 text-amber-200'
+                }`}
+              >
+                <p className="font-bold flex items-center justify-center gap-2 text-xs">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping shrink-0" />
+                  <span>{isCompleted ? 'Finalizando orden en el sistema...' : 'Transacción bancaria en proceso...'}</span>
+                </p>
+                <p className="text-[11px] opacity-85 leading-relaxed">
+                  Por favor espera un momento sin cerrar esta ventana. Tu comprobante oficial aparecerá automáticamente en pantalla.
+                </p>
+              </div>
+            )}
+
             {/* Botón de Confirmación de Pago */}
             <div className="pt-2 space-y-2">
               <button
                 type="submit"
-                disabled={isProcessing}
-                className="w-full py-3 px-4 bg-red-600 hover:bg-red-500 active:bg-red-700 disabled:opacity-50 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider"
+                disabled={isProcessing || isCompleted}
+                className={`w-full py-3.5 px-4 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 uppercase tracking-wider ${
+                  isProcessing || isCompleted
+                    ? 'opacity-65 cursor-not-allowed pointer-events-none shadow-none ring-2 ring-red-400/40'
+                    : 'cursor-pointer active:scale-98'
+                }`}
               >
-                {isProcessing ? (
+                {isProcessing || isCompleted ? (
                   <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Autorizando pago seguro...</span>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                    <span>
+                      {isCompleted
+                        ? 'Generando orden de compra exitosa...'
+                        : 'Autorizando pago seguro...'}
+                    </span>
                   </>
                 ) : (
                   <>
@@ -493,7 +534,7 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
                 )}
               </button>
 
-              {externalSessionUrl && (
+              {externalSessionUrl && !isProcessing && !isCompleted && (
                 <button
                   type="button"
                   onClick={() => {
@@ -513,11 +554,13 @@ export const CardPaymentModal: React.FC<CardPaymentModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                disabled={isProcessing}
-                className={`w-full py-2 text-xs font-semibold rounded-xl transition-colors cursor-pointer ${
-                  theme === 'light'
-                    ? 'text-slate-500 hover:text-slate-800'
-                    : 'text-slate-400 hover:text-slate-200'
+                disabled={isProcessing || isCompleted}
+                className={`w-full py-2 text-xs font-semibold rounded-xl transition-colors ${
+                  isProcessing || isCompleted
+                    ? 'opacity-30 pointer-events-none cursor-not-allowed'
+                    : theme === 'light'
+                    ? 'text-slate-500 hover:text-slate-800 cursor-pointer'
+                    : 'text-slate-400 hover:text-slate-200 cursor-pointer'
                 }`}
               >
                 Cancelar y regresar

@@ -44,6 +44,7 @@ import {
   Armchair,
   Ticket as TicketIcon,
   ChevronRight,
+  ChevronDown,
   X,
   AlertCircle,
   Calendar,
@@ -51,6 +52,8 @@ import {
   CreditCard,
   ShieldCheck,
   Lock,
+  Trash2,
+  Maximize2,
 } from 'lucide-react';
 
 interface MenuStandProps {
@@ -60,6 +63,50 @@ interface MenuStandProps {
   onRequireAuth?: () => void;
 }
 
+interface StandCartItem {
+  item: MenuItem;
+  quantity: number;
+  standId?: string;
+  standName?: string;
+  standLocation?: string;
+}
+
+type CartsByStand = Record<string, StandCartItem[]>;
+
+const CARTS_STORAGE_KEY = 'vxp_food_carts_by_stand';
+const SELECTED_STAND_KEY = 'vxp_food_selected_stand_id';
+
+const loadCartsFromStorage = (): CartsByStand => {
+  try {
+    const raw = localStorage.getItem(CARTS_STORAGE_KEY) || sessionStorage.getItem(CARTS_STORAGE_KEY);
+    if (raw) {
+      return JSON.parse(raw);
+    }
+    // Migración retrocompatible del carrito plano previo
+    const legacy = sessionStorage.getItem('vxp_food_cart');
+    if (legacy) {
+      const parsedLegacy = JSON.parse(legacy);
+      if (Array.isArray(parsedLegacy) && parsedLegacy.length > 0) {
+        const standId = parsedLegacy[0]?.item?.standId || 'legacy';
+        return { [standId]: parsedLegacy };
+      }
+    }
+  } catch (e) {
+    console.warn('Error cargando carritos guardados por negocio:', e);
+  }
+  return {};
+};
+
+const saveCartsToStorage = (carts: CartsByStand) => {
+  try {
+    const serialized = JSON.stringify(carts);
+    localStorage.setItem(CARTS_STORAGE_KEY, serialized);
+    sessionStorage.setItem(CARTS_STORAGE_KEY, serialized);
+  } catch (e) {
+    console.warn('Error guardando carritos en storage:', e);
+  }
+};
+
 export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGoToTickets, onRequireAuth }) => {
   const { theme } = useTheme();
   const [stands, setStands] = useState<StadiumStand[]>([]);
@@ -67,17 +114,26 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [loadingStands, setLoadingStands] = useState(true);
   const [loadingMenu, setLoadingMenu] = useState(false);
-  const [cart, setCart] = useState<{ item: MenuItem; quantity: number }[]>(() => {
-    try {
-      const saved = sessionStorage.getItem('vxp_food_cart');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [previewDishImage, setPreviewDishImage] = useState<{
+    src: string;
+    title: string;
+    category?: string;
+    description?: string;
+    price?: number;
+  } | null>(null);
+  
+  // Carrito persistente indexado por standId
+  const [cartsByStand, setCartsByStand] = useState<CartsByStand>(loadCartsFromStorage);
+
+  // Carrito activo correspondiente al negocio actualmente seleccionado
+  const cart = useMemo(() => {
+    if (!selectedStand) return [];
+    return cartsByStand[selectedStand.id] || [];
+  }, [selectedStand, cartsByStand]);
+
   const [placingOrder, setPlacingOrder] = useState(false);
 
-  // Sincronizar carrito con sessionStorage para no perder progreso ante inicio de sesión
+  // Sincronizar carrito activo con sessionStorage para compatibilidad con redirecciones
   useEffect(() => {
     try {
       if (cart.length > 0) {
@@ -86,9 +142,17 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
         sessionStorage.removeItem('vxp_food_cart');
       }
     } catch (e) {
-      console.warn('Error guardando carrito de comida:', e);
+      console.warn('Error sincronizando carrito temporal:', e);
     }
   }, [cart]);
+
+  const handleSelectStand = (stand: StadiumStand) => {
+    setSelectedStand(stand);
+    try {
+      localStorage.setItem(SELECTED_STAND_KEY, stand.id);
+      sessionStorage.setItem(SELECTED_STAND_KEY, stand.id);
+    } catch {}
+  };
 
   useEffect(() => {
     try {
@@ -152,9 +216,9 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
   const [resolvedZone, setResolvedZone] = useState<Zone | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Éxito de orden
-  const [lastPlacedOrder, setLastPlacedOrder] = useState<{
-    code: string;
+  // Éxito de orden (soporta comandas de múltiples negocios)
+  interface PlacedOrdersSummary {
+    orders: FoodOrder[];
     type: OrderType;
     section?: string;
     row?: string;
@@ -165,13 +229,14 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
     cardBrand?: string;
     cardLast4?: string;
     authCode?: string;
-    amount?: number;
-  } | null>(null);
+    totalAmount: number;
+  }
+  const [lastPlacedOrders, setLastPlacedOrders] = useState<PlacedOrdersSummary | null>(null);
 
   const [currentVenueName, setCurrentVenueName] = useState<string>('Estadio Teodoro Mariscal');
 
-  // Popup de confirmación oficial de pedido de comida
-  const [completedFoodOrder, setCompletedFoodOrder] = useState<FoodOrder | null>(null);
+  // Popups y confirmaciones de pedidos de comida (soporta multi-negocio)
+  const [completedFoodOrders, setCompletedFoodOrders] = useState<FoodOrder[]>([]);
 
   useEffect(() => {
     const fetchVenueInfo = async () => {
@@ -200,7 +265,9 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
         const data = await getStadiumStands(vId);
         setStands(data);
         if (data.length > 0) {
-          setSelectedStand(data[0]);
+          const savedStandId = localStorage.getItem(SELECTED_STAND_KEY) || sessionStorage.getItem(SELECTED_STAND_KEY);
+          const found = savedStandId ? data.find((s) => s.id === savedStandId) : null;
+          setSelectedStand(found || data[0]);
         } else {
           setSelectedStand(null);
         }
@@ -306,18 +373,30 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
   }, [selectedStand]);
 
   const addToCart = (item: MenuItem) => {
-    setCart((prev) => {
-      const idx = prev.findIndex((c) => c.item.id === item.id);
+    if (!selectedStand) return;
+    const standId = selectedStand.id;
+    const standName = selectedStand.name;
+    const standLocation = selectedStand.location;
+
+    setCartsByStand((prev) => {
+      const standCart = prev[standId] || [];
+      const idx = standCart.findIndex((c) => c.item.id === item.id);
+      let updatedStandCart: StandCartItem[];
       if (idx > -1) {
-        return prev.map((c, i) => (i === idx ? { ...c, quantity: c.quantity + 1 } : c));
+        updatedStandCart = standCart.map((c, i) => (i === idx ? { ...c, quantity: c.quantity + 1 } : c));
+      } else {
+        updatedStandCart = [...standCart, { item, quantity: 1, standId, standName, standLocation }];
       }
-      return [...prev, { item, quantity: 1 }];
+      const updated = { ...prev, [standId]: updatedStandCart };
+      saveCartsToStorage(updated);
+      return updated;
     });
   };
 
-  const updateCartQty = (itemId: string, delta: number) => {
-    setCart((prev) => {
-      return prev
+  const updateCartQty = (standId: string, itemId: string, delta: number) => {
+    setCartsByStand((prev) => {
+      const standCart = prev[standId] || [];
+      const updatedStandCart = standCart
         .map((c) => {
           if (c.item.id === itemId) {
             return { ...c, quantity: c.quantity + delta };
@@ -325,11 +404,66 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
           return c;
         })
         .filter((c) => c.quantity > 0);
+      const updated = { ...prev };
+      if (updatedStandCart.length === 0) {
+        delete updated[standId];
+      } else {
+        updated[standId] = updatedStandCart;
+      }
+      saveCartsToStorage(updated);
+      return updated;
     });
   };
 
-  const total = cart.reduce((sum, c) => sum + c.item.price * c.quantity, 0);
-  const totalCount = cart.reduce((sum, c) => sum + c.quantity, 0);
+  const clearSingleStandCart = (standId: string) => {
+    setCartsByStand((prev) => {
+      const updated = { ...prev };
+      delete updated[standId];
+      saveCartsToStorage(updated);
+      return updated;
+    });
+  };
+
+  const clearAllCarts = () => {
+    setCartsByStand({});
+    saveCartsToStorage({});
+  };
+
+  // Comandas consolidadas agrupadas por puesto o negocio
+  const standOrdersList = useMemo(() => {
+    const list: {
+      standId: string;
+      standName: string;
+      standLocation?: string;
+      items: StandCartItem[];
+      subtotal: number;
+      count: number;
+    }[] = [];
+
+    for (const standId of Object.keys(cartsByStand)) {
+      const items: StandCartItem[] = cartsByStand[standId] || [];
+      if (items.length > 0) {
+        const subtotal = items.reduce((sum, c) => sum + c.item.price * c.quantity, 0);
+        const count = items.reduce((sum, c) => sum + c.quantity, 0);
+        const standInfo = stands.find((s) => s.id === standId);
+        const standName = items[0]?.standName || standInfo?.name || 'Puesto Oficial';
+        const standLocation = items[0]?.standLocation || standInfo?.location || '';
+        list.push({ standId, standName, standLocation, items, subtotal, count });
+      }
+    }
+    return list;
+  }, [cartsByStand, stands]);
+
+  // Totales consolidados de todos los negocios en la comanda única
+  const total = useMemo(() => {
+    return standOrdersList.reduce((sum, s) => sum + s.subtotal, 0);
+  }, [standOrdersList]);
+
+  const totalCount = useMemo(() => {
+    return standOrdersList.reduce((sum, s) => sum + s.count, 0);
+  }, [standOrdersList]);
+
+  const totalStandsCount = standOrdersList.length;
 
   const handleTicketSelect = (ticketId: string) => {
     setSelectedTicketId(ticketId);
@@ -342,121 +476,115 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
   };
 
   const handleOpenCheckout = () => {
-    if (cart.length === 0 || !selectedStand) return;
+    if (standOrdersList.length === 0) return;
     setFormError(null);
     setIsCheckoutModalOpen(true);
   };
 
   const executeOrderPlacement = async (cardResult?: DirectPaymentResult) => {
-    if (cart.length === 0 || !selectedStand) return;
+    if (standOrdersList.length === 0 || placingOrder) return;
 
     setFormError(null);
+    setPlacingOrder(true);
 
     try {
-      const foodItems: FoodOrderItem[] = cart.map((c) => ({
-        itemId: c.item.id,
-        name: c.item.name,
-        price: c.item.price,
-        quantity: c.quantity,
-      }));
-
       const finalPaymentMethod = cardResult
         ? `Tarjeta en Línea (${cardResult.cardBrand.toUpperCase()} •••• ${cardResult.cardLast4})`
         : foodPaymentMethod;
 
-      const orderId = `FOOD-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
-      const pickupCode = Math.floor(1000 + Math.random() * 9000).toString();
+      const createdOrders: FoodOrder[] = [];
 
-      const generatedOrder: FoodOrder = {
-        id: orderId,
-        venueId: selectedStand.venueId || user.browsingVenueId || user.venueId || DEFAULT_VENUE_ID,
-        standId: selectedStand.id,
-        standName: selectedStand.name,
-        userId: user.uid,
-        customerName: user.displayName || 'Aficionado Venados',
-        orderType: selectedOrderType,
-        items: foodItems,
-        total,
-        paymentMethod: finalPaymentMethod,
-        paymentStatus: cardResult ? 'pagado' : 'pendiente',
-        pickupCode,
-        status: 'pendiente',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        section: selectedOrderType === 'in-seat' ? cleanSectionValue(seatSection) : undefined,
-        row: selectedOrderType === 'in-seat' ? cleanRowValue(seatRow) : undefined,
-        seat: selectedOrderType === 'in-seat' ? cleanSeatValue(seatNumber) : undefined,
-        zoneId: resolvedZone?.id || 'zona-a',
-      };
+      // Procesar cada negocio de forma individual, dividiendo exactamente el pago y los platillos
+      for (const standOrder of standOrdersList) {
+        const foodItems: FoodOrderItem[] = standOrder.items.map((c) => ({
+          itemId: c.item.id,
+          name: c.item.name,
+          price: c.item.price,
+          quantity: c.quantity,
+          notes: c.item.description || undefined,
+        }));
 
-      // 1. Mostrar de inmediato el modal de éxito (0 ms)
-      setLastPlacedOrder({
-        code: pickupCode,
-        type: selectedOrderType,
-        section: generatedOrder.section,
-        row: generatedOrder.row,
-        seat: generatedOrder.seat,
-        zoneName: resolvedZone?.name || 'Zona Asignada',
-        paymentMethod: finalPaymentMethod,
-        paymentStatus: 'pagado',
-        cardBrand: cardResult?.cardBrand,
-        cardLast4: cardResult?.cardLast4,
-        authCode: cardResult?.authCode,
-        amount: total,
-      });
-
-      setCart([]);
-      try {
-        sessionStorage.removeItem('vxp_food_cart');
-      } catch {}
-      setIsCheckoutModalOpen(false);
-      setIsCardModalOpen(false);
-      setPlacingOrder(false);
-      setCompletedFoodOrder(generatedOrder);
-
-      // 2. Persistir en Firestore en segundo plano
-      createFoodOrder({
-        venueId: selectedStand.venueId || user.browsingVenueId || user.venueId || DEFAULT_VENUE_ID,
-        standId: selectedStand.id,
-        standName: selectedStand.name,
-        userId: user.uid,
-        customerName: user.displayName || 'Aficionado Venados',
-        orderType: selectedOrderType,
-        items: foodItems,
-        total,
-        paymentMethod: finalPaymentMethod,
-        paymentStatus: cardResult ? 'pagado' : 'pendiente',
-        paymentDetails: cardResult
+        // Datos de pago específicos asignados a este negocio
+        const standPaymentDetails = cardResult
           ? {
               paymentIntentId: cardResult.paymentIntentId,
               authCode: cardResult.authCode,
               cardBrand: cardResult.cardBrand,
               cardLast4: cardResult.cardLast4,
-              amount: cardResult.amount,
+              amount: standOrder.subtotal, // DIVISIÓN EXACTA DEL PAGO PARA ESTE NEGOCIO
               timestamp: cardResult.timestamp,
             }
-          : undefined,
-        section: selectedOrderType === 'in-seat' ? cleanSectionValue(seatSection) : undefined,
-        row: selectedOrderType === 'in-seat' ? cleanRowValue(seatRow) : undefined,
-        seat: selectedOrderType === 'in-seat' ? cleanSeatValue(seatNumber) : undefined,
-        zoneId: resolvedZone?.id || 'zona-a',
-      })
-        .then((realOrder) => {
-          if (realOrder) {
-            setCompletedFoodOrder(realOrder);
-          }
-        })
-        .catch((err) => {
-          console.warn('Aviso sincronizando pedido de alimentos en Firestore:', err);
+          : undefined;
+
+        const standVenueId =
+          standOrder.items[0]?.item?.venueId ||
+          stands.find((s) => s.id === standOrder.standId)?.venueId ||
+          user.browsingVenueId ||
+          user.venueId ||
+          DEFAULT_VENUE_ID;
+
+        // Crear la orden en Firestore para este puesto
+        const newOrder = await createFoodOrder({
+          venueId: standVenueId,
+          standId: standOrder.standId,
+          standName: standOrder.standName,
+          userId: user.uid,
+          customerName: user.displayName || 'Aficionado',
+          orderType: selectedOrderType,
+          items: foodItems,
+          total: standOrder.subtotal, // MONTO DIVIDIDO DE ESTE NEGOCIO
+          paymentMethod: finalPaymentMethod,
+          paymentStatus: cardResult ? 'pagado' : 'pendiente',
+          paymentDetails: standPaymentDetails,
+          section: selectedOrderType === 'in-seat' ? cleanSectionValue(seatSection) : undefined,
+          row: selectedOrderType === 'in-seat' ? cleanRowValue(seatRow) : undefined,
+          seat: selectedOrderType === 'in-seat' ? cleanSeatValue(seatNumber) : undefined,
+          zoneId: resolvedZone?.id || 'zona-a',
         });
+
+        if (newOrder) {
+          createdOrders.push(newOrder);
+        }
+      }
+
+      if (createdOrders.length > 0) {
+        const primary = createdOrders[0];
+        setLastPlacedOrders({
+          orders: createdOrders,
+          type: selectedOrderType,
+          section: primary.section,
+          row: primary.row,
+          seat: primary.seat,
+          zoneName: resolvedZone?.name || 'Zona Asignada',
+          paymentMethod: finalPaymentMethod,
+          paymentStatus: 'pagado',
+          cardBrand: cardResult?.cardBrand,
+          cardLast4: cardResult?.cardLast4,
+          authCode: cardResult?.authCode,
+          totalAmount: total,
+        });
+        setCompletedFoodOrders(createdOrders);
+      }
+
+      // Vaciar todos los carritos tras éxito
+      setCartsByStand({});
+      saveCartsToStorage({});
+      try {
+        sessionStorage.removeItem('vxp_food_cart');
+      } catch {}
+
+      setIsCheckoutModalOpen(false);
+      setIsCardModalOpen(false);
+      setPlacingOrder(false);
     } catch (err: any) {
-      console.error('Error placing food order:', err);
+      console.error('Error placing multi-business food orders:', err);
+      setFormError('Hubo un error al procesar las comandas de los negocios. Por favor intenta de nuevo.');
       setPlacingOrder(false);
     }
   };
 
   const handleConfirmOrder = async () => {
-    if (cart.length === 0 || !selectedStand) return;
+    if (standOrdersList.length === 0) return;
 
     // Si el usuario no tiene sesión iniciada, solicitamos login manteniendo su carrito intacto
     if (!user || !user.uid) {
@@ -543,48 +671,8 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
 
   return (
     <div className="space-y-4">
-      {/* Header Compacto de Alimentos (48px–56px): platillos y concesiones visibles de inmediato en el first fold */}
-      <div className={`p-3 sm:px-4 rounded-2xl border flex items-center justify-between gap-3 shadow-xs transition-colors ${
-        theme === 'light'
-          ? 'bg-white border-slate-200 text-slate-900'
-          : 'bg-[#0F1626] border-slate-800 text-white'
-      }`}>
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-500 border border-amber-500/30 flex items-center justify-center shrink-0">
-            <Utensils className="w-4 h-4" />
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-sm sm:text-base font-black font-sports uppercase tracking-wide truncate">
-              Alimentos & Bebidas • {currentVenueName}
-            </h2>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-              {activeOrderingEvent
-                ? `Evento en curso: ${activeOrderingEvent.name} • Entrega a butaca y pickup`
-                : upcomingEvent
-                ? `Menú oficial • Próximo: ${upcomingEvent.name}`
-                : 'Pide a tu butaca o recoge con Pickup Express'}
-            </p>
-          </div>
-        </div>
-
-        <div className="shrink-0 flex items-center gap-2">
-          <span className={`text-[11px] font-bold px-2.5 py-1 rounded-xl border font-sports uppercase tracking-wider hidden sm:inline-flex items-center gap-1 ${
-            activeOrderingEvent
-              ? theme === 'light'
-                ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
-                : 'bg-emerald-950/60 text-emerald-300 border-emerald-500/40'
-              : theme === 'light'
-              ? 'bg-amber-100 text-amber-900 border-amber-300'
-              : 'bg-amber-950/50 text-amber-300 border-amber-500/40'
-          }`}>
-            <span className={`w-2 h-2 rounded-full ${activeOrderingEvent ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-            {activeOrderingEvent ? 'Cocina Abierta' : 'Catálogo'}
-          </span>
-        </div>
-      </div>
-
       {/* Banner de Confirmación de Pedido Reciente */}
-      {lastPlacedOrder && (
+      {lastPlacedOrders && (
         <div className={`p-5 rounded-2xl shadow-xl space-y-3 font-sports border ${
           theme === 'light'
             ? 'bg-white border-emerald-400 text-slate-900'
@@ -593,95 +681,92 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-6 h-6 text-emerald-500 shrink-0" />
-              <h3 className={`font-extrabold text-sm uppercase tracking-wider ${
-                theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
-              }`}>
-                ¡Orden Enviada a Cocina con Éxito!
-              </h3>
+              <div>
+                <h3 className={`font-extrabold text-sm uppercase tracking-wider ${
+                  theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
+                }`}>
+                  {lastPlacedOrders.orders.length > 1
+                    ? `¡${lastPlacedOrders.orders.length} Órdenes Creadas y Divididas con Éxito!`
+                    : '¡Orden Enviada a Cocina con Éxito!'}
+                </h3>
+                <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-sans">
+                  Compra unificada procesada • Total: ${lastPlacedOrders.totalAmount.toLocaleString('es-MX')} MXN {lastPlacedOrders.cardLast4 ? `(Tarjeta ${lastPlacedOrders.cardBrand?.toUpperCase()} •••• ${lastPlacedOrders.cardLast4})` : `(${lastPlacedOrders.paymentMethod || 'Efectivo'})`}
+                </p>
+              </div>
             </div>
-            <button
-              onClick={() => setLastPlacedOrder(null)}
-              className={`text-xs underline font-semibold cursor-pointer ${
-                theme === 'light' ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Cerrar
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCompletedFoodOrders(lastPlacedOrders.orders)}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+              >
+                Ver Comprobantes
+              </button>
+              <button
+                onClick={() => setLastPlacedOrders(null)}
+                className={`text-xs underline font-semibold cursor-pointer ${
+                  theme === 'light' ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Cerrar
+              </button>
+            </div>
           </div>
 
-          <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border ${
-            theme === 'light'
-              ? 'bg-emerald-50/60 border-emerald-200 text-slate-900'
-              : 'bg-[#0A0E17] border-slate-700/80 text-white'
-          }`}>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className={`text-xs font-medium uppercase ${
-                  theme === 'light' ? 'text-slate-700' : 'text-slate-400'
-                }`}>Modalidad:</span>
-                <span className={`px-2 py-0.5 rounded text-[11px] font-bold border uppercase ${
+          {/* Tarjetas individuales por cada negocio con su código y monto dividido */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+            {lastPlacedOrders.orders.map((ord, idx) => (
+              <div
+                key={ord.id}
+                className={`p-3 rounded-xl border flex flex-col justify-between ${
                   theme === 'light'
-                    ? 'bg-emerald-100 text-emerald-950 border-emerald-300'
-                    : 'bg-emerald-950 text-emerald-300 border-emerald-500/40'
-                }`}>
-                  {lastPlacedOrder.type === 'in-seat' ? '🚴 Entrega a Butaca' : '⚡ Pickup Express'}
-                </span>
-              </div>
-              <p className={`text-2xl font-black tracking-wider font-scoreboard mt-1 ${
-                theme === 'light' ? 'text-emerald-700' : 'text-emerald-400'
-              }`}>
-                {lastPlacedOrder.code}
-              </p>
+                    ? 'bg-emerald-50/70 border-emerald-200 text-slate-900'
+                    : 'bg-[#0A0E17] border-slate-700/80 text-white'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-1 mb-1">
+                    <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-800 dark:text-emerald-300">
+                      Puesto #{idx + 1}
+                    </span>
+                    <span className="text-xs font-scoreboard font-bold text-emerald-700 dark:text-emerald-400">
+                      ${ord.total.toLocaleString('es-MX')} MXN
+                    </span>
+                  </div>
+                  <h4 className="font-extrabold text-xs truncate" title={ord.standName}>
+                    {ord.standName}
+                  </h4>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-300 font-sans line-clamp-1 mt-0.5">
+                    {ord.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')}
+                  </p>
+                </div>
 
-              {lastPlacedOrder.cardLast4 ? (
-                <div className="flex items-center gap-1.5 mt-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-                  <CreditCard className="w-3.5 h-3.5" />
-                  <span>
-                    Pagado con Tarjeta {lastPlacedOrder.cardBrand?.toUpperCase()} •••• {lastPlacedOrder.cardLast4}
-                    {lastPlacedOrder.authCode ? ` (Auth: ${lastPlacedOrder.authCode})` : ''}
+                <div className="mt-2.5 pt-2 border-t border-emerald-200/70 dark:border-slate-800 flex items-center justify-between">
+                  <span className="text-[10px] uppercase text-slate-500 dark:text-slate-400 font-bold">Código Retiro:</span>
+                  <span className="font-scoreboard font-black text-sm text-emerald-700 dark:text-emerald-400 tracking-wider">
+                    {ord.pickupCode}
                   </span>
                 </div>
-              ) : (
-                <div className="flex items-center gap-1.5 mt-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
-                  <span>💵 Pago al recibir: {lastPlacedOrder.paymentMethod || 'Efectivo / Terminal'}</span>
-                </div>
-              )}
-            </div>
+              </div>
+            ))}
+          </div>
 
-            <div className="text-xs font-sans">
-              {lastPlacedOrder.type === 'in-seat' ? (
-                <div className="space-y-0.5">
-                  <p className={`font-bold font-sports ${
-                    theme === 'light' ? 'text-slate-900' : 'text-white'
-                  }`}>
-                    Destino: {formatDeliverySeat(lastPlacedOrder.section, lastPlacedOrder.row, lastPlacedOrder.seat)}
-                  </p>
-                  <p className={`text-[11px] ${
-                    theme === 'light' ? 'text-slate-600' : '!text-[#E2E8F0] text-slate-300'
-                  }`}>
-                    {lastPlacedOrder.cardLast4
-                      ? 'Tu pedido ya está pagado. El Runner de estadio te lo llevará directamente a tu asiento sin necesidad de cobrar.'
-                      : 'Un Runner de estadio te lo llevará en cuanto la cocina lo tenga listo y te cobrará al entregar.'}
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-0.5">
-                  <p className={theme === 'light' ? 'text-slate-700' : 'text-slate-300'}>
-                    Pasa al mostrador cuando la pantalla o tu pestaña "Mis Pedidos" marque <strong className={theme === 'light' ? 'text-emerald-700 font-bold' : 'text-emerald-400 font-bold'}>LISTO</strong>.
-                  </p>
-                  {lastPlacedOrder.cardLast4 && (
-                    <p className={`text-[11px] ${theme === 'light' ? 'text-slate-600' : '!text-[#E2E8F0] text-slate-300'}`}>
-                      Tu pedido ya está pagado en línea. Solo muestra tu código <strong>{lastPlacedOrder.code}</strong> para recoger.
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
+          <div className={`p-3 rounded-xl text-xs font-sans border ${
+            theme === 'light' ? 'bg-white border-slate-200 text-slate-700' : 'bg-[#121929] border-slate-800 text-slate-300'
+          }`}>
+            {lastPlacedOrders.type === 'in-seat' ? (
+              <p>
+                🚴 <strong>Entrega a Butaca:</strong> Destino {formatDeliverySeat(lastPlacedOrders.section, lastPlacedOrders.row, lastPlacedOrders.seat)}. Los runners del estadio te llevarán los pedidos de cada concesionario directamente a tu asiento.
+              </p>
+            ) : (
+              <p>
+                ⚡ <strong>Pickup Express:</strong> Presenta el código de retiro correspondiente en la barra de cada concesionario para retirar tus alimentos en cuanto su estado marque <strong>LISTO</strong>.
+              </p>
+            )}
           </div>
         </div>
       )}
 
-      {/* Selector de Puestos del Estadio */}
+      {/* Selector Discreto de Puestos / Concesionarios (Estilo Dropdown como los selectores del sistema) */}
       {loadingStands ? (
         <LoadingSpinner message="Localizando puestos de comida en el estadio..." />
       ) : stands.length === 0 ? (
@@ -709,92 +794,62 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
           </div>
         </div>
       ) : (
-        <div className="space-y-4 font-sports">
-          <div className="flex items-center justify-between">
-            <h3 className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${
-              theme === 'light' ? 'text-slate-700' : 'text-slate-300'
-            }`}>
-              <Store className="w-4 h-4 text-red-500" /> Concesiones & Puestos en Vivo
-            </h3>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {stands.map((stand) => (
-              <button
-                key={stand.id}
-                onClick={() => {
-                  setSelectedStand(stand);
-                  setCart([]);
+        <div className="flex items-center gap-2.5 font-sports">
+          {/* Selector Discreto tipo dropdown (idéntico al selector de estadio) */}
+          <div className="relative inline-flex items-center shrink-0">
+            <label htmlFor="concession-stand-selector" className="sr-only">
+              Seleccionar puesto o concesionario
+            </label>
+            <div
+              className={`flex items-center gap-1.5 pl-2.5 pr-2 py-1.5 border rounded-xl transition-all group cursor-pointer shadow-xs ${
+                theme === 'light'
+                  ? 'bg-white hover:bg-slate-50 border-slate-300 text-slate-900'
+                  : 'bg-[#101625] hover:bg-[#182032] border-slate-700 text-slate-200'
+              }`}
+            >
+              <Store className="w-3.5 h-3.5 text-red-500 shrink-0" />
+              <select
+                id="concession-stand-selector"
+                value={selectedStand?.id || ''}
+                onChange={(e) => {
+                  const s = stands.find((st) => st.id === e.target.value);
+                  if (s) {
+                    handleSelectStand(s);
+                  }
                 }}
-                className={`p-3.5 rounded-xl text-left border transition-all flex items-start gap-3 cursor-pointer ${
-                  selectedStand?.id === stand.id
-                    ? theme === 'light'
-                      ? 'bg-red-50/50 border-red-600 shadow-md ring-2 ring-red-600/30'
-                      : 'bg-[#0F1626] border-red-600 shadow-xl ring-2 ring-red-600/30'
-                    : theme === 'light'
-                    ? 'bg-white border-slate-200 hover:bg-slate-50 hover:border-slate-300 shadow-xs'
-                    : 'bg-[#0F1626]/80 border-slate-700/80 hover:bg-[#0F1626] hover:border-slate-600 shadow-md'
+                className={`bg-transparent text-[11px] sm:text-xs font-bold pr-5 focus:outline-none cursor-pointer appearance-none truncate max-w-[210px] sm:max-w-xs ${
+                  theme === 'light' ? 'text-slate-900' : 'text-slate-200'
                 }`}
+                title="Cambiar puesto seleccionado"
               >
-                <img
-                  src={stand.image}
-                  alt={stand.name}
-                  className={`w-12 h-12 rounded-lg object-cover shrink-0 ${
-                    theme === 'light' ? 'bg-slate-100' : 'bg-[#0A0E17]'
-                  }`}
-                  referrerPolicy="no-referrer"
-                />
-                <div className="flex-1 min-w-0">
-                  <p className={`text-xs font-bold truncate tracking-wide ${
-                    theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
-                  }`}>{stand.name}</p>
-                  <p className={`text-[11px] flex items-center gap-1 mt-0.5 font-sans ${
-                    theme === 'light' ? 'text-slate-600' : '!text-[#E2E8F0] text-slate-200'
-                  }`}>
-                    <MapPin className="w-3 h-3 text-red-500 shrink-0" />
-                    <span className="truncate">{stand.location}</span>
-                  </p>
-                  <span className={`inline-flex items-center gap-1 text-[10px] font-semibold mt-1 font-sans ${
-                    theme === 'light' ? 'text-amber-800' : 'text-amber-400'
-                  }`}>
-                    <Clock className="w-3 h-3" /> ~{stand.estimatedWaitMinutes} min
-                  </span>
-                </div>
-              </button>
-            ))}
+                {stands.map((stand) => {
+                  const standCartCount = (cartsByStand[stand.id] || []).reduce((sum, c) => sum + c.quantity, 0);
+                  return (
+                    <option
+                      key={stand.id}
+                      value={stand.id}
+                      className={theme === 'light' ? 'bg-white text-slate-900' : 'bg-[#101625] text-white font-medium'}
+                    >
+                      {stand.name} • {stand.location} (~{stand.estimatedWaitMinutes} min){standCartCount > 0 ? ` • [${standCartCount} en carrito]` : ''}
+                    </option>
+                  );
+                })}
+              </select>
+              <ChevronDown
+                className={`w-3.5 h-3.5 absolute right-2 pointer-events-none transition-colors ${
+                  theme === 'light' ? 'text-slate-500 group-hover:text-slate-800' : 'text-slate-400 group-hover:text-slate-200'
+                }`}
+              />
+            </div>
           </div>
         </div>
       )}
 
       {/* Menú y Carrito */}
       {selectedStand && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2 font-sports">
-          {/* Menú del puesto seleccionado */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 font-sports">
+          {/* Menú del puesto seleccionado (Platillos grandes y visibles sin scroll) */}
           <div className="lg:col-span-2 space-y-4">
-            <div className={`p-4 rounded-xl border shadow-md flex items-center justify-between ${
-              theme === 'light'
-                ? 'bg-white border-slate-200 text-slate-900'
-                : 'bg-[#0F1626] border-slate-700/80 text-white'
-            }`}>
-              <div>
-                <h3 className={`font-extrabold text-sm tracking-wide ${
-                  theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
-                }`}>{selectedStand.name}</h3>
-                <p className={`text-xs flex items-center gap-1 mt-0.5 font-sans ${
-                  theme === 'light' ? 'text-slate-600' : '!text-[#E2E8F0] text-slate-200'
-                }`}>
-                  <MapPin className="w-3.5 h-3.5 text-red-500" /> {selectedStand.location}
-                </p>
-              </div>
-              <span className={`px-2.5 py-1 rounded-full text-xs font-bold border uppercase tracking-wider ${
-                theme === 'light'
-                  ? 'bg-amber-100 text-amber-950 border-amber-300'
-                  : 'bg-amber-950/40 text-amber-300 border-amber-500/30'
-              }`}>
-                {selectedStand.categoryTag}
-              </span>
-            </div>
-
             {loadingMenu ? (
               <LoadingSpinner message="Cargando menú del puesto..." />
             ) : menuItems.length === 0 ? (
@@ -806,70 +861,166 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
                 No hay productos disponibles en este puesto en este momento.
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {menuItems.map((item) => (
                   <div
                     key={item.id}
-                    className={`p-3.5 rounded-xl border transition-colors flex gap-3 justify-between ${
-                      theme === 'light'
-                        ? 'bg-white border-slate-200 text-slate-900 shadow-xs hover:border-slate-300'
-                        : 'bg-[#0F1626] border-slate-700/80 text-white shadow-md hover:border-slate-600'
+                    className={`rounded-2xl border transition-all overflow-hidden flex flex-col justify-between group shadow-md ${
+                      item.available
+                        ? theme === 'light'
+                          ? 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-lg'
+                          : 'bg-[#0F1626] border-slate-700/80 hover:border-slate-600 hover:shadow-xl'
+                        : theme === 'light'
+                        ? 'bg-slate-100/80 border-slate-200 opacity-60'
+                        : 'bg-[#0A0E17]/80 border-slate-800 opacity-60'
                     }`}
                   >
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center gap-2">
-                        <h4 className={`font-bold text-xs tracking-wide ${
-                          theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
-                        }`}>{item.name}</h4>
-                        {!item.available && (
-                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase border ${
-                            theme === 'light'
-                              ? 'bg-red-100 text-red-950 border-red-300'
-                              : 'bg-red-950 text-red-400 border-red-800'
-                          }`}>
-                            Agotado
+                    <div>
+                      {/* Imagen Prominente del Platillo (Completa, sin recortes) */}
+                      <div
+                        className="relative h-44 sm:h-52 w-full bg-slate-950 overflow-hidden group/img cursor-pointer flex items-center justify-center"
+                        onClick={() => {
+                          const resolvedImg =
+                            normalizeGoogleDriveImageUrl(item.image) ||
+                            'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&auto=format&fit=crop&q=80';
+                          setPreviewDishImage({
+                            src: resolvedImg,
+                            title: item.name,
+                            category: item.category,
+                            description: item.description,
+                            price: item.price,
+                          });
+                        }}
+                        title="Clic para ver foto ampliada"
+                      >
+                        {/* Fondo desenfocado de ambientación para rellenar los bordes con suavidad */}
+                        <img
+                          src={
+                            normalizeGoogleDriveImageUrl(item.image) ||
+                            'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80'
+                          }
+                          alt=""
+                          aria-hidden="true"
+                          className="absolute inset-0 w-full h-full object-cover blur-md scale-110 opacity-25 select-none pointer-events-none"
+                        />
+
+                        {/* Imagen Principal Completa (object-contain para mostrar 100% de la foto) */}
+                        <img
+                          src={
+                            normalizeGoogleDriveImageUrl(item.image) ||
+                            'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80'
+                          }
+                          alt={item.name}
+                          referrerPolicy="no-referrer"
+                          className="relative z-10 w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300 drop-shadow-md"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src =
+                              'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80';
+                          }}
+                        />
+
+                        {/* Botón para ver en grande */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const resolvedImg =
+                              normalizeGoogleDriveImageUrl(item.image) ||
+                              'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&auto=format&fit=crop&q=80';
+                            setPreviewDishImage({
+                              src: resolvedImg,
+                              title: item.name,
+                              category: item.category,
+                              description: item.description,
+                              price: item.price,
+                            });
+                          }}
+                          className="absolute bottom-2.5 right-2.5 p-1.5 bg-black/80 hover:bg-red-600 border border-white/20 rounded-lg text-white shadow-lg opacity-0 group-hover/img:opacity-100 sm:group-hover:opacity-100 transition-all z-20 flex items-center gap-1 text-[10px] font-sports font-bold tracking-wider cursor-pointer"
+                          title="Ver imagen completa"
+                        >
+                          <Maximize2 className="w-3.5 h-3.5" />
+                          <span className="hidden sm:inline">AMPLIAR</span>
+                        </button>
+
+                        {/* Badges superiores sobre la imagen */}
+                        <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 z-20">
+                          <span className="px-2 py-0.5 rounded-md bg-black/75 backdrop-blur-xs text-white text-[10px] font-black uppercase tracking-wider font-sports border border-white/20">
+                            {item.category}
                           </span>
+                          {item.prepTimeMinutes && (
+                            <span className="px-2 py-0.5 rounded-md bg-black/75 backdrop-blur-xs text-amber-300 text-[10px] font-bold flex items-center gap-1 border border-white/20">
+                              <Clock className="w-3 h-3 text-amber-400" />
+                              {item.prepTimeMinutes} min
+                            </span>
+                          )}
+                        </div>
+
+                        {!item.available && (
+                          <div className="absolute top-2.5 right-2.5 z-20">
+                            <span className="px-2.5 py-0.5 rounded-md bg-red-600 text-white text-[10px] font-black uppercase tracking-wider border border-white/20 shadow-md">
+                              Agotado
+                            </span>
+                          </div>
                         )}
                       </div>
-                      <p className={`text-[11px] line-clamp-2 leading-relaxed font-sans ${
-                        theme === 'light' ? 'text-slate-600' : '!text-[#E2E8F0] text-slate-200'
-                      }`}>
-                        {item.description}
-                      </p>
-                      <div className="pt-1 flex items-center justify-between">
-                        <span className={`text-xs font-black font-scoreboard ${
-                          theme === 'light' ? 'text-emerald-700' : 'text-emerald-400'
-                        }`}>
-                          ${item.price.toLocaleString('es-MX')} <span className={`text-[10px] font-sans ${
-                            theme === 'light' ? 'text-slate-600' : 'text-slate-400'
-                          }`}>MXN</span>
-                        </span>
-                        {item.available && (
-                          <button
-                            onClick={() => addToCart(item)}
-                            className="px-3 py-1 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white text-xs font-bold rounded-lg shadow-md flex items-center gap-1 transition-transform active:scale-95 uppercase tracking-wider cursor-pointer"
+
+                      {/* Info del Platillo */}
+                      <div className="p-3.5 space-y-1.5">
+                        <h4
+                          className={`font-black text-sm tracking-wide line-clamp-1 ${
+                            theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
+                          }`}
+                        >
+                          {item.name}
+                        </h4>
+                        {item.description && (
+                          <p
+                            className={`text-xs line-clamp-2 leading-relaxed font-sans ${
+                              theme === 'light' ? 'text-slate-600' : '!text-[#E2E8F0] text-slate-300'
+                            }`}
                           >
-                            <Plus className="w-3 h-3" /> Agregar
-                          </button>
+                            {item.description}
+                          </p>
                         )}
                       </div>
                     </div>
 
-                    <img
-                      src={item.image}
-                      alt={item.name}
-                      className={`w-16 h-16 rounded-lg object-cover shrink-0 self-center ${
-                        theme === 'light' ? 'bg-slate-100' : 'bg-[#0A0E17]'
-                      }`}
-                      referrerPolicy="no-referrer"
-                    />
+                    {/* Precio y Botón Agregar */}
+                    <div className="p-3.5 pt-0 flex items-center justify-between gap-2 border-t border-transparent mt-2">
+                      <div>
+                        <span
+                          className={`text-base sm:text-lg font-black font-scoreboard ${
+                            theme === 'light' ? 'text-emerald-700' : 'text-emerald-400'
+                          }`}
+                        >
+                          ${item.price.toLocaleString('es-MX')}
+                        </span>
+                        <span
+                          className={`text-[10px] font-sans ml-1 ${
+                            theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                          }`}
+                        >
+                          MXN
+                        </span>
+                      </div>
+
+                      {item.available && (
+                        <button
+                          type="button"
+                          onClick={() => addToCart(item)}
+                          className="px-3.5 py-1.5 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white text-xs font-black font-sports rounded-xl shadow-md flex items-center gap-1.5 transition-all active:scale-95 uppercase tracking-wider cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Agregar
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          {/* Carrito de Comanda */}
+          {/* Carrito de Comanda General Unificado */}
           <div className={`p-5 rounded-2xl border shadow-xl space-y-4 h-fit sticky top-20 ${
             theme === 'light'
               ? 'bg-white border-slate-200 text-slate-900'
@@ -878,74 +1029,175 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
             <div className={`flex items-center justify-between pb-3 border-b ${
               theme === 'light' ? 'border-slate-200' : 'border-slate-700/80'
             }`}>
-              <div className={`flex items-center gap-2 font-extrabold text-sm uppercase tracking-wider ${
+              <div className={`flex items-center gap-2 font-extrabold text-sm uppercase tracking-wider min-w-0 ${
                 theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
               }`}>
-                <ShoppingBag className="w-4 h-4 text-red-500" />
-                <span>Comanda del Estadio</span>
+                <ShoppingBag className="w-4 h-4 text-red-500 shrink-0" />
+                <span className="truncate">Carrito General de Comida</span>
               </div>
-              <span className={`text-xs font-semibold ${
-                theme === 'light' ? 'text-slate-600' : 'text-slate-400'
-              }`}>{totalCount} platillos</span>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className={`text-xs font-semibold ${
+                  theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                }`}>
+                  {totalStandsCount > 0 ? `${totalStandsCount} ${totalStandsCount === 1 ? 'puesto' : 'puestos'} • ` : ''}
+                  {totalCount} {totalCount === 1 ? 'artículo' : 'artículos'}
+                </span>
+                {totalCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearAllCarts}
+                    className="text-[10px] text-red-500 hover:text-red-400 underline font-sans cursor-pointer ml-1"
+                    title="Vaciar todo el carrito"
+                  >
+                    Vaciar
+                  </button>
+                )}
+              </div>
             </div>
 
-            {cart.length === 0 ? (
+            {standOrdersList.length === 0 ? (
               <div className="py-8 text-center space-y-2">
                 <Utensils className={`w-8 h-8 mx-auto ${
                   theme === 'light' ? 'text-slate-400' : 'text-slate-600'
                 }`} />
                 <p className={`text-xs font-semibold uppercase tracking-wider ${
-                  theme === 'light' ? 'text-slate-600' : 'text-slate-400'
-                }`}>Selecciona platillos del menú</p>
+                  theme === 'light' ? 'text-slate-700' : 'text-slate-300'
+                }`}>Tu comanda unificada está vacía</p>
+                <p className={`text-[11px] font-sans px-2 leading-relaxed ${
+                  theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                }`}>
+                  Selecciona y agrega platillos de cualquiera de los puestos del estadio. ¡Puedes comprar de diferentes negocios en una sola compra y el pago se dividirá automáticamente!
+                </p>
               </div>
             ) : (
-              <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
-                {cart.map((c) => (
-                  <div
-                    key={c.item.id}
-                    className={`flex items-center justify-between gap-2 p-2 rounded-lg border text-xs ${
-                      theme === 'light'
-                        ? 'bg-slate-50 border-slate-200 text-slate-900'
-                        : 'bg-[#0A0E17] border-slate-700/80 text-white'
-                    }`}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className={`font-bold truncate tracking-wide ${
-                        theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
-                      }`}>{c.item.name}</p>
-                      <p className={`text-[11px] font-scoreboard font-bold ${
-                        theme === 'light' ? 'text-emerald-700' : 'text-emerald-400'
-                      }`}>
-                        ${(c.item.price * c.quantity).toLocaleString('es-MX')} MXN
-                      </p>
+              <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                {standOrdersList.map((standGroup) => {
+                  const isCurrentStand = selectedStand?.id === standGroup.standId;
+                  return (
+                    <div
+                      key={standGroup.standId}
+                      className={`p-2.5 rounded-xl border space-y-2 transition-all ${
+                        isCurrentStand
+                          ? theme === 'light'
+                            ? 'bg-slate-50 border-red-200'
+                            : 'bg-[#0D1424] border-red-500/30'
+                          : theme === 'light'
+                          ? 'bg-slate-50/70 border-slate-200'
+                          : 'bg-[#0A0E17] border-slate-800'
+                      }`}
+                    >
+                      {/* Cabecera del Puesto */}
+                      <div className="flex items-center justify-between gap-1 pb-1.5 border-b border-slate-200 dark:border-slate-800">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <Store className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                          <span className={`font-extrabold text-xs truncate ${
+                            theme === 'light' ? 'text-slate-900' : 'text-white'
+                          }`} title={standGroup.standName}>
+                            {standGroup.standName}
+                          </span>
+                          {!isCurrentStand && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const found = stands.find((s) => s.id === standGroup.standId);
+                                if (found) handleSelectStand(found);
+                              }}
+                              className="text-[10px] text-red-500 hover:underline shrink-0 font-semibold cursor-pointer"
+                              title="Ver menú de este puesto"
+                            >
+                              (Ver menú)
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[11px] font-scoreboard font-bold text-emerald-600 dark:text-emerald-400">
+                            ${standGroup.subtotal.toLocaleString('es-MX')} MXN
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => clearSingleStandCart(standGroup.standId)}
+                            className="p-0.5 text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+                            title={`Eliminar comanda de ${standGroup.standName}`}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Platillos de este puesto */}
+                      <div className="space-y-1.5">
+                        {standGroup.items.map((c) => (
+                          <div
+                            key={c.item.id}
+                            className={`flex items-center justify-between gap-2 p-1.5 rounded-lg border text-xs ${
+                              theme === 'light'
+                                ? 'bg-white border-slate-200 text-slate-900'
+                                : 'bg-[#121929] border-slate-700/60 text-white'
+                            }`}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p className={`font-bold truncate text-[11px] ${
+                                theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
+                              }`}>{c.item.name}</p>
+                              <p className={`text-[10px] font-scoreboard font-bold ${
+                                theme === 'light' ? 'text-emerald-700' : 'text-emerald-400'
+                              }`}>
+                                ${(c.item.price * c.quantity).toLocaleString('es-MX')} MXN
+                              </p>
+                            </div>
+                            <div className={`flex items-center gap-0.5 border rounded-md p-0.5 ${
+                              theme === 'light'
+                                ? 'bg-slate-50 border-slate-300 text-slate-900'
+                                : 'bg-[#141C2E] border-slate-700 text-white'
+                            }`}>
+                              <button
+                                onClick={() => updateCartQty(standGroup.standId, c.item.id, -1)}
+                                className={`p-1 cursor-pointer ${
+                                  theme === 'light' ? 'text-slate-600 hover:text-red-600' : 'text-slate-400 hover:text-red-400'
+                                }`}
+                                title="Quitar uno"
+                              >
+                                <Minus className="w-2.5 h-2.5" />
+                              </button>
+                              <span className={`text-[11px] font-bold px-1 font-mono ${
+                                theme === 'light' ? 'text-slate-900' : 'text-white'
+                              }`}>{c.quantity}</span>
+                              <button
+                                onClick={() => updateCartQty(standGroup.standId, c.item.id, 1)}
+                                className={`p-1 cursor-pointer ${
+                                  theme === 'light' ? 'text-slate-600 hover:text-emerald-600' : 'text-slate-400 hover:text-emerald-400'
+                                }`}
+                                title="Agregar uno más"
+                              >
+                                <Plus className="w-2.5 h-2.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div className={`flex items-center gap-1 border rounded-md p-0.5 ${
-                      theme === 'light'
-                        ? 'bg-white border-slate-300 text-slate-900'
-                        : 'bg-[#141C2E] border-slate-700 text-white'
-                    }`}>
-                      <button
-                        onClick={() => updateCartQty(c.item.id, -1)}
-                        className={`p-1 cursor-pointer ${
-                          theme === 'light' ? 'text-slate-600 hover:text-red-600' : 'text-slate-400 hover:text-red-400'
-                        }`}
-                      >
-                        <Minus className="w-3 h-3" />
-                      </button>
-                      <span className={`text-xs font-bold px-1 font-mono ${
-                        theme === 'light' ? 'text-slate-900' : 'text-white'
-                      }`}>{c.quantity}</span>
-                      <button
-                        onClick={() => updateCartQty(c.item.id, 1)}
-                        className={`p-1 cursor-pointer ${
-                          theme === 'light' ? 'text-slate-600 hover:text-emerald-600' : 'text-slate-400 hover:text-emerald-400'
-                        }`}
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Desglose de división cuando hay más de un negocio */}
+            {totalStandsCount > 1 && (
+              <div className={`p-2.5 rounded-xl border text-[10.5px] font-sans space-y-1 ${
+                theme === 'light' ? 'bg-amber-50/70 border-amber-200 text-amber-900' : 'bg-amber-950/20 border-amber-500/30 text-amber-200'
+              }`}>
+                <span className="font-bold block uppercase tracking-wider text-[9.5px]">División de Pago por Negocio:</span>
+                <div className="space-y-0.5">
+                  {standOrdersList.map((st) => (
+                    <div key={st.standId} className="flex justify-between items-center">
+                      <span className="truncate pr-1">• {st.standName}:</span>
+                      <span className="font-scoreboard font-bold">${st.subtotal.toLocaleString('es-MX')} MXN</span>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 pt-1 border-t border-amber-200/50 dark:border-amber-500/20">
+                  ⚡ 1 solo pago: El cobro se dividirá automáticamente y cada negocio recibirá su propia comanda.
+                </p>
               </div>
             )}
 
@@ -955,21 +1207,53 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
               <div className={`flex justify-between items-center text-sm font-black ${
                 theme === 'light' ? 'text-slate-900' : 'text-white'
               }`}>
-                <span className="uppercase tracking-wider">Total:</span>
+                <span className="uppercase tracking-wider">Total Consolidado:</span>
                 <span className={`font-scoreboard text-lg font-bold ${
                   theme === 'light' ? 'text-emerald-700' : 'text-emerald-400'
                 }`}>${total.toLocaleString('es-MX')} MXN</span>
               </div>
 
               <button
-                disabled={cart.length === 0}
+                disabled={totalCount === 0}
                 onClick={handleOpenCheckout}
                 className="w-full py-3 bg-red-600 hover:bg-red-500 active:bg-red-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider"
               >
-                <span>Continuar al Pedido</span>
+                <span>Comprar Todo en 1 Sola Compra</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Barra flotante móvil para continuar con el pedido sin scrollear */}
+      {totalCount > 0 && (
+        <div className="lg:hidden fixed bottom-20 left-3 right-3 z-30 animate-in slide-in-from-bottom-4 duration-200 font-sports">
+          <div className={`p-3 rounded-2xl border shadow-2xl flex items-center justify-between gap-3 ${
+            theme === 'light'
+              ? 'bg-slate-900 text-white border-slate-800'
+              : 'bg-[#101728] text-white border-slate-700'
+          }`}>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-red-600 flex items-center justify-center font-black text-xs text-white shrink-0">
+                {totalCount}
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase font-bold text-slate-400 truncate">
+                  Comanda General • {totalStandsCount} {totalStandsCount === 1 ? 'negocio' : 'negocios'}
+                </p>
+                <p className="text-sm font-black font-scoreboard text-emerald-400">
+                  ${total.toLocaleString('es-MX')} MXN
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleOpenCheckout}
+              className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95 transition-transform"
+            >
+              <span>Comprar Todo</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       )}
@@ -995,10 +1279,12 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
                 <div>
                   <h3 className={`font-black text-sm sm:text-base uppercase tracking-wider ${
                     theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
-                  }`}>Detalles y Pago del Pedido</h3>
+                  }`}>Detalles y Pago de Comanda Unificada</h3>
                   <p className={`text-[11px] sm:text-xs font-sans ${
                     theme === 'light' ? 'text-slate-600' : '!text-[#E2E8F0] text-slate-300'
-                  }`}>Puesto: {selectedStand?.name}</p>
+                  }`}>
+                    {totalStandsCount} {totalStandsCount === 1 ? 'negocio' : 'negocios en comanda'} • {totalCount} {totalCount === 1 ? 'artículo' : 'artículos en total'}
+                  </p>
                 </div>
               </div>
               <button
@@ -1021,6 +1307,78 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
                   <span>{formError}</span>
                 </div>
               )}
+
+              {/* Resumen Unificado de Negocios y División del Pago */}
+              <div className={`p-3.5 sm:p-4 rounded-2xl border space-y-3 ${
+                theme === 'light'
+                  ? 'bg-slate-50 border-slate-200 text-slate-900'
+                  : 'bg-[#0A0E17] border-slate-700/80 text-white'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <span className={`text-xs font-black uppercase tracking-wider flex items-center gap-1.5 ${
+                    theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
+                  }`}>
+                    <ShoppingBag className="w-3.5 h-3.5 text-red-500" />
+                    Resumen del Pedido por Negocio
+                  </span>
+                  <span className="text-xs font-scoreboard font-black text-emerald-600 dark:text-emerald-400">
+                    Total: ${total.toLocaleString('es-MX')} MXN
+                  </span>
+                </div>
+
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {standOrdersList.map((st) => (
+                    <div
+                      key={st.standId}
+                      className={`p-2.5 rounded-xl border text-xs space-y-1.5 ${
+                        theme === 'light'
+                          ? 'bg-white border-slate-200 text-slate-900 shadow-xs'
+                          : 'bg-[#121929] border-slate-800 text-white'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between font-bold border-b border-slate-100 dark:border-slate-800/80 pb-1">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <Store className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                          <span className="truncate">{st.standName}</span>
+                          {st.standLocation && (
+                            <span className="text-[10px] text-slate-500 font-normal truncate hidden sm:inline">
+                              • {st.standLocation}
+                            </span>
+                          )}
+                        </div>
+                        <span className="font-scoreboard text-emerald-600 dark:text-emerald-400 shrink-0">
+                          ${st.subtotal.toLocaleString('es-MX')} MXN
+                        </span>
+                      </div>
+                      <div className="space-y-0.5 text-[11px] text-slate-600 dark:text-slate-300 font-sans">
+                        {st.items.map((i) => (
+                          <div key={i.item.id} className="flex justify-between items-center">
+                            <span>{i.quantity}x {i.item.name}</span>
+                            <span className="font-mono text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                              ${(i.item.price * i.quantity).toLocaleString('es-MX')} MXN
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Explicación de la división automática */}
+                <div className={`p-2.5 rounded-xl border text-[11px] font-sans flex items-start gap-2 ${
+                  theme === 'light'
+                    ? 'bg-emerald-50/80 border-emerald-300 text-emerald-950'
+                    : 'bg-emerald-950/30 border-emerald-500/40 text-emerald-200'
+                }`}>
+                  <Sparkles className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="block font-bold">Compra única con división automática:</strong>
+                    <span>
+                      Pagarás todo en una sola exhibición por un total de <strong>${total.toLocaleString('es-MX')} MXN</strong>. Al confirmarse el pago, el sistema creará automáticamente <strong>{totalStandsCount} {totalStandsCount === 1 ? 'orden de pedido' : 'órdenes de pedido independientes'}</strong> (una para cada negocio) y dividirá el dinero para que a cada concesionario le corresponda exactamente su cantidad.
+                    </span>
+                  </div>
+                </div>
+              </div>
 
               {/* 1. Modalidad de Entrega */}
               <div className="space-y-1.5">
@@ -1434,7 +1792,7 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
         isOpen={isCardModalOpen}
         onClose={() => setIsCardModalOpen(false)}
         amount={total}
-        concept={`${selectedStand?.name || 'Comida Estadio'} — ${
+        concept={`Comanda Unificada (${totalStandsCount} ${totalStandsCount === 1 ? 'negocio' : 'negocios'}: ${standOrdersList.map((s) => s.standName).join(', ')}) — ${
           selectedOrderType === 'in-seat'
             ? `Entrega a Butaca (${cleanSectionValue(seatSection) ? `Sec. ${cleanSectionValue(seatSection)}, Fila ${cleanRowValue(seatRow)}, Asiento ${cleanSeatValue(seatNumber)}` : 'Butaca'})`
             : 'Pick Up Express en Barra'
@@ -1443,9 +1801,9 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
         customerEmail={user.email || undefined}
         orderType="comida"
         metadata={{
-          venueId: selectedStand?.venueId || user.browsingVenueId || user.venueId || DEFAULT_VENUE_ID,
-          standId: selectedStand?.id || '',
-          standName: selectedStand?.name || '',
+          venueId: user.browsingVenueId || user.venueId || DEFAULT_VENUE_ID,
+          standsCount: String(totalStandsCount),
+          standsBreakdown: standOrdersList.map((s) => `${s.standName}: $${s.subtotal}`).join(' | '),
           orderType: selectedOrderType,
           itemsCount: String(totalCount),
           section: cleanSectionValue(seatSection) || '',
@@ -1456,20 +1814,80 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
       />
 
       {/* Modal Popup de Confirmación Oficial de Pedido de Comida */}
-      {completedFoodOrder && (
+      {completedFoodOrders.length > 0 && (
         <PurchaseSuccessModal
           isOpen={true}
           type="food"
-          foodOrder={completedFoodOrder}
+          foodOrders={completedFoodOrders}
           onClose={() => {
-            setCompletedFoodOrder(null);
+            setCompletedFoodOrders([]);
             if (onOrderSuccess) onOrderSuccess();
           }}
           onNavigateToOrders={() => {
-            setCompletedFoodOrder(null);
+            setCompletedFoodOrders([]);
             if (onOrderSuccess) onOrderSuccess();
           }}
         />
+      )}
+
+      {/* Modal Lightbox de Vista Completa de Imagen del Platillo */}
+      {previewDishImage && (
+        <div
+          className="fixed inset-0 z-[120] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setPreviewDishImage(null)}
+        >
+          <div
+            className={`relative max-w-2xl w-full rounded-2xl overflow-hidden shadow-2xl border ${
+              theme === 'light'
+                ? 'bg-white border-slate-200 text-slate-900'
+                : 'bg-[#0F1626] border-slate-700 text-white'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setPreviewDishImage(null)}
+              className="absolute top-3 right-3 z-30 p-2 rounded-full bg-black/70 hover:bg-red-600 text-white transition-colors cursor-pointer"
+              title="Cerrar vista previa"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="relative w-full h-72 sm:h-96 bg-black flex items-center justify-center overflow-hidden">
+              <img
+                src={previewDishImage.src}
+                alt=""
+                aria-hidden="true"
+                className="absolute inset-0 w-full h-full object-cover blur-xl scale-125 opacity-30 select-none pointer-events-none"
+              />
+              <img
+                src={previewDishImage.src}
+                alt={previewDishImage.title}
+                className="relative z-10 max-h-full max-w-full object-contain p-2"
+              />
+            </div>
+
+            <div className="p-5 font-sports space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <span className="px-2.5 py-0.5 rounded-full bg-red-600/20 text-red-500 border border-red-500/30 text-[10px] font-black uppercase tracking-wider">
+                  {previewDishImage.category || 'Alimentos & Bebidas'}
+                </span>
+                {typeof previewDishImage.price === 'number' && (
+                  <span className="text-xl font-black font-scoreboard text-emerald-500">
+                    ${previewDishImage.price.toLocaleString('es-MX')} MXN
+                  </span>
+                )}
+              </div>
+              <h3 className="text-lg sm:text-xl font-black uppercase tracking-wide">
+                {previewDishImage.title}
+              </h3>
+              {previewDishImage.description && (
+                <p className="text-xs sm:text-sm font-sans text-slate-300 leading-relaxed">
+                  {previewDishImage.description}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -15,6 +15,7 @@ import { StadiumStand, MenuItem } from '../types';
 import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
 import { DEFAULT_VENUE_ID } from './constants';
 import { getCachedData, setCachedData, invalidateCache } from './clientCache';
+import { normalizeGoogleDriveImageUrl } from './imageUtils';
 
 const STANDS_COLLECTION = 'stands';
 const MENU_COLLECTION = 'menuItems';
@@ -35,7 +36,7 @@ export const INITIAL_STANDS: StadiumStand[] = [
     active: true,
     estimatedWaitMinutes: 12,
     image: 'https://images.unsplash.com/photo-1535400255456-984241443b29?w=600&auto=format&fit=crop&q=80',
-    createdAt: '2026-01-01T00:00:00.000Z',
+    createdAt: '2026-01-01T00:00:01.000Z',
   },
   {
     id: 'stand-asador-venados-bbq',
@@ -46,7 +47,7 @@ export const INITIAL_STANDS: StadiumStand[] = [
     active: true,
     estimatedWaitMinutes: 8,
     image: 'https://images.unsplash.com/photo-1551504734-5ee1c4a1479b?w=600&auto=format&fit=crop&q=80',
-    createdAt: '2026-01-01T00:00:00.000Z',
+    createdAt: '2026-01-01T00:00:02.000Z',
   },
   {
     id: 'stand-barra-pacifico',
@@ -57,7 +58,7 @@ export const INITIAL_STANDS: StadiumStand[] = [
     active: true,
     estimatedWaitMinutes: 3,
     image: 'https://images.unsplash.com/photo-1608270199996-51f786fa05d8?w=600&auto=format&fit=crop&q=80',
-    createdAt: '2026-01-01T00:00:00.000Z',
+    createdAt: '2026-01-01T00:00:03.000Z',
   },
 ];
 
@@ -180,6 +181,21 @@ const INITIAL_MENU_ITEMS: Record<string, Omit<MenuItem, 'id' | 'standId' | 'crea
   ],
 };
 
+/**
+ * Ordena puestos/negocios cronológicamente según su fecha de creación ascendente
+ * (el primer negocio creado se ubica en 1° lugar, luego el 2°, 3°, 4°, etc.)
+ */
+export function sortStandsChronologically(a: StadiumStand, b: StadiumStand): number {
+  const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+  const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+  if (!isNaN(timeA) && !isNaN(timeB) && timeA > 0 && timeB > 0 && timeA !== timeB) {
+    return timeA - timeB; // Ascendente: más antiguo / primer creado primero
+  }
+  if (timeA > 0 && (!timeB || isNaN(timeB) || timeB === 0)) return -1;
+  if (timeB > 0 && (!timeA || isNaN(timeA) || timeA === 0)) return 1;
+  return (a.name || '').localeCompare(b.name || '');
+}
+
 export async function getStadiumStands(venueId?: string): Promise<StadiumStand[]> {
   const isMariscal = !venueId || venueId === DEFAULT_VENUE_ID;
   const targetVenueId = venueId || DEFAULT_VENUE_ID;
@@ -188,13 +204,14 @@ export async function getStadiumStands(venueId?: string): Promise<StadiumStand[]
   // 1. Revisar caché local primero
   const cached = getCachedData<StadiumStand[]>(cacheKey);
   if (cached && cached.length > 0) {
-    return cached;
+    const sortedCached = [...cached].sort(sortStandsChronologically);
+    return sortedCached;
   }
 
   try {
     const q = venueId
-      ? query(collection(db, STANDS_COLLECTION), where('venueId', '==', venueId), limit(50))
-      : query(collection(db, STANDS_COLLECTION), limit(50));
+      ? query(collection(db, STANDS_COLLECTION), where('venueId', '==', venueId), limit(150))
+      : query(collection(db, STANDS_COLLECTION), limit(150));
     const snap = await getDocs(q);
 
     if (snap.empty) {
@@ -205,16 +222,16 @@ export async function getStadiumStands(venueId?: string): Promise<StadiumStand[]
         return [];
       }
 
-      // Únicamente para el Estadio Teodoro Mariscal sembramos sus datos de muestra iniciales
+      // Únicamente para el Estadio Teodoro Mariscal sembramos sus datos de muestra iniciales si está vacío
       try {
         const seeded = await seedInitialStandsAndMenu();
         const match = seeded.filter((s) => (s.venueId || DEFAULT_VENUE_ID) === DEFAULT_VENUE_ID);
-        const result = match.slice(0, 3);
-        setCachedData(cacheKey, result, 15);
-        return result;
+        match.sort(sortStandsChronologically);
+        setCachedData(cacheKey, match, 15);
+        return match;
       } catch (seedErr) {
         console.warn('No se pudieron sembrar los puestos en Firestore para Mariscal. Usando datos iniciales:', seedErr);
-        const fallback = INITIAL_STANDS.slice(0, 3);
+        const fallback = [...INITIAL_STANDS].sort(sortStandsChronologically);
         setCachedData(cacheKey, fallback, 15);
         return fallback;
       }
@@ -231,34 +248,25 @@ export async function getStadiumStands(venueId?: string): Promise<StadiumStand[]
       return [];
     }
 
-    // Deduplicar estrictamente por nombre o ID para garantizar exactamente un puesto por concepto
+    // Deduplicar únicamente por ID de documento
     const uniqueMap = new Map<string, StadiumStand>();
     for (const s of venueFilteredDocs) {
-      const key = (s.name || '').trim().toLowerCase();
-      if (!uniqueMap.has(key)) {
-        uniqueMap.set(key, s);
+      if (!uniqueMap.has(s.id)) {
+        uniqueMap.set(s.id, s);
       }
     }
     const deduplicated = Array.from(uniqueMap.values());
 
-    // Solo para el Mariscal limitamos canónicamente a 3 y realizamos mantenimiento si acumuló duplicados
-    if (isMariscal) {
-      if (allDocs.length > 3) {
-        cleanupDuplicateStands().catch(() => {});
-      }
-      const result = deduplicated.slice(0, 3);
-      setCachedData(cacheKey, result, 15);
-      return result;
-    }
+    // Ordenar de manera cronológica estricta: primer creado -> segundo -> tercero -> etc.
+    deduplicated.sort(sortStandsChronologically);
 
     setCachedData(cacheKey, deduplicated, 15);
     return deduplicated;
   } catch (err) {
     handleFirestoreError(err, OperationType.LIST, STANDS_COLLECTION);
     // En caso de fallo de red: solo devolver datos de muestra si es la sede del Mariscal.
-    // Para cualquier otra sede solicitada explícitamente, siempre retornar arreglo vacío.
     if (isMariscal) {
-      const fallback = INITIAL_STANDS.slice(0, 3);
+      const fallback = [...INITIAL_STANDS].sort(sortStandsChronologically);
       setCachedData(cacheKey, fallback, 10);
       return fallback;
     }
@@ -267,49 +275,10 @@ export async function getStadiumStands(venueId?: string): Promise<StadiumStand[]
 }
 
 /**
- * Limpia y consolida puestos en Firestore dejando únicamente los 3 concesionarios canónicos del Teodoro Mariscal.
- * Respeta escrupulosamente los negocios de otras sedes (ej. venue-encanto) sin tocarlos ni eliminarlos.
+ * Mantenimiento de puestos: nunca elimina negocios legítimos creados por el administrador
  */
 export async function cleanupDuplicateStands(): Promise<void> {
-  try {
-    const standsSnap = await getDocs(collection(db, STANDS_COLLECTION));
-    const canonicalIds = new Set(INITIAL_STANDS.map((s) => s.id));
-    const seenNames = new Set<string>();
-
-    for (const d of standsSnap.docs) {
-      const data = d.data() as StadiumStand;
-      const standVenue = data.venueId || DEFAULT_VENUE_ID;
-
-      // NUNCA tocar o eliminar puestos creados para otras sedes
-      if (standVenue !== DEFAULT_VENUE_ID) {
-        continue;
-      }
-
-      const normalizedName = (data.name || '').trim().toLowerCase();
-
-      // Si no es un ID canónico o ya procesamos un puesto con este nombre en Mariscal, borrar duplicado
-      const isExtraOrDuplicate = !canonicalIds.has(d.id) || seenNames.has(normalizedName);
-      if (isExtraOrDuplicate) {
-        await deleteDoc(d.ref).catch(() => {});
-        // Limpiar items de menú que dependían del ID duplicado
-        try {
-          const menuSnap = await getDocs(
-            query(collection(db, MENU_COLLECTION), where('standId', '==', d.id))
-          );
-          for (const mDoc of menuSnap.docs) {
-            await deleteDoc(mDoc.ref).catch(() => {});
-          }
-        } catch {}
-      } else {
-        seenNames.add(normalizedName);
-      }
-    }
-
-    // Asegurar que los 3 concesionarios canónicos de Mariscal existen con sus IDs deterministas
-    await seedInitialStandsAndMenu();
-  } catch (err) {
-    console.warn('cleanupDuplicateStands: Nota durante la consolidación de puestos del Mariscal:', err);
-  }
+  // No-op de seguridad para no eliminar ningún negocio creado por el administrador
 }
 
 // =========================================================================================
@@ -322,28 +291,37 @@ export async function seedInitialStandsAndMenu(): Promise<StadiumStand[]> {
 
   for (const standData of INITIAL_STANDS) {
     const standDocRef = doc(db, STANDS_COLLECTION, standData.id);
-    const fullStand: StadiumStand = {
-      ...standData,
-      venueId: DEFAULT_VENUE_ID,
-      createdAt: standData.createdAt || now,
-      updatedAt: now,
-    };
-    await setDoc(standDocRef, fullStand, { merge: true });
-    createdStands.push(fullStand);
+    const snap = await getDoc(standDocRef);
 
-    // Sembrar menú con IDs deterministas para evitar duplicados
-    const menuList = INITIAL_MENU_ITEMS[standData.name] || [];
-    for (let idx = 0; idx < menuList.length; idx++) {
-      const item = menuList[idx];
-      const itemDocRef = doc(db, MENU_COLLECTION, `menu-${standData.id}-${idx + 1}`);
-      const fullItem: MenuItem = {
-        ...item,
-        id: `menu-${standData.id}-${idx + 1}`,
-        standId: standData.id,
+    if (!snap.exists()) {
+      const fullStand: StadiumStand = {
+        ...standData,
         venueId: DEFAULT_VENUE_ID,
-        createdAt: now,
+        createdAt: standData.createdAt || now,
+        updatedAt: now,
       };
-      await setDoc(itemDocRef, fullItem, { merge: true });
+      await setDoc(standDocRef, fullStand);
+      createdStands.push(fullStand);
+
+      // Sembrar menú solo si el stand es nuevo
+      const menuList = INITIAL_MENU_ITEMS[standData.name] || [];
+      for (let idx = 0; idx < menuList.length; idx++) {
+        const item = menuList[idx];
+        const itemDocRef = doc(db, MENU_COLLECTION, `menu-${standData.id}-${idx + 1}`);
+        const itemSnap = await getDoc(itemDocRef);
+        if (!itemSnap.exists()) {
+          const fullItem: MenuItem = {
+            ...item,
+            id: `menu-${standData.id}-${idx + 1}`,
+            standId: standData.id,
+            venueId: DEFAULT_VENUE_ID,
+            createdAt: now,
+          };
+          await setDoc(itemDocRef, fullItem);
+        }
+      }
+    } else {
+      createdStands.push({ id: snap.id, ...snap.data() } as StadiumStand);
     }
   }
 
@@ -363,7 +341,14 @@ export async function getMenuItemsByStand(standId: string): Promise<MenuItem[]> 
       where('standId', '==', standId)
     );
     const snap = await getDocs(q);
-    const result = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as MenuItem[];
+    const result = snap.docs.map((d) => {
+      const data = d.data() as MenuItem;
+      return {
+        ...data,
+        id: d.id,
+        image: normalizeGoogleDriveImageUrl(data.image) || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80',
+      };
+    });
     setCachedData(cacheKey, result, 15);
     return result;
   } catch (err) {
@@ -385,7 +370,14 @@ export async function getAllMenuItems(venueId?: string): Promise<MenuItem[]> {
       ? query(collection(db, MENU_COLLECTION), where('venueId', '==', venueId), limit(150))
       : query(collection(db, MENU_COLLECTION), limit(150));
     const snap = await getDocs(q);
-    let items = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as MenuItem[];
+    let items = snap.docs.map((d) => {
+      const data = d.data() as MenuItem;
+      return {
+        ...data,
+        id: d.id,
+        image: normalizeGoogleDriveImageUrl(data.image) || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80',
+      };
+    });
 
     // Si no hay items con venueId explícito guardados en Firestore,
     // filtrar según los stands registrados para esta sede
@@ -394,7 +386,14 @@ export async function getAllMenuItems(venueId?: string): Promise<MenuItem[]> {
       const standIds = new Set(stands.map((s) => s.id));
       if (standIds.size > 0) {
         const allSnap = await getDocs(query(collection(db, MENU_COLLECTION), limit(150)));
-        items = (allSnap.docs.map((d) => ({ id: d.id, ...d.data() })) as MenuItem[]).filter((i) => standIds.has(i.standId));
+        items = allSnap.docs.map((d) => {
+          const data = d.data() as MenuItem;
+          return {
+            ...data,
+            id: d.id,
+            image: normalizeGoogleDriveImageUrl(data.image) || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80',
+          };
+        }).filter((i) => standIds.has(i.standId));
       } else {
         items = [];
       }
@@ -422,14 +421,23 @@ export async function saveMenuItem(
 ): Promise<MenuItem> {
   const now = new Date().toISOString();
   try {
-    if (itemData.id) {
-      const docRef = doc(db, MENU_COLLECTION, itemData.id);
-      await updateDoc(docRef, sanitizeFirestoreData(itemData));
-      return itemData as MenuItem;
+    let itemId = itemData.id;
+    let docRef: any;
+    const normalizedImage = itemData.image ? normalizeGoogleDriveImageUrl(itemData.image) : undefined;
+    const cleanedData = {
+      ...(itemData as Record<string, any>),
+      ...(normalizedImage ? { image: normalizedImage } : {}),
+      updatedAt: now,
+    };
+
+    if (itemId) {
+      docRef = doc(db, MENU_COLLECTION, itemId);
+      await setDoc(docRef, sanitizeFirestoreData(cleanedData), { merge: true });
     } else {
-      const docRef = doc(collection(db, MENU_COLLECTION));
+      docRef = doc(collection(db, MENU_COLLECTION));
+      itemId = docRef.id;
       const newItem: MenuItem = {
-        id: docRef.id,
+        id: itemId,
         standId: itemData.standId,
         venueId: itemData.venueId || DEFAULT_VENUE_ID,
         name: itemData.name,
@@ -437,15 +445,27 @@ export async function saveMenuItem(
         price: Number(itemData.price) || 0,
         category: itemData.category || 'comida',
         available: itemData.available !== undefined ? itemData.available : true,
-        image: itemData.image || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80',
+        image: normalizedImage || itemData.image || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80',
         prepTimeMinutes: Number(itemData.prepTimeMinutes) || 5,
         createdAt: now,
       };
       await setDoc(docRef, sanitizeFirestoreData(newItem));
-      return newItem;
     }
+
+    const snap = await getDoc(docRef);
+    const rawData = (snap.data() as Record<string, any>) || {};
+    const saved: MenuItem = {
+      id: docRef.id,
+      ...rawData,
+      image: normalizeGoogleDriveImageUrl(rawData.image) || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80',
+    } as MenuItem;
+
+    invalidateCache('concessions_menu_');
+    invalidateCache('concessions_');
+    return saved;
   } catch (err) {
     handleFirestoreError(err, itemData.id ? OperationType.UPDATE : OperationType.CREATE, MENU_COLLECTION);
+    throw err;
   }
 }
 
@@ -453,6 +473,8 @@ export async function deleteMenuItem(itemId: string): Promise<void> {
   try {
     const docRef = doc(db, MENU_COLLECTION, itemId);
     await deleteDoc(docRef);
+    invalidateCache('concessions_menu_');
+    invalidateCache('concessions_');
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, `${MENU_COLLECTION}/${itemId}`);
   }

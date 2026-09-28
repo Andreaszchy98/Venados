@@ -337,8 +337,11 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
   };
 
   const handleCardPaymentSuccess = async (result: DirectPaymentResult) => {
-    setIsCardModalOpen(false);
-    await executeOrderSubmission(result);
+    try {
+      await executeOrderSubmission(result);
+    } finally {
+      setIsCardModalOpen(false);
+    }
   };
 
   return (

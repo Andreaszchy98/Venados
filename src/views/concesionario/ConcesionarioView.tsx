@@ -878,18 +878,24 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
                   }`}
                 >
                   <div>
-                    {/* Imagen del Platillo */}
-                    <div className="relative h-36 w-full bg-slate-900 overflow-hidden">
+                    {/* Imagen del Platillo (Completa, sin recortes) */}
+                    <div className="relative h-40 w-full bg-slate-950 overflow-hidden flex items-center justify-center">
                       <img
-                        src={item.image || PRESET_FOOD_IMAGES[0].url}
+                        src={normalizeGoogleDriveImageUrl(item.image) || PRESET_FOOD_IMAGES[0].url}
+                        alt=""
+                        aria-hidden="true"
+                        className="absolute inset-0 w-full h-full object-cover blur-md scale-110 opacity-25 select-none pointer-events-none"
+                      />
+                      <img
+                        src={normalizeGoogleDriveImageUrl(item.image) || PRESET_FOOD_IMAGES[0].url}
                         alt={item.name}
                         referrerPolicy="no-referrer"
-                        className="w-full h-full object-cover"
+                        className="relative z-10 w-full h-full object-contain p-2 drop-shadow-md"
                         onError={(e) => {
                           (e.target as HTMLImageElement).src = PRESET_FOOD_IMAGES[0].url;
                         }}
                       />
-                      <div className="absolute top-2 left-2 flex items-center gap-1.5">
+                      <div className="absolute top-2 left-2 flex items-center gap-1.5 z-20">
                         <span className="px-2 py-0.5 rounded-lg bg-slate-950/80 backdrop-blur-xs text-white text-[10px] font-black uppercase tracking-wider font-sports border border-slate-700/60">
                           {item.category}
                         </span>
@@ -902,7 +908,7 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
                       </div>
 
                       {/* Badge de disponibilidad en foto */}
-                      <div className="absolute top-2 right-2">
+                      <div className="absolute top-2 right-2 z-20">
                         <span
                           className={`px-2 py-0.5 rounded-lg text-[10px] font-black tracking-wider uppercase shadow-md font-sports ${
                             item.available

@@ -728,12 +728,12 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
   };
 
   const handleCardPaymentSuccess = async (paymentResult: DirectPaymentResult) => {
-    setIsCardModalOpen(false);
     setPurchaseError(null);
 
     // Conservar snapshot inmutable de los asientos a comprar
     const seatsToPurchase = [...selectedSeats];
     if (seatsToPurchase.length === 0) {
+      setIsCardModalOpen(false);
       setPurchasing(false);
       return;
     }
@@ -784,6 +784,7 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
     setCompletedPurchaseId(purchaseId);
     setCompletedTicketsCount(generatedTickets.length);
     setPurchasing(false);
+    setIsCardModalOpen(false);
 
     // Registrar en segundo plano la transacción en Firestore
     purchaseSeatsTransaction({

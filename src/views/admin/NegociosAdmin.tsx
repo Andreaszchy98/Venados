@@ -10,6 +10,7 @@ import {
   saveMenuItem,
   deleteMenuItem,
   toggleMenuItemAvailability,
+  sortStandsChronologically,
 } from '../../lib/stands';
 import { getVenueStaff } from '../../lib/auth';
 import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
@@ -233,7 +234,7 @@ export const NegociosAdmin: React.FC<NegociosAdminProps> = ({ user }) => {
       if (editingStand) {
         await updateStadiumStand(editingStand.id, payload);
         setStands((prev) =>
-          prev.map((s) => (s.id === editingStand.id ? { ...s, ...payload, updatedAt: new Date().toISOString() } : s))
+          prev.map((s) => (s.id === editingStand.id ? { ...s, ...payload, updatedAt: new Date().toISOString() } : s)).sort(sortStandsChronologically)
         );
         setNotification({
           type: 'success',
@@ -241,7 +242,7 @@ export const NegociosAdmin: React.FC<NegociosAdminProps> = ({ user }) => {
         });
       } else {
         const created = await createStadiumStand(payload);
-        setStands((prev) => [created, ...prev]);
+        setStands((prev) => [...prev, created].sort(sortStandsChronologically));
         setNotification({
           type: 'success',
           message: `Nuevo negocio "${payload.name}" registrado con éxito en el estadio.`,
@@ -1147,7 +1148,7 @@ export const NegociosAdmin: React.FC<NegociosAdminProps> = ({ user }) => {
                     >
                       <div className="flex items-center gap-3">
                         <img
-                          src={item.image || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80'}
+                          src={normalizeGoogleDriveImageUrl(item.image) || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80'}
                           alt={item.name}
                           referrerPolicy="no-referrer"
                           className="w-12 h-12 rounded-xl object-cover border border-slate-700 shrink-0"
