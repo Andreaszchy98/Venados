@@ -39,6 +39,7 @@ import {
   RotateCcw,
   Armchair,
   Radio,
+  FileText,
 } from 'lucide-react';
 
 interface EventsManagerProps {
@@ -120,6 +121,7 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user, onOpenScoreb
   const [formName, setFormName] = useState('');
   const [formType, setFormType] = useState<EventType>('baseball');
   const [formOpponent, setFormOpponent] = useState('');
+  const [formSynopsis, setFormSynopsis] = useState('');
   const [formDate, setFormDate] = useState('');
   const [formTime, setFormTime] = useState('20:00 hrs');
   const [formGate, setFormGate] = useState('Puertas 1, 2 y 4');
@@ -170,6 +172,7 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user, onOpenScoreb
     setFormName('Venados de Mazatlán vs ');
     setFormType('baseball');
     setFormOpponent('');
+    setFormSynopsis('');
     setFormDate(defaultDate);
     setFormTime(defaultTime);
     setFormGate('Puertas 1, 2, 4 y 8');
@@ -195,6 +198,7 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user, onOpenScoreb
     setFormName(event.name);
     setFormType(event.type);
     setFormOpponent(event.opponent || '');
+    setFormSynopsis(event.synopsis || event.description || '');
     setFormDate(event.date);
     setFormTime(event.time || '20:00 hrs');
     setFormGate(event.gate || 'Puertas Generales');
@@ -327,6 +331,8 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user, onOpenScoreb
             name: formName.trim(),
             type: formType,
             opponent: formOpponent.trim() || undefined,
+            synopsis: formSynopsis.trim() || undefined,
+            description: formSynopsis.trim() || undefined,
             date: formDate,
             time: formTime.trim(),
             gate: formGate.trim() || undefined,
@@ -350,6 +356,8 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user, onOpenScoreb
             name: formName.trim(),
             type: formType,
             opponent: formOpponent.trim() || undefined,
+            synopsis: formSynopsis.trim() || undefined,
+            description: formSynopsis.trim() || undefined,
             date: formDate,
             time: formTime.trim(),
             gate: formGate.trim() || undefined,
@@ -707,6 +715,11 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user, onOpenScoreb
                         Rival: <span className="font-bold text-slate-200">{ev.opponent}</span>
                       </p>
                     )}
+                    {Boolean(ev.synopsis || ev.description) && (
+                      <p className="text-[11px] text-slate-300 mt-1 line-clamp-2 italic font-body bg-black/40 p-1.5 rounded-lg border border-slate-800">
+                        "{ev.synopsis || ev.description}"
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -986,6 +999,29 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user, onOpenScoreb
                     className="w-full px-3 py-2 bg-[#0A0E17] border border-slate-700/80 rounded-xl text-xs font-semibold text-white placeholder-slate-500 focus:outline-hidden focus:border-red-500"
                   />
                 </div>
+              </div>
+
+              {/* Sinopsis / Reseña del Evento */}
+              <div className="space-y-1.5 p-3.5 bg-[#0A0E17] rounded-xl border border-slate-800">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-black uppercase font-sports tracking-wider text-slate-200 flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-amber-400" />
+                    Sinopsis / Reseña del Evento (Cartelera & Ficha Técnica)
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    {formSynopsis.length} caracteres
+                  </span>
+                </div>
+                <textarea
+                  rows={3}
+                  placeholder="Escribe la sinopsis del encuentro o espectáculo para los aficionados (ej. 'Gran clásico sinaloense de la Liga Mexicana del Pacífico. Vive toda la pasión del béisbol con música en vivo y fiesta en las gradas...')."
+                  value={formSynopsis}
+                  onChange={(e) => setFormSynopsis(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#141C2E] border border-slate-700 rounded-xl text-xs font-medium text-white placeholder-slate-500 focus:outline-hidden focus:border-red-500 resize-none leading-relaxed"
+                />
+                <p className="text-[11px] text-slate-400 font-body">
+                  Esta sinopsis se mostrará en la cartelera principal, en la ficha técnica del evento y durante la selección de boletos.
+                </p>
               </div>
 
               {/* Sección 1: Subida de Imagen Promocional (Póster para Cartelera) */}

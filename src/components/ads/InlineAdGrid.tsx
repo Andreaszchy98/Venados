@@ -7,9 +7,10 @@ import { ExternalLink, Sparkles } from 'lucide-react';
 
 interface InlineAdGridProps {
   venueId: string;
+  onSelectStore?: (type: 'tienda' | 'comida') => void;
 }
 
-export const InlineAdGrid: React.FC<InlineAdGridProps> = ({ venueId }) => {
+export const InlineAdGrid: React.FC<InlineAdGridProps> = ({ venueId, onSelectStore }) => {
   const { theme } = useTheme();
   const [ads, setAds] = useState<SponsorAd[]>([]);
   const trackedImpressions = useRef<Set<string>>(new Set());
@@ -30,7 +31,17 @@ export const InlineAdGrid: React.FC<InlineAdGridProps> = ({ venueId }) => {
 
   const handleClick = (ad: SponsorAd) => {
     trackAdClick(ad.id);
-    if (ad.targetUrl) {
+    if (ad.linkDestinationType === 'store_item' && ad.targetItemId) {
+      try {
+        sessionStorage.setItem('vxp_target_product_id', ad.targetItemId);
+      } catch {}
+      onSelectStore?.('tienda');
+    } else if (ad.linkDestinationType === 'concession_dish' && ad.targetItemId) {
+      try {
+        sessionStorage.setItem('vxp_target_dish_id', ad.targetItemId);
+      } catch {}
+      onSelectStore?.('comida');
+    } else if (ad.targetUrl) {
       window.open(ad.targetUrl, '_blank', 'noopener,noreferrer');
     }
   };
@@ -64,6 +75,9 @@ export const InlineAdGrid: React.FC<InlineAdGridProps> = ({ venueId }) => {
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+              <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-xs border border-white/10 text-[9px] font-sports font-bold tracking-wider uppercase text-amber-300">
+                {ad.badgeLabel || 'Patrocinador Oficial'}
+              </div>
               <div className="absolute bottom-2 left-2.5 right-2.5 flex items-center justify-between">
                 <span className="text-xs font-black font-sports uppercase tracking-wider text-white truncate">
                   {ad.sponsorName}

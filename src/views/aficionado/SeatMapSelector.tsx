@@ -916,6 +916,14 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
             <span className={`font-bold ${theme === 'light' ? 'text-slate-800' : 'text-slate-200'}`}>{stadiumName}</span>
           </div>
         </div>
+
+        {Boolean(event.synopsis || event.description) && (
+          <p className={`text-xs leading-relaxed pt-2 border-t font-sans ${
+            theme === 'light' ? 'border-slate-100 text-slate-600' : 'border-slate-800 text-slate-300'
+          }`}>
+            {event.synopsis || event.description}
+          </p>
+        )}
       </div>
 
       {/* Banner si el evento ya finalizó o la venta está cerrada */}

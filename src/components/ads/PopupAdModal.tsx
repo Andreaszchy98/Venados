@@ -6,9 +6,10 @@ import { X, ExternalLink, Sparkles } from 'lucide-react';
 
 interface PopupAdModalProps {
   venueId: string;
+  onSelectStore?: (type: 'tienda' | 'comida') => void;
 }
 
-export const PopupAdModal: React.FC<PopupAdModalProps> = ({ venueId }) => {
+export const PopupAdModal: React.FC<PopupAdModalProps> = ({ venueId, onSelectStore }) => {
   const [popupAd, setPopupAd] = useState<SponsorAd | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const trackedRef = useRef(false);
@@ -37,7 +38,17 @@ export const PopupAdModal: React.FC<PopupAdModalProps> = ({ venueId }) => {
 
   const handleAction = () => {
     trackAdClick(popupAd.id);
-    if (popupAd.targetUrl) {
+    if (popupAd.linkDestinationType === 'store_item' && popupAd.targetItemId) {
+      try {
+        sessionStorage.setItem('vxp_target_product_id', popupAd.targetItemId);
+      } catch {}
+      onSelectStore?.('tienda');
+    } else if (popupAd.linkDestinationType === 'concession_dish' && popupAd.targetItemId) {
+      try {
+        sessionStorage.setItem('vxp_target_dish_id', popupAd.targetItemId);
+      } catch {}
+      onSelectStore?.('comida');
+    } else if (popupAd.targetUrl) {
       window.open(popupAd.targetUrl, '_blank', 'noopener,noreferrer');
     }
     setIsOpen(false);
@@ -66,7 +77,7 @@ export const PopupAdModal: React.FC<PopupAdModalProps> = ({ venueId }) => {
 
           <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black/70 border border-white/10 text-[10px] font-sports font-bold tracking-wider uppercase text-amber-400">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Patrocinador Oficial</span>
+            <span>{popupAd.badgeLabel || 'Patrocinador Oficial'}</span>
           </div>
         </div>
 

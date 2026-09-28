@@ -116,9 +116,13 @@ export async function createSponsorAd(
   const newAd = {
     venueId: adData.venueId || DEFAULT_VENUE_ID,
     sponsorName: (adData.sponsorName || 'Patrocinador Oficial').trim(),
+    badgeLabel: (adData.badgeLabel || 'Patrocinador Oficial').trim(),
     type: adType,
     imageUrl: finalImageUrl,
     targetUrl: (adData.targetUrl || '').trim(),
+    linkDestinationType: adData.linkDestinationType || 'external',
+    targetItemId: adData.targetItemId || '',
+    targetItemName: adData.targetItemName || '',
     startDate: adData.startDate || now.split('T')[0],
     endDate: adData.endDate || now.split('T')[0],
     active: typeof adData.active === 'boolean' ? adData.active : true,
@@ -142,9 +146,13 @@ export async function updateSponsorAd(id: string, updates: Partial<SponsorAd>): 
   };
 
   if (updates.sponsorName !== undefined) cleanUpdates.sponsorName = updates.sponsorName.trim();
+  if (updates.badgeLabel !== undefined) cleanUpdates.badgeLabel = updates.badgeLabel.trim();
   if (updates.type !== undefined) cleanUpdates.type = updates.type;
   if (updates.imageUrl !== undefined) cleanUpdates.imageUrl = normalizeGoogleDriveImageUrl(updates.imageUrl.trim());
   if (updates.targetUrl !== undefined) cleanUpdates.targetUrl = updates.targetUrl.trim();
+  if (updates.linkDestinationType !== undefined) cleanUpdates.linkDestinationType = updates.linkDestinationType;
+  if (updates.targetItemId !== undefined) cleanUpdates.targetItemId = updates.targetItemId;
+  if (updates.targetItemName !== undefined) cleanUpdates.targetItemName = updates.targetItemName;
   if (updates.startDate !== undefined) cleanUpdates.startDate = updates.startDate;
   if (updates.endDate !== undefined) cleanUpdates.endDate = updates.endDate;
   if (updates.active !== undefined) cleanUpdates.active = updates.active;

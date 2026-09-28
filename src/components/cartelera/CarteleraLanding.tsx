@@ -168,17 +168,31 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
       localStorage.setItem('vxp_selected_city', newCity);
     } catch {}
 
-    // Si la sede actual no pertenece a la nueva ciudad, reiniciar a 'todos'
     if (newCity !== 'todas') {
       const match = venues.filter((v) => (v.city || 'Mazatlán').toLowerCase() === newCity.toLowerCase());
-      if (selectedVenueId !== 'todos' && !match.some((v) => v.id === selectedVenueId)) {
-        setSelectedVenueId('todos');
+      if (match.length === 1) {
+        setSelectedVenueId(match[0].id);
         try {
-          localStorage.setItem('vxp_selected_venue_id', 'todos');
+          localStorage.setItem('vxp_selected_venue_id', match[0].id);
+        } catch {}
+      } else if (selectedVenueId !== 'todos' && !match.some((v) => v.id === selectedVenueId)) {
+        setSelectedVenueId(match.length > 1 ? 'todos' : (match[0]?.id || 'todos'));
+        try {
+          localStorage.setItem('vxp_selected_venue_id', match.length > 1 ? 'todos' : (match[0]?.id || 'todos'));
         } catch {}
       }
     }
   };
+
+  // Auto-seleccionar el único recinto si no hay más opciones en la ciudad
+  useEffect(() => {
+    if (venuesInCity.length === 1 && selectedVenueId === 'todos') {
+      setSelectedVenueId(venuesInCity[0].id);
+      try {
+        localStorage.setItem('vxp_selected_venue_id', venuesInCity[0].id);
+      } catch {}
+    }
+  }, [venuesInCity, selectedVenueId]);
 
   // Manejar cambio de sede dentro de la ciudad
   const handleSwitchVenue = (venueId: string) => {
@@ -195,13 +209,17 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
     if (selectedVenueId !== 'todos' && venueObj?.name) {
       return venueObj.name;
     }
+    // Si solo hay un recinto disponible en la ciudad, mostrarlo directamente
+    if (venuesInCity.length === 1 && venuesInCity[0]?.name) {
+      return venuesInCity[0].name;
+    }
     // 2. Si está en "Todos los recintos" de una ciudad específica
     if (selectedCity !== 'todas') {
       return `${selectedCity} · Todos los recintos`;
     }
     // 3. Si está en "Todas las ciudades"
     return 'Todas las ciudades';
-  }, [selectedCity, selectedVenueId, venues]);
+  }, [selectedCity, selectedVenueId, venues, venuesInCity]);
 
   // Nombre descriptivo del recinto para el encabezado de selección
   const selectedVenueHeaderLabel = useMemo(() => {
@@ -315,6 +333,13 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
 
   // Generar descripción / sinopsis atractiva
   const getEventSynopsis = (ev: VenueEvent) => {
+    if (ev.synopsis && ev.synopsis.trim().length > 0) {
+      return ev.synopsis.trim();
+    }
+    if (ev.description && ev.description.trim().length > 0) {
+      return ev.description.trim();
+    }
+
     const v = venues.find((item) => item.id === ev.venueId);
     const venueName = ev.venueName || v?.name || 'el recinto';
     if (ev.type === 'baseball') {
@@ -501,25 +526,28 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
                       2. SELECCIONA RECINTO ({selectedVenueHeaderLabel})
                     </span>
                     <div className="space-y-1 max-h-52 overflow-y-auto pr-0.5">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleSwitchVenue('todos');
-                          setIsLocationOpen(false);
-                        }}
-                        className={`w-full px-2.5 py-1.5 rounded-xl text-left text-xs font-bold flex items-center justify-between transition-colors cursor-pointer ${
-                          selectedVenueId === 'todos'
-                            ? theme === 'light'
-                              ? 'bg-red-50 text-red-700 border border-red-200'
-                              : 'bg-red-600/20 text-red-300 border border-red-500/50'
-                            : theme === 'light'
-                            ? 'hover:bg-slate-100 text-slate-700'
-                            : 'hover:bg-[#182032] text-slate-300'
-                        }`}
-                      >
-                        <span>Todos los recintos</span>
-                        {selectedVenueId === 'todos' && <Check className="w-3.5 h-3.5 text-red-500" />}
-                      </button>
+                      {/* Solo mostrar 'Todos los recintos' si hay más de 1 recinto disponible en la lista */}
+                      {venuesInCity.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleSwitchVenue('todos');
+                            setIsLocationOpen(false);
+                          }}
+                          className={`w-full px-2.5 py-1.5 rounded-xl text-left text-xs font-bold flex items-center justify-between transition-colors cursor-pointer ${
+                            selectedVenueId === 'todos'
+                              ? theme === 'light'
+                                ? 'bg-red-50 text-red-700 border border-red-200'
+                                : 'bg-red-600/20 text-red-300 border border-red-500/50'
+                              : theme === 'light'
+                              ? 'hover:bg-slate-100 text-slate-700'
+                              : 'hover:bg-[#182032] text-slate-300'
+                          }`}
+                        >
+                          <span>Todos los recintos</span>
+                          {selectedVenueId === 'todos' && <Check className="w-3.5 h-3.5 text-red-500" />}
+                        </button>
+                      )}
 
                       {venuesInCity.map((v) => {
                         const isSel = selectedVenueId === v.id;
@@ -574,7 +602,13 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
       {/* 2. FILA DE SELECCIÓN DE VISTA (CARTELERA VS MARCADORES FINALIZADOS) Y FILTROS */}
       <div className="max-w-6xl mx-auto mb-4 space-y-3">
         {/* Banner Publicitario Hero de Patrocinador Oficial */}
-        <HeroAdBanner venueId={selectedVenueId} onSelectStore={() => onSelectStore?.('tienda')} />
+        <HeroAdBanner
+          venueId={selectedVenueId}
+          onSelectStore={(type) => {
+            if (onSelectStore) onSelectStore(type);
+            else if (onSelectTab) onSelectTab(type);
+          }}
+        />
 
         {/* Switcher de Vista: Cartelera vs Marcadores de Juegos Finalizados */}
         <div className="flex flex-wrap items-center justify-between gap-2.5">
@@ -992,14 +1026,26 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
         </div>
 
         {/* Banners Inline Grid de Patrocinadores Oficiales */}
-        <InlineAdGrid venueId={selectedVenueId} />
+        <InlineAdGrid
+          venueId={selectedVenueId}
+          onSelectStore={(type) => {
+            if (onSelectStore) onSelectStore(type);
+            else if (onSelectTab) onSelectTab(type);
+          }}
+        />
       </main>
       )}
     </>
   )}
 
       {/* Modal Emergente Popup de Patrocinio */}
-      <PopupAdModal venueId={selectedVenueId} />
+      <PopupAdModal
+        venueId={selectedVenueId}
+        onSelectStore={(type) => {
+          if (onSelectStore) onSelectStore(type);
+          else if (onSelectTab) onSelectTab(type);
+        }}
+      />
 
       {/* 4. MODAL FLOTANTE DE SINOPSIS DEL EVENTO */}
       {synopsisEvent && (

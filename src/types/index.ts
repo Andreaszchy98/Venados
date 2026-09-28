@@ -81,6 +81,8 @@ export interface VenueEvent {
   type: EventType;
   name: string; // ej. "Venados de Mazatlán vs Tomateros de Culiacán"
   opponent?: string;
+  synopsis?: string; // Sinopsis / Reseña promocional del evento
+  description?: string; // Descripción opcional del evento
   date: string;
   time: string;
   gate?: string;
@@ -541,9 +543,13 @@ export interface SponsorAd {
   id: string;
   venueId: string;
   sponsorName: string;
+  badgeLabel?: string; // Etiqueta distintiva (ej. "Patrocinador Oficial", "Tienda Oficial", "Promoción Especial", "Concesionario")
   type: AdType; // 'hero' | 'inline' | 'popup'
   imageUrl: string;
-  targetUrl?: string; // URL opcional de redirección
+  targetUrl?: string; // URL opcional de redirección externa
+  linkDestinationType?: 'external' | 'store_item' | 'concession_dish'; // Tipo de destino del enlace
+  targetItemId?: string; // ID del producto de tienda o platillo de concesionario seleccionado
+  targetItemName?: string; // Nombre de referencia del artículo o platillo
   startDate: string; // YYYY-MM-DD
   endDate: string; // YYYY-MM-DD
   active: boolean;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { UserProfile, SponsorAd, AdType, Venue } from '../../types';
+import { UserProfile, SponsorAd, AdType, Venue, InventoryProduct, MenuItem } from '../../types';
 import {
   subscribeSponsorAds,
   createSponsorAd,
@@ -8,6 +8,8 @@ import {
 } from '../../lib/sponsorAds';
 import { uploadAdImage } from '../../lib/imageUpload';
 import { subscribeVenues } from '../../lib/venues';
+import { getInventoryProducts } from '../../lib/inventory';
+import { getAllMenuItems } from '../../lib/stands';
 import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
 import { normalizeGoogleDriveImageUrl, isGoogleDriveUrl } from '../../lib/imageUtils';
 import { useTheme } from '../../context/ThemeContext';
@@ -35,34 +37,58 @@ import {
   Tv,
   HelpCircle,
   Wand2,
+  Tag,
+  ShoppingBag,
+  Utensils,
 } from 'lucide-react';
 
 interface AnunciosAdminProps {
   user: UserProfile;
 }
 
+// Opciones rápidas para el texto del banner
+export const BADGE_PRESETS = [
+  'Patrocinador Oficial',
+  'Tienda Oficial',
+  'Promoción Concesionario',
+  'Promoción Especial',
+  'Boletos & Abonos',
+  'Descuento Exclusivo',
+];
+
 // Plantillas predeterminadas de patrocinadores para carga rápida con 1 clic
 const PRESET_SPONSORS = [
   {
     name: 'Cerveza Pacífico Oficial',
+    badgeLabel: 'Patrocinador Oficial',
     type: 'hero' as AdType,
     imageUrl: 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=1200&auto=format&fit=crop&q=80',
     targetUrl: 'https://www.cervezapacifico.com',
   },
   {
+    name: 'Tienda Oficial Venados Store',
+    badgeLabel: 'Tienda Oficial',
+    type: 'hero' as AdType,
+    imageUrl: 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=1200&auto=format&fit=crop&q=80',
+    targetUrl: '',
+  },
+  {
     name: 'Caliente.mx Casa de Apuestas',
+    badgeLabel: 'Patrocinador Oficial',
     type: 'inline' as AdType,
     imageUrl: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=1200&auto=format&fit=crop&q=80',
     targetUrl: 'https://www.caliente.mx',
   },
   {
     name: 'Telcel 5G Velocidad Oficial',
+    badgeLabel: 'Patrocinador Oficial',
     type: 'popup' as AdType,
     imageUrl: 'https://images.unsplash.com/photo-1516245834210-c4c142787335?w=1200&auto=format&fit=crop&q=80',
     targetUrl: 'https://www.telcel.com',
   },
   {
     name: 'Mariscos & Botanero El Teodoro',
+    badgeLabel: 'Promoción Concesionario',
     type: 'inline' as AdType,
     imageUrl: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=1200&auto=format&fit=crop&q=80',
     targetUrl: 'https://venados.com/estadio',
@@ -101,9 +127,15 @@ export const AnunciosAdmin: React.FC<AnunciosAdminProps> = ({ user }) => {
 
   // Formulario
   const [formSponsorName, setFormSponsorName] = useState('');
+  const [formBadgeLabel, setFormBadgeLabel] = useState('Patrocinador Oficial');
   const [formType, setFormType] = useState<AdType>('hero');
   const [formImageUrl, setFormImageUrl] = useState('');
   const [formTargetUrl, setFormTargetUrl] = useState('');
+  const [formLinkDestinationType, setFormLinkDestinationType] = useState<'external' | 'store_item' | 'concession_dish'>('external');
+  const [formTargetItemId, setFormTargetItemId] = useState('');
+  const [formTargetItemName, setFormTargetItemName] = useState('');
+  const [inventoryProducts, setInventoryProducts] = useState<InventoryProduct[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [formStartDate, setFormStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [formEndDate, setFormEndDate] = useState(() => {
     const nextMonth = new Date();
@@ -112,6 +144,14 @@ export const AnunciosAdmin: React.FC<AnunciosAdminProps> = ({ user }) => {
   });
   const [formActive, setFormActive] = useState(true);
   const [formVenueId, setFormVenueId] = useState(currentVenueId);
+
+  // Cargar productos de tienda y platillos del concesionario al abrir el modal o cambiar de sede
+  useEffect(() => {
+    if (isModalOpen) {
+      getInventoryProducts(formVenueId).then(setInventoryProducts).catch(() => setInventoryProducts([]));
+      getAllMenuItems(formVenueId).then(setMenuItems).catch(() => setMenuItems([]));
+    }
+  }, [isModalOpen, formVenueId]);
 
   // Errores y estado de carga
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -162,9 +202,13 @@ export const AnunciosAdmin: React.FC<AnunciosAdminProps> = ({ user }) => {
   const handleOpenCreateModal = () => {
     setEditingAd(null);
     setFormSponsorName('');
+    setFormBadgeLabel('Patrocinador Oficial');
     setFormType('hero');
     setFormImageUrl(DEFAULT_TYPE_IMAGES.hero);
     setFormTargetUrl('');
+    setFormLinkDestinationType('external');
+    setFormTargetItemId('');
+    setFormTargetItemName('');
     setFormStartDate(new Date().toISOString().split('T')[0]);
     const nextMonth = new Date();
     nextMonth.setMonth(nextMonth.getMonth() + 3);
@@ -180,9 +224,13 @@ export const AnunciosAdmin: React.FC<AnunciosAdminProps> = ({ user }) => {
   const handleOpenEditModal = (ad: SponsorAd) => {
     setEditingAd(ad);
     setFormSponsorName(ad.sponsorName);
+    setFormBadgeLabel(ad.badgeLabel || 'Patrocinador Oficial');
     setFormType(ad.type);
     setFormImageUrl(ad.imageUrl);
     setFormTargetUrl(ad.targetUrl || '');
+    setFormLinkDestinationType(ad.linkDestinationType || 'external');
+    setFormTargetItemId(ad.targetItemId || '');
+    setFormTargetItemName(ad.targetItemName || '');
     setFormStartDate(ad.startDate || new Date().toISOString().split('T')[0]);
     setFormEndDate(ad.endDate || new Date().toISOString().split('T')[0]);
     setFormActive(typeof ad.active === 'boolean' ? ad.active : true);
@@ -195,6 +243,7 @@ export const AnunciosAdmin: React.FC<AnunciosAdminProps> = ({ user }) => {
 
   const handleApplyPreset = (preset: typeof PRESET_SPONSORS[0]) => {
     setFormSponsorName(preset.name);
+    setFormBadgeLabel(preset.badgeLabel || 'Patrocinador Oficial');
     setFormType(preset.type);
     setFormImageUrl(preset.imageUrl);
     setFormTargetUrl(preset.targetUrl);
@@ -273,29 +322,27 @@ export const AnunciosAdmin: React.FC<AnunciosAdminProps> = ({ user }) => {
 
     setSaving(true);
     try {
+      const finalBadgeLabel = formBadgeLabel.trim() || 'Patrocinador Oficial';
+      const payload: any = {
+        sponsorName: formSponsorName.trim(),
+        badgeLabel: finalBadgeLabel,
+        type: formType,
+        imageUrl: finalImage,
+        linkDestinationType: formLinkDestinationType,
+        targetItemId: formLinkDestinationType !== 'external' ? formTargetItemId : '',
+        targetItemName: formLinkDestinationType !== 'external' ? formTargetItemName : '',
+        targetUrl: formLinkDestinationType === 'external' ? (cleanTargetUrl || undefined) : undefined,
+        startDate: formStartDate,
+        endDate: formEndDate,
+        active: formActive,
+        venueId: formVenueId,
+      };
+
       if (editingAd) {
-        await updateSponsorAd(editingAd.id, {
-          sponsorName: formSponsorName.trim(),
-          type: formType,
-          imageUrl: finalImage,
-          targetUrl: cleanTargetUrl || undefined,
-          startDate: formStartDate,
-          endDate: formEndDate,
-          active: formActive,
-          venueId: formVenueId,
-        });
+        await updateSponsorAd(editingAd.id, payload);
         showFeedback('success', `¡Banner de "${formSponsorName}" actualizado exitosamente!`);
       } else {
-        await createSponsorAd({
-          sponsorName: formSponsorName.trim(),
-          type: formType,
-          imageUrl: finalImage,
-          targetUrl: cleanTargetUrl || undefined,
-          startDate: formStartDate,
-          endDate: formEndDate,
-          active: formActive,
-          venueId: formVenueId,
-        });
+        await createSponsorAd(payload);
         showFeedback('success', `¡Nuevo banner de "${formSponsorName}" creado y activado!`);
       }
       setIsModalOpen(false);
@@ -314,6 +361,7 @@ export const AnunciosAdmin: React.FC<AnunciosAdminProps> = ({ user }) => {
       for (const preset of PRESET_SPONSORS) {
         await createSponsorAd({
           sponsorName: preset.name,
+          badgeLabel: preset.badgeLabel || 'Patrocinador Oficial',
           type: preset.type,
           imageUrl: preset.imageUrl,
           targetUrl: preset.targetUrl,
@@ -651,6 +699,11 @@ export const AnunciosAdmin: React.FC<AnunciosAdminProps> = ({ user }) => {
                       {ad.type === 'hero' ? 'Hero' : ad.type === 'inline' ? 'Inline Grid' : 'Popup'}
                     </span>
 
+                    {/* Badge de Etiqueta Personalizada */}
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase font-sports tracking-wider bg-black/75 backdrop-blur-xs text-amber-300 border border-amber-400/40">
+                      {ad.badgeLabel || 'Patrocinador Oficial'}
+                    </span>
+
                     {/* Badge de Estado */}
                     {isExpired ? (
                       <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 text-[10px] font-bold border border-slate-700">
@@ -904,6 +957,60 @@ export const AnunciosAdmin: React.FC<AnunciosAdminProps> = ({ user }) => {
                 )}
               </div>
 
+              {/* Texto de la Etiqueta / Badge Personalizable */}
+              <div className="space-y-2 p-3.5 rounded-2xl bg-[#0A0E17] border border-slate-700/80">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[11px] font-sports font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                    <Tag className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Texto Distintivo del Banner (Etiqueta Superior) *</span>
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    {formBadgeLabel.length}/40
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Ej: Patrocinador Oficial, Tienda Oficial, Promoción Concesionario..."
+                  value={formBadgeLabel}
+                  maxLength={40}
+                  onChange={(e) => setFormBadgeLabel(e.target.value)}
+                  className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-bold border focus:outline-none focus:ring-2 focus:ring-red-600 ${
+                    theme === 'light'
+                      ? 'bg-white border-slate-300 text-slate-900'
+                      : 'bg-[#141C2E] border-slate-700 text-white'
+                  }`}
+                />
+                <p className="text-[10.5px] text-slate-400 leading-relaxed font-sans">
+                  Personaliza el distintivo para banners de patrocinadores, tiendas oficiales del club, o promociones de alimentos y concesionarios.
+                </p>
+
+                {/* Botones de selección rápida de etiqueta (1 Clic) */}
+                <div className="space-y-1 pt-1">
+                  <span className="text-[10px] uppercase font-sports font-bold tracking-wider text-slate-400 block">
+                    Sugerencias Rápidas:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {BADGE_PRESETS.map((badge, bIdx) => {
+                      const isSelected = formBadgeLabel.trim().toLowerCase() === badge.toLowerCase();
+                      return (
+                        <button
+                          key={bIdx}
+                          type="button"
+                          onClick={() => setFormBadgeLabel(badge)}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-sports font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-amber-500 text-slate-950 font-black shadow-xs ring-1 ring-amber-400'
+                              : 'bg-[#1A253D] hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700'
+                          }`}
+                        >
+                          {badge}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
               {/* Selector de Formato del Anuncio */}
               <div className="space-y-1">
                 <label className="block text-[11px] font-sports font-bold uppercase tracking-wider text-slate-300">
@@ -1064,25 +1171,142 @@ export const AnunciosAdmin: React.FC<AnunciosAdminProps> = ({ user }) => {
                 )}
               </div>
 
-              {/* URL Opcional de Redirección */}
-              <div className="space-y-1">
-                <label className="block text-[11px] font-sports font-bold uppercase tracking-wider text-slate-300">
-                  URL de Destino / Redirección (Opcional)
+              {/* Selector de Destino del Enlace del Banner */}
+              <div className="space-y-2 p-4 rounded-2xl bg-[#141C2E] border border-slate-700/80">
+                <label className="block text-[11px] font-sports font-bold uppercase tracking-wider text-amber-400">
+                  ¿A dónde lleva este banner cuando el aficionado hace clic? *
                 </label>
-                <div className="relative">
-                  <ExternalLink className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="https://patrocinador.com/promocion"
-                    value={formTargetUrl}
-                    onChange={(e) => setFormTargetUrl(e.target.value)}
-                    className={`w-full pl-9 pr-3.5 py-2.5 rounded-xl text-xs border focus:outline-none focus:ring-2 focus:ring-red-600 ${
-                      theme === 'light'
-                        ? 'bg-slate-50 border-slate-300 text-slate-900'
-                        : 'bg-[#141C2E] border-slate-700 text-white'
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormLinkDestinationType('external');
+                      setFormTargetItemId('');
+                      setFormTargetItemName('');
+                    }}
+                    className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
+                      formLinkDestinationType === 'external'
+                        ? 'bg-red-600 text-white border-red-500 shadow-md font-bold'
+                        : 'bg-[#0F1626] border-slate-700 text-slate-300 hover:bg-[#1A253D]'
                     }`}
-                  />
+                  >
+                    <ExternalLink className="w-4 h-4 mx-auto mb-1 text-red-300" />
+                    <span className="block text-[11px] font-sports font-bold uppercase">Enlace Web</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormLinkDestinationType('store_item');
+                      setFormTargetUrl('');
+                    }}
+                    className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
+                      formLinkDestinationType === 'store_item'
+                        ? 'bg-blue-600 text-white border-blue-500 shadow-md font-bold'
+                        : 'bg-[#0F1626] border-slate-700 text-slate-300 hover:bg-[#1A253D]'
+                    }`}
+                  >
+                    <ShoppingBag className="w-4 h-4 mx-auto mb-1 text-blue-300" />
+                    <span className="block text-[11px] font-sports font-bold uppercase">Tienda Oficial</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormLinkDestinationType('concession_dish');
+                      setFormTargetUrl('');
+                    }}
+                    className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
+                      formLinkDestinationType === 'concession_dish'
+                        ? 'bg-amber-600 text-white border-amber-500 shadow-md font-bold'
+                        : 'bg-[#0F1626] border-slate-700 text-slate-300 hover:bg-[#1A253D]'
+                    }`}
+                  >
+                    <Utensils className="w-4 h-4 mx-auto mb-1 text-amber-300" />
+                    <span className="block text-[11px] font-sports font-bold uppercase">Concesionario</span>
+                  </button>
                 </div>
+
+                {/* Si es Tienda Oficial */}
+                {formLinkDestinationType === 'store_item' && (
+                  <div className="space-y-1.5 pt-2">
+                    <label className="block text-[10px] font-sports font-bold uppercase tracking-wider text-slate-300">
+                      Selecciona el Artículo de la Tienda Oficial *
+                    </label>
+                    <select
+                      value={formTargetItemId}
+                      onChange={(e) => {
+                        const sId = e.target.value;
+                        setFormTargetItemId(sId);
+                        const found = inventoryProducts.find((p) => p.id === sId);
+                        if (found) {
+                          setFormTargetItemName(found.name);
+                        }
+                      }}
+                      className="w-full px-3 py-2.5 rounded-xl text-xs bg-[#0F1626] border border-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    >
+                      <option value="">-- Selecciona producto de merch --</option>
+                      {inventoryProducts.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} (${p.price} MXN - Stock: {p.stock})
+                        </option>
+                      ))}
+                    </select>
+                    {inventoryProducts.length === 0 && (
+                      <p className="text-[10px] text-amber-400">No hay productos de tienda registrados en esta sede.</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Si es Platillo de Concesionario */}
+                {formLinkDestinationType === 'concession_dish' && (
+                  <div className="space-y-1.5 pt-2">
+                    <label className="block text-[10px] font-sports font-bold uppercase tracking-wider text-slate-300">
+                      Selecciona el Platillo o Bebida del Concesionario *
+                    </label>
+                    <select
+                      value={formTargetItemId}
+                      onChange={(e) => {
+                        const sId = e.target.value;
+                        setFormTargetItemId(sId);
+                        const found = menuItems.find((m) => m.id === sId);
+                        if (found) {
+                          setFormTargetItemName(found.name);
+                        }
+                      }}
+                      className="w-full px-3 py-2.5 rounded-xl text-xs bg-[#0F1626] border border-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
+                    >
+                      <option value="">-- Selecciona platillo o bebida --</option>
+                      {menuItems.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name} (${m.price} MXN)
+                        </option>
+                      ))}
+                    </select>
+                    {menuItems.length === 0 && (
+                      <p className="text-[10px] text-amber-400">No hay platillos de concesionario registrados en esta sede.</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Si es Enlace Web Externo */}
+                {formLinkDestinationType === 'external' && (
+                  <div className="space-y-1 pt-2">
+                    <label className="block text-[10px] font-sports font-bold uppercase tracking-wider text-slate-300">
+                      URL de Redirección Web (Opcional)
+                    </label>
+                    <div className="relative">
+                      <ExternalLink className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="https://patrocinador.com/promocion"
+                        value={formTargetUrl}
+                        onChange={(e) => setFormTargetUrl(e.target.value)}
+                        className="w-full pl-9 pr-3.5 py-2.5 rounded-xl text-xs bg-[#0F1626] border border-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-red-600"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Rango de Fechas de Vigencia */}

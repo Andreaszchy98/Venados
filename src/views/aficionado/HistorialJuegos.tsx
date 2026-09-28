@@ -185,19 +185,21 @@ export const HistorialJuegos: React.FC<HistorialJuegosProps> = ({
             Filtrar por Recinto / Estadio:
           </label>
           <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setSelectedVenue('todos')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                selectedVenue === 'todos'
-                  ? 'bg-red-600 text-white shadow-md'
-                  : theme === 'light'
-                  ? 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-                  : 'bg-[#121826] text-slate-300 hover:bg-[#182032] border border-slate-800'
-              }`}
-            >
-              Todos los recintos
-            </button>
+            {venues.length > 1 && (
+              <button
+                type="button"
+                onClick={() => setSelectedVenue('todos')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  selectedVenue === 'todos'
+                    ? 'bg-red-600 text-white shadow-md'
+                    : theme === 'light'
+                    ? 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                    : 'bg-[#121826] text-slate-300 hover:bg-[#182032] border border-slate-800'
+                }`}
+              >
+                Todos los recintos
+              </button>
+            )}
 
             {venues.map((v) => (
               <button

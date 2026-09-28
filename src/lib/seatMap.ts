@@ -771,7 +771,7 @@ export async function seedSeatMapForVenue(venueId: string = DEFAULT_VENUE_ID): P
     const createdSections: SeatSection[] = [];
 
     for (const data of sectionsData) {
-      const docId = `${venueId}_sec_${data.sectionNumber.replace(/\s+/g, '_')}`;
+      const docId = `${venueId}_sec_${(data.sectionNumber || '').replace(/\s+/g, '_')}`;
       const docRef = doc(db, 'seatSections', docId);
       const section: SeatSection = {
         id: docId,
@@ -787,7 +787,7 @@ export async function seedSeatMapForVenue(venueId: string = DEFAULT_VENUE_ID): P
     console.warn('Aviso al sincronizar secciones en Firestore (usando catálogo físico maestro):', err);
     // Retorna los datos en memoria para que la UI funcione de forma fluida
     const localData = buildSectionsForVenue(venueId);
-    return localData.map((d) => ({ id: `${venueId}_sec_${d.sectionNumber.replace(/\s+/g, '_')}`, ...d }));
+    return localData.map((d) => ({ id: `${venueId}_sec_${(d.sectionNumber || '').replace(/\s+/g, '_')}`, ...d }));
   }
 }
 
@@ -822,7 +822,7 @@ export function sanitizeVenueSections(venueId: string, rawSections: SeatSection[
     });
     if (valid.length > 0) return valid;
     const master = buildEncantoSectionsData(venueId);
-    return master.map((d) => ({ id: `${venueId}_sec_${d.sectionNumber.replace(/\s+/g, '_')}`, ...d }));
+    return master.map((d) => ({ id: `${venueId}_sec_${(d.sectionNumber || '').replace(/\s+/g, '_')}`, ...d }));
   } else {
     const valid = rawSections
       .filter((s) => {
@@ -845,7 +845,7 @@ export function sanitizeVenueSections(venueId: string, rawSections: SeatSection[
       });
     if (valid.length > 0) return valid;
     const master = buildMariscalSectionsData(venueId);
-    return master.map((d) => ({ id: `${venueId}_sec_${d.sectionNumber.replace(/\s+/g, '_')}`, ...d }));
+    return master.map((d) => ({ id: `${venueId}_sec_${(d.sectionNumber || '').replace(/\s+/g, '_')}`, ...d }));
   }
 }
 
@@ -876,7 +876,7 @@ export async function getSeatSectionsForVenue(venueId: string = DEFAULT_VENUE_ID
   } catch (err) {
     console.warn('Error fetching seat sections:', err);
     const localData = buildSectionsForVenue(venueId);
-    const fallback = localData.map((d) => ({ id: `${venueId}_sec_${d.sectionNumber.replace(/\s+/g, '_')}`, ...d }));
+    const fallback = localData.map((d) => ({ id: `${venueId}_sec_${(d.sectionNumber || '').replace(/\s+/g, '_')}`, ...d }));
     setCachedData(cacheKey, fallback, 10);
     return fallback;
   }
@@ -902,7 +902,7 @@ export function subscribeSeatSections(
     (snap) => {
       if (snap.empty) {
         const localData = buildSectionsForVenue(venueId);
-        const fallback = localData.map((d) => ({ id: `${venueId}_sec_${d.sectionNumber.replace(/\s+/g, '_')}`, ...d }));
+        const fallback = localData.map((d) => ({ id: `${venueId}_sec_${(d.sectionNumber || '').replace(/\s+/g, '_')}`, ...d }));
         setCachedData(cacheKey, fallback, 30);
         callback(fallback);
       } else {

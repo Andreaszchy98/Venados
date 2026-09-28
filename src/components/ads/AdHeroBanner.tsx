@@ -51,7 +51,7 @@ export const AdHeroBanner: React.FC<AdHeroBannerProps> = ({ ads }) => {
           <div className="flex items-center gap-2 mb-2">
             <span className="px-3 py-1 bg-red-600 text-white rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1 shadow-md">
               <Sparkles className="w-3.5 h-3.5" />
-              Patrocinador Oficial
+              {currentAd.badgeLabel || 'Patrocinador Oficial'}
             </span>
             <span className="text-slate-300 text-xs font-medium">
               {currentAd.sponsorName}

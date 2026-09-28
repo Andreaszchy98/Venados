@@ -7,7 +7,7 @@ import { ExternalLink, Sparkles, ShoppingBag } from 'lucide-react';
 
 interface HeroAdBannerProps {
   venueId: string;
-  onSelectStore?: () => void;
+  onSelectStore?: (type: 'tienda' | 'comida') => void;
 }
 
 interface CarouselItem {
@@ -18,6 +18,9 @@ interface CarouselItem {
   badgeLabel: string;
   isStorePromo?: boolean;
   targetUrl?: string;
+  linkDestinationType?: 'external' | 'store_item' | 'concession_dish';
+  targetItemId?: string;
+  targetItemName?: string;
   adId?: string;
 }
 
@@ -62,8 +65,11 @@ export const HeroAdBanner: React.FC<HeroAdBannerProps> = ({ venueId, onSelectSto
             id: ad.id,
             title: ad.sponsorName,
             imageUrl: normalizeGoogleDriveImageUrl(ad.imageUrl),
-            badgeLabel: 'Patrocinador Oficial',
+            badgeLabel: ad.badgeLabel || 'Patrocinador Oficial',
             targetUrl: ad.targetUrl,
+            linkDestinationType: ad.linkDestinationType || 'external',
+            targetItemId: ad.targetItemId,
+            targetItemName: ad.targetItemName,
             adId: ad.id,
           });
         });
@@ -109,7 +115,19 @@ export const HeroAdBanner: React.FC<HeroAdBannerProps> = ({ venueId, onSelectSto
 
   const handleClick = () => {
     if (currentItem.isStorePromo) {
-      onSelectStore?.();
+      onSelectStore?.('tienda');
+    } else if (currentItem.linkDestinationType === 'store_item' && currentItem.targetItemId) {
+      if (currentItem.adId) trackAdClick(currentItem.adId);
+      try {
+        sessionStorage.setItem('vxp_target_product_id', currentItem.targetItemId);
+      } catch {}
+      onSelectStore?.('tienda');
+    } else if (currentItem.linkDestinationType === 'concession_dish' && currentItem.targetItemId) {
+      if (currentItem.adId) trackAdClick(currentItem.adId);
+      try {
+        sessionStorage.setItem('vxp_target_dish_id', currentItem.targetItemId);
+      } catch {}
+      onSelectStore?.('comida');
     } else if (currentItem.targetUrl) {
       if (currentItem.adId) trackAdClick(currentItem.adId);
       window.open(currentItem.targetUrl, '_blank', 'noopener,noreferrer');

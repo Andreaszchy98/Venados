@@ -726,6 +726,8 @@ export async function createVenueEvent(
       type: eventData.type || 'baseball',
       name: eventData.name,
       opponent: eventData.opponent || '',
+      synopsis: eventData.synopsis ? eventData.synopsis.trim() : (eventData.description ? eventData.description.trim() : undefined),
+      description: eventData.description ? eventData.description.trim() : (eventData.synopsis ? eventData.synopsis.trim() : undefined),
       date: eventData.date,
       time: eventData.time || '20:00 hrs',
       gate: eventData.gate || 'Puertas Generales',
@@ -787,6 +789,12 @@ export async function updateVenueEvent(
     safeUpdates.venueId = adminVenueId;
     if (safeUpdates.posterUrl !== undefined) {
       safeUpdates.posterUrl = normalizeGoogleDriveImageUrl(safeUpdates.posterUrl);
+    }
+    if (safeUpdates.synopsis !== undefined) {
+      safeUpdates.synopsis = typeof safeUpdates.synopsis === 'string' ? safeUpdates.synopsis.trim() : '';
+    }
+    if (safeUpdates.description !== undefined) {
+      safeUpdates.description = typeof safeUpdates.description === 'string' ? safeUpdates.description.trim() : '';
     }
     if (safeUpdates.availableSeats !== undefined && safeUpdates.availableSeats !== null) {
       safeUpdates.availableSeats = Number(safeUpdates.availableSeats);

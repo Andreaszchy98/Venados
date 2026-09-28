@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { UserProfile, Venue } from '../../types';
 import { getAllUsers, assignAdminRole, revokeAdminRole } from '../../lib/auth';
 import { getAllVenues } from '../../lib/venues';
+import { useTheme } from '../../context/ThemeContext';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { ConfirmationModal } from '../../components/shared/ConfirmationModal';
 import {
@@ -19,6 +20,7 @@ import {
 } from 'lucide-react';
 
 export const AdminsManager: React.FC = () => {
+  const { theme } = useTheme();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(true);
@@ -223,16 +225,32 @@ export const AdminsManager: React.FC = () => {
       )}
 
       {/* Formulario para asignar Administrador a un usuario existente */}
-      <div className="bg-[#0F1626] rounded-2xl border border-slate-700/80 p-6 shadow-xl space-y-4 font-sports">
-        <div className="flex items-center gap-2 pb-3 border-b border-slate-800">
-          <div className="p-2 bg-red-600/20 rounded-xl text-red-400 border border-red-500/30">
+      <div
+        className={`rounded-2xl border p-5 sm:p-6 shadow-xs space-y-4 font-sports transition-colors ${
+          theme === 'light'
+            ? 'bg-white border-slate-200 text-slate-900'
+            : 'bg-[#0F1626] border-slate-700/80 text-white shadow-xl'
+        }`}
+      >
+        <div
+          className={`flex items-center gap-2 pb-3 border-b ${
+            theme === 'light' ? 'border-slate-100' : 'border-slate-800'
+          }`}
+        >
+          <div
+            className={`p-2 rounded-xl shrink-0 ${
+              theme === 'light'
+                ? 'bg-red-50 text-red-600 border border-red-100'
+                : 'bg-red-600/20 text-red-400 border border-red-500/30'
+            }`}
+          >
             <UserPlus className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-sm sm:text-base font-black text-white tracking-wide">
+            <h2 className="text-sm sm:text-base font-black tracking-wide">
               Asignar Administrador de Sede
             </h2>
-            <p className="text-xs text-slate-400 font-sans">
+            <p className={`text-xs font-sans ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
               Busca una cuenta ya registrada por su correo y asígnale el mando de una sede específica.
             </p>
           </div>
@@ -242,7 +260,11 @@ export const AdminsManager: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Campo de Búsqueda de Usuario */}
             <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1 font-sports uppercase tracking-wider">
+              <label
+                className={`block text-xs font-bold mb-1 font-sports uppercase tracking-wider ${
+                  theme === 'light' ? 'text-slate-700' : 'text-slate-300'
+                }`}
+              >
                 1. Buscar usuario registrado por correo o nombre
               </label>
               <div className="relative">
@@ -255,13 +277,23 @@ export const AdminsManager: React.FC = () => {
                     if (selectedUserToPromote) setSelectedUserToPromote(null);
                   }}
                   placeholder="Escribe al menos 2 letras del correo o nombre..."
-                  className="w-full pl-9 pr-3 py-2 bg-[#0A0E17] border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:ring-2 focus:ring-red-600 focus:outline-hidden"
+                  className={`w-full pl-9 pr-3 py-2 border rounded-xl text-xs focus:ring-2 focus:ring-red-600 focus:outline-hidden ${
+                    theme === 'light'
+                      ? 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'
+                      : 'bg-[#0A0E17] border-slate-700 text-white placeholder-slate-500'
+                  }`}
                 />
               </div>
 
               {/* Sugerencias desplegables */}
               {userSearchTerm.trim().length >= 2 && !selectedUserToPromote && (
-                <div className="mt-1 bg-[#0F1626] border border-slate-700 rounded-xl shadow-2xl max-h-48 overflow-y-auto divide-y divide-slate-800 z-10 relative">
+                <div
+                  className={`mt-1 border rounded-xl shadow-2xl max-h-48 overflow-y-auto divide-y z-10 relative ${
+                    theme === 'light'
+                      ? 'bg-white border-slate-200 divide-slate-100'
+                      : 'bg-[#0F1626] border-slate-700 divide-slate-800'
+                  }`}
+                >
                   {candidateUsers.length === 0 ? (
                     <div className="p-3 text-xs text-slate-400 text-center">
                       No se encontraron usuarios registrados con ese correo
@@ -275,13 +307,23 @@ export const AdminsManager: React.FC = () => {
                           setSelectedUserToPromote(u);
                           setUserSearchTerm(u.email || u.displayName || '');
                         }}
-                        className="w-full text-left p-2.5 hover:bg-slate-800 flex items-center justify-between text-xs transition-colors cursor-pointer"
+                        className={`w-full text-left p-2.5 flex items-center justify-between text-xs transition-colors cursor-pointer ${
+                          theme === 'light' ? 'hover:bg-slate-50' : 'hover:bg-slate-800'
+                        }`}
                       >
                         <div>
-                          <p className="font-bold text-white">{u.displayName || 'Sin nombre'}</p>
+                          <p className={`font-bold ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>
+                            {u.displayName || 'Sin nombre'}
+                          </p>
                           <p className="text-slate-400 font-mono text-[11px]">{u.email}</p>
                         </div>
-                        <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                        <span
+                          className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${
+                            theme === 'light'
+                              ? 'bg-slate-100 text-slate-700 border-slate-200'
+                              : 'bg-slate-800 text-slate-300 border-slate-700'
+                          }`}
+                        >
                           {u.role}
                         </span>
                       </button>
@@ -291,14 +333,14 @@ export const AdminsManager: React.FC = () => {
               )}
 
               {selectedUserToPromote && (
-                <div className="mt-2 p-2.5 bg-emerald-500/20 border border-emerald-500/40 rounded-xl flex items-center justify-between text-xs">
+                <div className="mt-2 p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center justify-between text-xs">
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                     <div>
-                      <span className="font-bold text-white">
+                      <span className={`font-bold ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>
                         {selectedUserToPromote.displayName || 'Usuario seleccionado'}
                       </span>
-                      <span className="text-emerald-300 ml-1 font-mono text-[11px]">
+                      <span className="text-emerald-600 dark:text-emerald-300 ml-1 font-mono text-[11px]">
                         ({selectedUserToPromote.email})
                       </span>
                     </div>
@@ -309,7 +351,7 @@ export const AdminsManager: React.FC = () => {
                       setSelectedUserToPromote(null);
                       setUserSearchTerm('');
                     }}
-                    className="text-emerald-300 hover:text-white p-1 cursor-pointer"
+                    className="text-emerald-600 dark:text-emerald-300 hover:opacity-75 p-1 cursor-pointer"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -319,7 +361,11 @@ export const AdminsManager: React.FC = () => {
 
             {/* Selector de Sede */}
             <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1 font-sports uppercase tracking-wider">
+              <label
+                className={`block text-xs font-bold mb-1 font-sports uppercase tracking-wider ${
+                  theme === 'light' ? 'text-slate-700' : 'text-slate-300'
+                }`}
+              >
                 2. Seleccionar Sede a Administrar
               </label>
               <div className="relative">
@@ -327,16 +373,20 @@ export const AdminsManager: React.FC = () => {
                 <select
                   value={selectedVenueId}
                   onChange={(e) => setSelectedVenueId(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 bg-[#0A0E17] border border-slate-700 rounded-xl text-xs font-semibold text-white focus:ring-2 focus:ring-red-600 focus:outline-hidden cursor-pointer"
+                  className={`w-full pl-9 pr-3 py-2 border rounded-xl text-xs font-semibold focus:ring-2 focus:ring-red-600 focus:outline-hidden cursor-pointer ${
+                    theme === 'light'
+                      ? 'bg-slate-50 border-slate-200 text-slate-900'
+                      : 'bg-[#0A0E17] border-slate-700 text-white'
+                  }`}
                 >
                   {venues.map((v) => (
-                    <option key={v.id} value={v.id} className="bg-[#0A0E17] text-white">
+                    <option key={v.id} value={v.id} className={theme === 'light' ? 'bg-white text-slate-900' : 'bg-[#0A0E17] text-white'}>
                       {v.name} ({v.city || 'Sede'})
                     </option>
                   ))}
                 </select>
               </div>
-              <p className="text-[11px] text-slate-400 mt-1.5">
+              <p className={`text-[11px] mt-1.5 ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
                 El usuario solo tendrá acceso al inventario, ventas y personal de esta sede.
               </p>
             </div>
@@ -346,7 +396,7 @@ export const AdminsManager: React.FC = () => {
             <button
               type="submit"
               disabled={!selectedUserToPromote || !selectedVenueId || assigning}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-black font-sports uppercase tracking-wider rounded-xl text-xs shadow-md shadow-red-950/40 transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-black font-sports uppercase tracking-wider rounded-xl text-xs shadow-md transition-all cursor-pointer"
             >
               <ShieldCheck className="w-4 h-4" />
               {assigning ? 'Asignando mando...' : 'Confirmar Rol de Administrador'}
@@ -356,14 +406,20 @@ export const AdminsManager: React.FC = () => {
       </div>
 
       {/* Lista de Administradores Actuales */}
-      <div className="bg-[#0F1626] rounded-2xl border border-slate-700/80 shadow-xl overflow-hidden space-y-4 p-6 font-sports">
+      <div
+        className={`rounded-2xl border shadow-xs overflow-hidden space-y-4 p-5 sm:p-6 font-sports transition-colors ${
+          theme === 'light'
+            ? 'bg-white border-slate-200 text-slate-900'
+            : 'bg-[#0F1626] border-slate-700/80 text-white shadow-xl'
+        }`}
+      >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm sm:text-base font-black text-white tracking-wide flex items-center gap-2">
+            <h3 className="text-sm sm:text-base font-black tracking-wide flex items-center gap-2">
               <ShieldCheck className="w-5 h-5 text-red-500" />
               <span>Administradores de Sede Activos ({adminsList.length})</span>
             </h3>
-            <p className="text-xs text-slate-400 mt-0.5 font-sans">
+            <p className={`text-xs mt-0.5 font-sans ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
               Cada administrador opera con permisos acotados exclusivamente a su sede asignada.
             </p>
           </div>
@@ -375,7 +431,11 @@ export const AdminsManager: React.FC = () => {
               value={adminSearch}
               onChange={(e) => setAdminSearch(e.target.value)}
               placeholder="Filtrar por nombre, correo o sede..."
-              className="w-full pl-8 pr-3 py-1.5 bg-[#0A0E17] border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:ring-2 focus:ring-red-600 focus:outline-hidden"
+              className={`w-full pl-8 pr-3 py-1.5 border rounded-xl text-xs focus:ring-2 focus:ring-red-600 focus:outline-hidden ${
+                theme === 'light'
+                  ? 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'
+                  : 'bg-[#0A0E17] border-slate-700 text-white placeholder-slate-500'
+              }`}
             />
           </div>
         </div>
@@ -414,8 +474,14 @@ export const AdminsManager: React.FC = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-300">
-              <thead className="bg-[#0A0E17] border-b border-slate-800 text-slate-400 font-black uppercase text-[10px] tracking-wider">
+            <table className={`w-full text-left text-xs ${theme === 'light' ? 'text-slate-700' : 'text-slate-300'}`}>
+              <thead
+                className={`border-b font-black uppercase text-[10px] tracking-wider ${
+                  theme === 'light'
+                    ? 'bg-slate-50 border-slate-200 text-slate-500'
+                    : 'bg-[#0A0E17] border-slate-800 text-slate-400'
+                }`}
+              >
                 <tr>
                   <th className="px-4 py-3">Administrador</th>
                   <th className="px-4 py-3">Correo</th>
@@ -424,15 +490,26 @@ export const AdminsManager: React.FC = () => {
                   <th className="px-4 py-3 text-right">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800 font-medium font-sans">
+              <tbody className={`divide-y font-medium font-sans ${theme === 'light' ? 'divide-slate-100' : 'divide-slate-800'}`}>
                 {filteredAdmins.map((admin) => (
-                  <tr key={admin.uid} className="hover:bg-slate-800/40 transition-colors">
+                  <tr
+                    key={admin.uid}
+                    className={`transition-colors ${
+                      theme === 'light' ? 'hover:bg-slate-50/80' : 'hover:bg-slate-800/40'
+                    }`}
+                  >
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full bg-red-600/20 border border-red-500/30 text-red-400 font-bold flex items-center justify-center text-xs shrink-0">
+                        <div
+                          className={`w-8 h-8 rounded-full border font-bold flex items-center justify-center text-xs shrink-0 ${
+                            theme === 'light'
+                              ? 'bg-red-50 border-red-200 text-red-600'
+                              : 'bg-red-600/20 border-red-500/30 text-red-400'
+                          }`}
+                        >
                           {(admin.displayName || admin.email || 'A')[0].toUpperCase()}
                         </div>
-                        <span className="font-bold text-white">
+                        <span className={`font-bold ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>
                           {admin.displayName || 'Sin nombre'}
                         </span>
                       </div>
@@ -442,18 +519,24 @@ export const AdminsManager: React.FC = () => {
                     </td>
                     <td className="px-4 py-3.5">
                       {venues.some((v) => v.id === admin.venueId) ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#0A0E17] text-white border border-slate-700">
-                          <Building2 className="w-3 h-3 text-red-400" />
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+                            theme === 'light'
+                              ? 'bg-slate-100 text-slate-800 border-slate-200'
+                              : 'bg-[#0A0E17] text-white border-slate-700'
+                          }`}
+                        >
+                          <Building2 className="w-3 h-3 text-red-500" />
                           {admin.venueName || 'Estadio Teodoro Mariscal'}
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40" title="Esta sede no está registrada en el catálogo de Superadmin">
-                          <AlertCircle className="w-3 h-3 text-amber-400" />
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-500 border border-amber-500/40" title="Esta sede no está registrada en el catálogo de Superadmin">
+                          <AlertCircle className="w-3 h-3 text-amber-500" />
                           {admin.venueName || admin.venueId || 'Estadio Chevron'} (No Registrada)
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3.5 font-mono text-[11px] text-slate-500">
+                    <td className="px-4 py-3.5 font-mono text-[11px] text-slate-400">
                       {admin.venueId || 'venue-teodoro-mariscal'}
                     </td>
                     <td className="px-4 py-3.5 text-right">
@@ -463,14 +546,18 @@ export const AdminsManager: React.FC = () => {
                             setEditingAdmin(admin);
                             setEditVenueId(admin.venueId || venues[0]?.id || '');
                           }}
-                          className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                          className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                            theme === 'light'
+                              ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+                              : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                          }`}
                           title="Cambiar Sede Asignada"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => setAdminToRevoke(admin)}
-                          className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-600/20 rounded-lg transition-colors cursor-pointer"
+                          className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
                           title="Revocar Rol de Admin"
                         >
                           <UserX className="w-3.5 h-3.5" />
@@ -488,15 +575,25 @@ export const AdminsManager: React.FC = () => {
       {/* Modal para Cambiar Sede de Administrador */}
       {editingAdmin && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-[#0F1626] border border-slate-700 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 text-white font-sports">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="text-base font-black text-white tracking-wide flex items-center gap-2">
+          <div
+            className={`border rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 font-sports ${
+              theme === 'light'
+                ? 'bg-white border-slate-200 text-slate-900'
+                : 'bg-[#0F1626] border-slate-700 text-white'
+            }`}
+          >
+            <div
+              className={`flex items-center justify-between pb-3 border-b ${
+                theme === 'light' ? 'border-slate-100' : 'border-slate-800'
+              }`}
+            >
+              <h3 className="text-base font-black tracking-wide flex items-center gap-2">
                 <Building2 className="w-5 h-5 text-red-500" />
                 <span>Reasignar Sede</span>
               </h3>
               <button
                 onClick={() => setEditingAdmin(null)}
-                className="p-1 text-slate-400 hover:text-white rounded-lg cursor-pointer"
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-lg cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>

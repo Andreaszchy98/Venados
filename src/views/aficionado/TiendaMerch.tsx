@@ -114,6 +114,23 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
     fetchProducts();
   }, [activeVenueId]);
 
+  useEffect(() => {
+    try {
+      const targetId = sessionStorage.getItem('vxp_target_product_id');
+      if (targetId && products.length > 0) {
+        sessionStorage.removeItem('vxp_target_product_id');
+        const found = products.find((p) => p.id === targetId);
+        if (found) {
+          setPreviewImage({
+            src: found.image,
+            title: found.name,
+            category: found.category,
+          });
+        }
+      }
+    } catch {}
+  }, [products]);
+
   const categories = ['Todos', 'Jerseys', 'Gorras', 'Sudaderas', 'Souvenirs', 'Coleccionables'];
 
   const filteredProducts = products.filter((p) => {

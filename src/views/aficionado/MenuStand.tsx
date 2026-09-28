@@ -90,6 +90,16 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
     }
   }, [cart]);
 
+  useEffect(() => {
+    try {
+      const targetDishId = sessionStorage.getItem('vxp_target_dish_id');
+      if (targetDishId && stands.length > 0 && !selectedStand) {
+        sessionStorage.removeItem('vxp_target_dish_id');
+        setSelectedStand(stands[0]);
+      }
+    } catch {}
+  }, [stands]);
+
   // Verificación de ventana de pedidos activa
   const [checkingOrderingWindow, setCheckingOrderingWindow] = useState(true);
   const [activeOrderingEvent, setActiveOrderingEvent] = useState<VenueEvent | null>(null);

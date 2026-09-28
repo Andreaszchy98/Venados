@@ -209,7 +209,7 @@ export const VentasAdmin: React.FC<VentasAdminProps> = ({ user }) => {
         .concat(
           filteredSales.map(
             (s) =>
-              `"${s.id}","${s.channel}","${s.customerName || ''}","${s.description.replace(/"/g, '""')}","${s.amount}","${s.paymentMethod}","${s.date}","${s.status}"`
+              `"${s.id}","${s.channel}","${s.customerName || ''}","${(s.description || '').replace(/"/g, '""')}","${s.amount}","${s.paymentMethod}","${s.date}","${s.status}"`
           )
         )
         .join('\n');

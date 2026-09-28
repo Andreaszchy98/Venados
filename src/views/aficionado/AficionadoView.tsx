@@ -298,21 +298,6 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
 
         <button
           type="button"
-          onClick={() => setActiveTab('tienda')}
-          className={`px-5 py-2.5 rounded-2xl text-xs font-sports uppercase tracking-wider font-bold transition-all cursor-pointer flex items-center gap-2 shadow-xs ${
-            activeTab === 'tienda'
-              ? 'bg-red-600 text-white shadow-md shadow-red-950/30'
-              : theme === 'light'
-              ? 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
-              : 'bg-[#101625] hover:bg-[#182032] text-slate-300 border border-slate-800'
-          }`}
-        >
-          <ShoppingBag className="w-4 h-4" />
-          <span>{t('nav.store', 'Tienda')}</span>
-        </button>
-
-        <button
-          type="button"
           onClick={() => setActiveTab('comida')}
           className={`px-5 py-2.5 rounded-2xl text-xs font-sports uppercase tracking-wider font-bold transition-all cursor-pointer flex items-center gap-2 shadow-xs ${
             activeTab === 'comida'
@@ -324,6 +309,21 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
         >
           <Utensils className="w-4 h-4" />
           <span>{t('nav.food', 'Comida')}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('tienda')}
+          className={`px-5 py-2.5 rounded-2xl text-xs font-sports uppercase tracking-wider font-bold transition-all cursor-pointer flex items-center gap-2 shadow-xs ${
+            activeTab === 'tienda'
+              ? 'bg-red-600 text-white shadow-md shadow-red-950/30'
+              : theme === 'light'
+              ? 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+              : 'bg-[#101625] hover:bg-[#182032] text-slate-300 border border-slate-800'
+          }`}
+        >
+          <ShoppingBag className="w-4 h-4" />
+          <span>{t('nav.store', 'Tienda')}</span>
         </button>
 
         <button
@@ -378,32 +378,7 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
             </span>
           </button>
 
-          {/* 2. Tienda */}
-          <button
-            id="bottom-nav-tienda"
-            type="button"
-            onClick={() => setActiveTab('tienda')}
-            className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer font-sports tracking-wider ${
-              activeTab === 'tienda'
-                ? theme === 'light' ? 'text-red-600 font-black' : 'text-red-400 font-bold'
-                : theme === 'light' ? 'text-slate-500 hover:text-slate-900 font-semibold' : 'text-slate-400 hover:text-white font-medium'
-            }`}
-          >
-            <div
-              className={`p-1.5 rounded-xl transition-all ${
-                activeTab === 'tienda'
-                  ? 'bg-red-600 text-white shadow-md shadow-red-950/20 ring-1 ring-red-500/50'
-                  : theme === 'light' ? 'text-slate-500 hover:text-slate-900' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <ShoppingBag className="w-5 h-5" />
-            </div>
-            <span className="text-[10px] leading-tight mt-1 uppercase">
-              {t('nav.store', 'Tienda')}
-            </span>
-          </button>
-
-          {/* 3. Comida */}
+          {/* 2. Comida */}
           <button
             id="bottom-nav-comida"
             type="button"
@@ -425,6 +400,31 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
             </div>
             <span className="text-[10px] leading-tight mt-1 uppercase">
               {t('nav.food', 'Comida')}
+            </span>
+          </button>
+
+          {/* 3. Tienda */}
+          <button
+            id="bottom-nav-tienda"
+            type="button"
+            onClick={() => setActiveTab('tienda')}
+            className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer font-sports tracking-wider ${
+              activeTab === 'tienda'
+                ? theme === 'light' ? 'text-red-600 font-black' : 'text-red-400 font-bold'
+                : theme === 'light' ? 'text-slate-500 hover:text-slate-900 font-semibold' : 'text-slate-400 hover:text-white font-medium'
+            }`}
+          >
+            <div
+              className={`p-1.5 rounded-xl transition-all ${
+                activeTab === 'tienda'
+                  ? 'bg-red-600 text-white shadow-md shadow-red-950/20 ring-1 ring-red-500/50'
+                  : theme === 'light' ? 'text-slate-500 hover:text-slate-900' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <ShoppingBag className="w-5 h-5" />
+            </div>
+            <span className="text-[10px] leading-tight mt-1 uppercase">
+              {t('nav.store', 'Tienda')}
             </span>
           </button>
 
