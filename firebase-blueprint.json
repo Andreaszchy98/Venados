@@ -310,6 +310,41 @@
         "updatedAt": { "type": "string" }
       },
       "required": ["venueId", "sponsorName", "type", "imageUrl", "startDate", "endDate", "active"]
+    },
+    "email_dispatches": {
+      "title": "email_dispatches",
+      "description": "Registro de auditoría y despachos de correos electrónicos automáticos enviados a anfitriones y concesionarios",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "orderType": { "type": "string" },
+        "hostName": { "type": "string" },
+        "hostEmail": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerEmail": { "type": "string" },
+        "orderIdOrCode": { "type": "string" },
+        "subject": { "type": "string" },
+        "sentAt": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "hostEmail", "sentAt", "status"]
+    },
+    "appMediaRegistry": {
+      "title": "appMediaRegistry",
+      "description": "Registro persistente de imágenes y URLs subidas por el usuario para usarse como predeterminadas por categoría y entidad en toda la aplicación",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "url": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "isCategoryDefault": { "type": "boolean" },
+        "targetVenueId": { "type": "string" },
+        "uploadedBy": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "url", "category"]
     }
   }
 }

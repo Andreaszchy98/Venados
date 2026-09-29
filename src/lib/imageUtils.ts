@@ -1,3 +1,5 @@
+import { getRegisteredDefaultImage } from './mediaRegistry';
+
 /**
  * Utilidades para normalización y manejo de imágenes
  */
@@ -98,6 +100,19 @@ export const DEFAULT_PRODUCT_IMAGES: Record<string, string> = {
 };
 
 export function getDefaultProductPlaceholder(category?: string): string {
+  // 1. Revisar si el usuario ha guardado una imagen por defecto personalizada en Firestore
+  if (category) {
+    const customRegistered = getRegisteredDefaultImage(category);
+    if (customRegistered) {
+      return customRegistered;
+    }
+  }
+  const generalDefault = getRegisteredDefaultImage('default');
+  if (generalDefault) {
+    return generalDefault;
+  }
+
+  // 2. Fallback estático
   if (category && DEFAULT_PRODUCT_IMAGES[category]) {
     return DEFAULT_PRODUCT_IMAGES[category];
   }
@@ -108,18 +123,25 @@ export const DEFAULT_STORE_PROMO_BANNER =
   'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=1200&auto=format&fit=crop&q=80';
 
 export function getEventPosterPlaceholder(type?: string): string {
+  const customPoster = getRegisteredDefaultImage(`event_${type || 'baseball'}`) || getRegisteredDefaultImage('eventos');
+  if (customPoster) {
+    return customPoster;
+  }
+
   switch (type) {
     case 'baseball':
       return 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?auto=format&fit=crop&w=800&q=80';
     case 'concert':
       return 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=800&q=80';
     case 'football':
+    case 'soccer':
       return 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=800&q=80';
     case 'basketball':
-      return 'https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=800&q=80';
+      return 'https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&q=80';
     case 'other':
     default:
       return 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&q=80';
   }
 }
+
 

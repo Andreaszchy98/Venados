@@ -15,6 +15,7 @@ import { db } from './firebase';
 import { SponsorAd, AdType } from '../types';
 import { DEFAULT_VENUE_ID } from './defaultVenue';
 import { normalizeGoogleDriveImageUrl } from './imageUtils';
+import { registerUploadedMedia } from './mediaRegistry';
 
 /**
  * Escuchar en tiempo real los anuncios de una sede específica o de todas las sedes
@@ -133,6 +134,21 @@ export async function createSponsorAd(
   };
 
   const docRef = await addDoc(collection(db, 'sponsorAds'), newAd);
+
+  if (finalImageUrl && !finalImageUrl.includes('images.unsplash.com')) {
+    try {
+      await registerUploadedMedia({
+        url: finalImageUrl,
+        title: `Patrocinador: ${newAd.sponsorName}`,
+        category: 'banners',
+        targetVenueId: newAd.venueId,
+        isCategoryDefault: false,
+      });
+    } catch (err) {
+      console.warn('Nota al registrar banner en appMediaRegistry:', err);
+    }
+  }
+
   return docRef.id;
 }
 
@@ -148,7 +164,21 @@ export async function updateSponsorAd(id: string, updates: Partial<SponsorAd>): 
   if (updates.sponsorName !== undefined) cleanUpdates.sponsorName = updates.sponsorName.trim();
   if (updates.badgeLabel !== undefined) cleanUpdates.badgeLabel = updates.badgeLabel.trim();
   if (updates.type !== undefined) cleanUpdates.type = updates.type;
-  if (updates.imageUrl !== undefined) cleanUpdates.imageUrl = normalizeGoogleDriveImageUrl(updates.imageUrl.trim());
+  if (updates.imageUrl !== undefined) {
+    cleanUpdates.imageUrl = normalizeGoogleDriveImageUrl(updates.imageUrl.trim());
+    if (cleanUpdates.imageUrl && !cleanUpdates.imageUrl.includes('images.unsplash.com')) {
+      try {
+        await registerUploadedMedia({
+          url: cleanUpdates.imageUrl,
+          title: `Patrocinador: ${updates.sponsorName || id}`,
+          category: 'banners',
+          isCategoryDefault: false,
+        });
+      } catch (err) {
+        console.warn('Nota al registrar banner en appMediaRegistry:', err);
+      }
+    }
+  }
   if (updates.targetUrl !== undefined) cleanUpdates.targetUrl = updates.targetUrl.trim();
   if (updates.linkDestinationType !== undefined) cleanUpdates.linkDestinationType = updates.linkDestinationType;
   if (updates.targetItemId !== undefined) cleanUpdates.targetItemId = updates.targetItemId;

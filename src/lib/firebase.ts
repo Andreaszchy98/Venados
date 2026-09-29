@@ -19,7 +19,7 @@ const firebaseConfig = {
 };
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-const databaseId = firebaseConfigData.firestoreDatabaseId || undefined;
+const databaseId = (firebaseConfigData as any).firestoreDatabaseId || undefined;
 
 // Inicializar Firestore forzando long-polling para evitar errores de streaming WebChannel/WebSockets
 // provocados por el reverse proxy nginx y entornos embebidos en iframe.
@@ -41,6 +41,7 @@ export const db = firestoreDb;
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
+googleProvider.addScope('https://www.googleapis.com/auth/gmail.send');
 
 export default app;
 

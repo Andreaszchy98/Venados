@@ -409,7 +409,7 @@ export async function getAllMenuItems(venueId?: string): Promise<MenuItem[]> {
 export async function toggleMenuItemAvailability(itemId: string, available: boolean): Promise<void> {
   try {
     const docRef = doc(db, MENU_COLLECTION, itemId);
-    await updateDoc(docRef, { available });
+    await setDoc(docRef, { available, updatedAt: new Date().toISOString() }, { merge: true });
     invalidateCache('concessions_menu_');
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `${MENU_COLLECTION}/${itemId}`);
@@ -514,11 +514,13 @@ export async function updateStadiumStand(
 ): Promise<void> {
   try {
     const docRef = doc(db, STANDS_COLLECTION, standId);
+    const initialDefault = INITIAL_STANDS.find((s) => s.id === standId);
     const payload = {
+      ...(initialDefault || {}),
       ...updates,
       updatedAt: new Date().toISOString(),
     };
-    await updateDoc(docRef, sanitizeFirestoreData(payload));
+    await setDoc(docRef, sanitizeFirestoreData(payload), { merge: true });
     invalidateCache('concessions_');
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `${STANDS_COLLECTION}/${standId}`);
@@ -531,10 +533,13 @@ export async function updateStadiumStand(
 export async function toggleStandActive(standId: string, active: boolean): Promise<void> {
   try {
     const docRef = doc(db, STANDS_COLLECTION, standId);
-    await updateDoc(docRef, {
+    const initialDefault = INITIAL_STANDS.find((s) => s.id === standId);
+    const payload = {
+      ...(initialDefault || {}),
       active,
       updatedAt: new Date().toISOString(),
-    });
+    };
+    await setDoc(docRef, sanitizeFirestoreData(payload), { merge: true });
     invalidateCache('concessions_');
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `${STANDS_COLLECTION}/${standId}`);

@@ -14,6 +14,7 @@ import {
 import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { ConfirmationModal } from '../../components/shared/ConfirmationModal';
+import { MediaRegistryModal } from '../../components/shared/MediaRegistryModal';
 import {
   Boxes,
   Plus,
@@ -32,6 +33,7 @@ import {
   ExternalLink,
   ShoppingBag,
   Ruler,
+  Layers,
 } from 'lucide-react';
 import {
   normalizeGoogleDriveImageUrl,
@@ -59,6 +61,7 @@ export const InventarioAdmin: React.FC<InventarioAdminProps> = ({ user }) => {
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [productToDelete, setProductToDelete] = useState<InventoryProduct | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [isMediaGalleryOpen, setIsMediaGalleryOpen] = useState(false);
 
   const fetchInventory = async () => {
     setLoading(true);
@@ -252,6 +255,15 @@ export const InventarioAdmin: React.FC<InventarioAdminProps> = ({ user }) => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsMediaGalleryOpen(true)}
+            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs font-sports uppercase tracking-wider rounded-xl border border-slate-700 shadow-md flex items-center gap-1.5 transition-colors cursor-pointer"
+            title="Ver y configurar URLs e imágenes guardadas en Firestore"
+          >
+            <Layers className="w-4 h-4 text-red-400" />
+            <span>Galería de Imágenes & Defaults</span>
+          </button>
           <button
             id="btn-create-product"
             onClick={handleOpenCreateModal}
@@ -689,18 +701,28 @@ export const InventarioAdmin: React.FC<InventarioAdminProps> = ({ user }) => {
 
               {/* Sección de Imagen con soporte Google Drive y Vista Previa */}
               <div className="p-3.5 bg-[#0A0E17] rounded-2xl border border-slate-700/80 space-y-2.5">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <label className="block font-sports uppercase tracking-wider font-bold text-white text-xs flex items-center gap-1.5">
-                    <ImageIcon className="w-4 h-4 text-red-500" />
-                    <span>Fotografía del Producto (Soporta Google Drive)</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleResetPlaceholder}
-                    className="text-[11px] font-bold text-red-400 hover:text-red-300 underline cursor-pointer font-sports uppercase tracking-wider"
-                  >
-                    Usar placeholder de categoría
-                  </button>
+                     <ImageIcon className="w-4 h-4 text-red-500" />
+                     <span>Fotografía del Producto (Soporta Google Drive)</span>
+                   </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsMediaGalleryOpen(true)}
+                      className="text-[11px] font-bold text-slate-300 hover:text-white px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 transition-colors cursor-pointer font-sports uppercase tracking-wider flex items-center gap-1"
+                    >
+                      <Layers className="w-3 h-3 text-red-400" />
+                      <span>Elegir de Galería Firestore</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleResetPlaceholder}
+                      className="text-[11px] font-bold text-red-400 hover:text-red-300 underline cursor-pointer font-sports uppercase tracking-wider"
+                    >
+                      Usar default
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-3 items-start">
@@ -792,6 +814,18 @@ export const InventarioAdmin: React.FC<InventarioAdminProps> = ({ user }) => {
         confirmText="Eliminar Producto"
         cancelText="Cancelar"
         variant="danger"
+      />
+      {/* Modal de Galería e Imágenes de Firestore */}
+      <MediaRegistryModal
+        isOpen={isMediaGalleryOpen}
+        onClose={() => setIsMediaGalleryOpen(false)}
+        currentCategory={editingProduct?.category || selectedCategory}
+        venueId={venueId}
+        onSelectImage={(url) => {
+          if (editingProduct) {
+            handleImageUrlChange(url);
+          }
+        }}
       />
     </div>
   );

@@ -23,7 +23,15 @@ import {
   ChevronRight,
   Receipt,
   Store,
+  Mail,
 } from 'lucide-react';
+import { SendToHostEmailModal } from './SendToHostEmailModal';
+import {
+  HostEmailPayload,
+  buildFoodOrderHostEmail,
+  buildTicketOrderHostEmail,
+  generateHostDigitalPassHtml,
+} from '../../lib/orderEmailService';
 
 export type PurchaseSuccessType = 'ticket' | 'food' | 'merch';
 
@@ -64,6 +72,8 @@ export const PurchaseSuccessModal: React.FC<PurchaseSuccessModalProps> = ({
   const [selectedTicketIndex, setSelectedTicketIndex] = useState(0);
   const [selectedFoodOrderIndex, setSelectedFoodOrderIndex] = useState(0);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [emailModalPayload, setEmailModalPayload] = useState<HostEmailPayload | null>(null);
 
   const allFoodOrders: FoodOrder[] = useMemo(() => {
     if (foodOrders && foodOrders.length > 0) return foodOrders;
@@ -399,6 +409,20 @@ Conserva este comprobante para seguimiento o retiro.
 
               {/* Render del Resumen de Boleto Oficial */}
               <CinemaTicketSummary ticket={currentTicket} />
+
+              {/* Botón para enviar por correo el Pase Digital */}
+              <button
+                type="button"
+                onClick={() => {
+                  const payload = buildTicketOrderHostEmail([currentTicket], 'Estadio Teodoro Mariscal', currentTicket.customerEmail || 'soportevxp@gmail.com');
+                  setEmailModalPayload(payload);
+                  setIsEmailModalOpen(true);
+                }}
+                className="w-full py-2.5 px-4 rounded-xl border border-red-500/50 bg-red-600/20 hover:bg-red-600/30 text-red-300 font-sports font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer transition-all shadow-md"
+              >
+                <Mail className="w-4 h-4 text-red-500" />
+                <span>Enviar Pase Digital por Correo (soportevxp@gmail.com)</span>
+              </button>
             </div>
           )}
 
@@ -621,31 +645,48 @@ Conserva este comprobante para seguimiento o retiro.
                   </div>
                 </div>
 
-                {/* Acciones de compartir / descargar */}
-                <div className="grid grid-cols-2 gap-2">
+                {/* Acciones de compartir / descargar / enviar por correo */}
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={handleShareFood}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer font-sports uppercase tracking-wider ${
+                    className={`py-2 px-2 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer font-sports uppercase tracking-wider ${
                       theme === 'light'
                         ? 'bg-slate-200 hover:bg-slate-300 border-slate-300 text-slate-900 shadow-xs'
                         : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
                     }`}
                   >
-                    <Share2 className="w-3.5 h-3.5 text-amber-500" />
-                    <span>Compartir</span>
+                    <Share2 className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    <span className="truncate">Compartir</span>
                   </button>
                   <button
                     type="button"
                     onClick={handleDownloadFood}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer font-sports uppercase tracking-wider ${
+                    className={`py-2 px-2 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer font-sports uppercase tracking-wider ${
                       theme === 'light'
                         ? 'bg-slate-200 hover:bg-slate-300 border-slate-300 text-slate-900 shadow-xs'
                         : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
                     }`}
                   >
-                    <Download className="w-3.5 h-3.5 text-emerald-500" />
-                    <span>Descargar</span>
+                    <Download className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                    <span className="truncate">Descargar</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const payload = buildFoodOrderHostEmail(allFoodOrders, null, 'Estadio Teodoro Mariscal');
+                      setEmailModalPayload(payload);
+                      setIsEmailModalOpen(true);
+                    }}
+                    className={`py-2 px-2 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer font-sports uppercase tracking-wider ${
+                      theme === 'light'
+                        ? 'bg-red-50 hover:bg-red-100 border-red-200 text-red-700 shadow-xs'
+                        : 'bg-red-950/40 hover:bg-red-900/60 border-red-700/60 text-red-300'
+                    }`}
+                    title="Enviar orden de compra al correo del anfitrión"
+                  >
+                    <Mail className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                    <span className="truncate">Anfitrión</span>
                   </button>
                 </div>
 
@@ -846,31 +887,90 @@ Conserva este comprobante para seguimiento o retiro.
                   </div>
                 </div>
 
-                {/* Acciones de compartir / descargar */}
-                <div className="grid grid-cols-2 gap-2">
+                {/* Acciones de compartir / descargar / enviar por correo */}
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={handleShareMerch}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer font-sports uppercase tracking-wider ${
+                    className={`py-2 px-2 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer font-sports uppercase tracking-wider ${
                       theme === 'light'
                         ? 'bg-slate-200 hover:bg-slate-300 border-slate-300 text-slate-900 shadow-xs'
                         : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
                     }`}
                   >
-                    <Share2 className="w-3.5 h-3.5 text-red-500" />
-                    <span>Compartir</span>
+                    <Share2 className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                    <span className="truncate">Compartir</span>
                   </button>
                   <button
                     type="button"
                     onClick={handleDownloadMerch}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer font-sports uppercase tracking-wider ${
+                    className={`py-2 px-2 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer font-sports uppercase tracking-wider ${
                       theme === 'light'
                         ? 'bg-slate-200 hover:bg-slate-300 border-slate-300 text-slate-900 shadow-xs'
                         : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
                     }`}
                   >
-                    <Download className="w-3.5 h-3.5 text-amber-500" />
-                    <span>Descargar</span>
+                    <Download className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    <span className="truncate">Descargar</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!merchOrder) return;
+                      const nowFormatted = new Date().toLocaleString('es-MX');
+                      const itemsText = merchOrder.items
+                        .map((i: any) => `• ${i.quantity}x ${getMerchItemTitle(i)}${getMerchItemSize(i) ? ` (${getMerchItemSize(i)})` : ''} - $${(getMerchItemPrice(i) * i.quantity).toFixed(2)} MXN`)
+                        .join('\n');
+                      const payload: HostEmailPayload = {
+                        orderType: 'merch',
+                        hostName: storeName || 'Tienda Oficial Venados Store',
+                        hostEmail: 'tienda@venadosmazatlan.com',
+                        customerName: merchOrder.customerName || 'Cliente de Tienda',
+                        orderIdOrCode: `#${merchOrder.id.slice(-8).toUpperCase()}`,
+                        date: nowFormatted,
+                        subject: `[ORDEN TIENDA OFICIAL] Pedido #${merchOrder.id.slice(-8).toUpperCase()} — ${merchOrder.customerName}`,
+                        bodyText: `Estimado Administrador de Tienda Oficial,\n\nSe ha recibido una nueva compra de productos oficiales en la plataforma:\n\nPEDIDO:     #${merchOrder.id.toUpperCase()}\nCLIENTE:    ${merchOrder.customerName}\nFECHA:      ${nowFormatted}\nMODALIDAD:  ${merchOrder.shippingType === 'domicilio' ? `Envío a Domicilio (${merchOrder.shippingAddress?.street || ''}, ${merchOrder.shippingAddress?.city || 'Mazatlán'})` : 'Retiro en Tienda Oficial'}\nTOTAL:      $${merchOrder.total} MXN (Pagado Stripe SSL)\n\nARTÍCULOS:\n${itemsText}\n\nPor favor proceda a preparar el pedido.\n`,
+                        htmlBody: generateHostDigitalPassHtml({
+                          badgeTitle: 'ORDEN TIENDA OFICIAL',
+                          eventTitle: (storeName || 'TIENDA OFICIAL VENADOS').toUpperCase(),
+                          leagueOrCategory: 'Souvenirs & Jerseys Oficiales',
+                          qrCodeValue: merchOrder.id,
+                          orderCode: `#${merchOrder.id.slice(-8).toUpperCase()}`,
+                          eventDateText: nowFormatted,
+                          venueName: 'Estadio Teodoro Mariscal',
+                          zoneSection: merchOrder.shippingType === 'domicilio' ? 'Envío a Domicilio' : 'Retiro en Tienda',
+                          rowNumber: 'VXP Store',
+                          seatNumber: `${merchOrder.items.reduce((s: number, i: any) => s + i.quantity, 0)} pzas`,
+                          gate: merchOrder.shippingType === 'domicilio' ? 'DHL Express' : 'Mostrador Tienda',
+                          totalAmountFormatted: `$${merchOrder.total.toFixed(2)} MXN`,
+                          referenceId: `#${merchOrder.id.slice(-8).toUpperCase()}`,
+                          customerName: merchOrder.customerName,
+                          customerEmail: merchOrder.customerEmail,
+                          notesOrItemsHtml: `
+                            <div style="font-size: 9px; font-weight: 800; color: #64748B; text-transform: uppercase; margin-bottom: 6px;">ARTÍCULOS:</div>
+                            ${merchOrder.items.map((i: any) => `<div style="font-size: 11px; color: #ffffff; margin-bottom: 3px;">• ${i.quantity}x ${getMerchItemTitle(i)} — <strong style="color: #10B981;">$${(getMerchItemPrice(i) * i.quantity).toFixed(2)} MXN</strong></div>`).join('')}
+                          `,
+                        }),
+                        summary: {
+                          total: merchOrder.total,
+                          paymentMethod: merchOrder.paymentMethod || 'Tarjeta en Línea',
+                          itemsCount: merchOrder.items.reduce((s: number, i: any) => s + i.quantity, 0),
+                          destinationOrSeat: merchOrder.shippingType === 'domicilio' ? 'Envío a Domicilio' : 'Retiro en Tienda',
+                          venueName: 'Estadio Teodoro Mariscal',
+                        },
+                      };
+                      setEmailModalPayload(payload);
+                      setIsEmailModalOpen(true);
+                    }}
+                    className={`py-2 px-2 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer font-sports uppercase tracking-wider ${
+                      theme === 'light'
+                        ? 'bg-red-50 hover:bg-red-100 border-red-200 text-red-700 shadow-xs'
+                        : 'bg-red-950/40 hover:bg-red-900/60 border-red-700/60 text-red-300'
+                    }`}
+                    title="Enviar orden de compra al correo de la tienda"
+                  >
+                    <Mail className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                    <span className="truncate">Anfitrión</span>
                   </button>
                 </div>
 
@@ -940,6 +1040,18 @@ Conserva este comprobante para seguimiento o retiro.
           </div>
         </div>
       </div>
+
+      {/* Modal de Envío de Orden al Correo del Anfitrión */}
+      {emailModalPayload && (
+        <SendToHostEmailModal
+          isOpen={isEmailModalOpen}
+          onClose={() => {
+            setIsEmailModalOpen(false);
+            setEmailModalPayload(null);
+          }}
+          emailPayload={emailModalPayload}
+        />
+      )}
     </div>
   );
 };

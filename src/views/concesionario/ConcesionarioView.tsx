@@ -55,7 +55,13 @@ import {
   Calendar,
   AlertTriangle,
   Bike,
+  Mail,
 } from 'lucide-react';
+import { SendToHostEmailModal } from '../../components/shared/SendToHostEmailModal';
+import {
+  HostEmailPayload,
+  buildFoodOrderHostEmail,
+} from '../../lib/orderEmailService';
 
 const PRESET_FOOD_IMAGES = [
   {
@@ -143,6 +149,8 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
 
   // Modal para agregar / editar producto al menú
   const [isMenuModalOpen, setIsMenuModalOpen] = useState(false);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [emailModalPayload, setEmailModalPayload] = useState<HostEmailPayload | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<Partial<MenuItem>>({
     name: '',
@@ -764,6 +772,21 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
                           ✓ Pedido Entregado
                         </div>
                       )}
+
+                      {/* Botón de Enviar copia de la orden al correo del anfitrión */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const payload = buildFoodOrderHostEmail([order], selectedStand, 'Estadio Teodoro Mariscal');
+                          setEmailModalPayload(payload);
+                          setIsEmailModalOpen(true);
+                        }}
+                        className="w-full py-1.5 px-2 bg-slate-900/80 hover:bg-red-950/40 border border-slate-700/80 hover:border-red-600/50 text-slate-300 hover:text-red-300 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                        title="Enviar orden al correo del anfitrión / cocina"
+                      >
+                        <Mail className="w-3 h-3 text-red-400" />
+                        <span>Enviar al correo del anfitrión / cocina</span>
+                      </button>
                     </div>
                   </div>
                 );
@@ -1194,6 +1217,18 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
         cancelText="Cancelar"
         variant="danger"
       />
+
+      {/* Modal de Envío de Orden al Correo del Anfitrión */}
+      {emailModalPayload && (
+        <SendToHostEmailModal
+          isOpen={isEmailModalOpen}
+          onClose={() => {
+            setIsEmailModalOpen(false);
+            setEmailModalPayload(null);
+          }}
+          emailPayload={emailModalPayload}
+        />
+      )}
     </div>
   );
 };

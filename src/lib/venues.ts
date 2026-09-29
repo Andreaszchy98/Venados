@@ -216,7 +216,7 @@ export async function updateVenueStorePromo(
       ...(promoData.storePromoActive !== undefined ? { storePromoActive: promoData.storePromoActive } : {}),
       updatedAt: new Date().toISOString(),
     };
-    await updateDoc(docRef, sanitizeFirestoreData(updates));
+    await setDoc(docRef, sanitizeFirestoreData(updates), { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `${VENUES_COLLECTION}/${venueId}`);
     throw err;

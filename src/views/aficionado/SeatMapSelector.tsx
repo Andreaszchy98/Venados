@@ -37,6 +37,10 @@ import { createStripeCheckoutSession } from '../../lib/stripe';
 import { CardPaymentModal } from '../../components/shared/CardPaymentModal';
 import { DirectPaymentResult } from '../../lib/stripe';
 import {
+  buildTicketOrderHostEmail,
+  sendHostOrderEmailAutomatically,
+} from '../../lib/orderEmailService';
+import {
   MapPin,
   Calendar,
   Clock,
@@ -801,6 +805,12 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
       .then((result) => {
         if (result.tickets && result.tickets.length > 0) {
           setCompletedTickets(result.tickets);
+          try {
+            const emailPayload = buildTicketOrderHostEmail(result.tickets, stadiumName || 'Estadio Teodoro Mariscal');
+            sendHostOrderEmailAutomatically(emailPayload).catch(() => {});
+          } catch (e) {
+            console.warn('Envío automático de correo de boletos al anfitrión en background:', e);
+          }
         }
       })
       .catch((err) => {

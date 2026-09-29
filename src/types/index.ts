@@ -559,3 +559,32 @@ export interface SponsorAd {
   updatedAt: string;
 }
 
+// ==========================================
+// 11. REGISTRO CENTRALIZADO DE MEDIOS & IMÁGENES
+// ==========================================
+export type MediaCategory =
+  | 'Jerseys'
+  | 'Gorras'
+  | 'Sudaderas'
+  | 'Souvenirs'
+  | 'Accesorios'
+  | 'Coleccionables'
+  | 'concesiones'
+  | 'banners'
+  | 'eventos'
+  | 'venues'
+  | 'general';
+
+export interface AppMediaItem {
+  id: string;
+  url: string;
+  title: string;
+  category: MediaCategory | string;
+  isCategoryDefault?: boolean;
+  targetVenueId?: string;
+  uploadedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+
