@@ -6,7 +6,6 @@ import {
   signOut as fbSignOut,
   updateProfile,
   User as FirebaseUser,
-  GoogleAuthProvider,
 } from 'firebase/auth';
 import {
   doc,
@@ -22,19 +21,12 @@ import {
 import { auth, googleProvider, db } from './firebase';
 import { UserProfile, UserRole } from '../types';
 import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
-import { setCachedGoogleAccessToken } from './gmailService';
 
 /**
  * Mapeo de errores de Firebase Auth a mensajes amigables en español
  */
-export function getFriendlyAuthErrorMessage(errorCode: string, rawMessage?: string): string {
-  if (rawMessage && (rawMessage.includes('access_denied') || rawMessage.includes('blocked') || rawMessage.includes('403'))) {
-    return 'Acceso bloqueado por Google: Esta app está en modo de prueba (Testing) en Google Cloud. Debes agregar tu correo como "Usuario de prueba" en la pantalla OAuth de Google Cloud o iniciar sesión usando correo y contraseña.';
-  }
+export function getFriendlyAuthErrorMessage(errorCode: string): string {
   switch (errorCode) {
-    case 'auth/access-denied':
-    case 'auth/unauthorized-domain':
-      return 'Acceso bloqueado por Google: Esta app está en modo de prueba (Testing) en Google Cloud. Agrega tu correo a los Usuarios de Prueba en la consola o inicia sesión con correo y contraseña.';
     case 'auth/popup-closed-by-user':
       return 'Se cerró la ventana de autenticación antes de completar el inicio de sesión.';
     case 'auth/popup-blocked':
@@ -59,7 +51,7 @@ export function getFriendlyAuthErrorMessage(errorCode: string, rawMessage?: stri
     case 'auth/operation-not-allowed':
       return 'Este método de autenticación no está habilitado actualmente.';
     default:
-      return 'Ocurrió un error inesperado al autenticar. Inténtalo de nuevo o ingresa mediante correo y contraseña.';
+      return 'Ocurrió un error inesperado al autenticar. Inténtalo de nuevo.';
   }
 }
 
@@ -260,10 +252,6 @@ export async function signInWithGoogle(): Promise<UserProfile> {
   activeGoogleSignInPromise = (async () => {
     try {
       const result = await signInWithPopup(auth, googleProvider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      if (credential?.accessToken) {
-        setCachedGoogleAccessToken(credential.accessToken);
-      }
       return await syncUserProfile(result.user);
     } catch (error: any) {
       // Si el usuario ya completó la autenticación en segundo plano
@@ -272,7 +260,7 @@ export async function signInWithGoogle(): Promise<UserProfile> {
           return await syncUserProfile(auth.currentUser);
         } catch {}
       }
-      const message = getFriendlyAuthErrorMessage(error?.code || '', error?.message || '');
+      const message = getFriendlyAuthErrorMessage(error?.code || '');
       throw new Error(message);
     } finally {
       activeGoogleSignInPromise = null;
@@ -495,6 +483,5 @@ export async function updateRunnerStatus(
  * Cerrar sesión
  */
 export async function signOutUser(): Promise<void> {
-  setCachedGoogleAccessToken(null);
   await fbSignOut(auth);
 }

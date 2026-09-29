@@ -11,11 +11,6 @@ import { ErrorMessage } from '../../components/shared/ErrorMessage';
 import { CardPaymentModal } from '../../components/shared/CardPaymentModal';
 import { DirectPaymentResult } from '../../lib/stripe';
 import {
-  HostEmailPayload,
-  generateHostDigitalPassHtml,
-  sendHostOrderEmailAutomatically,
-} from '../../lib/orderEmailService';
-import {
   ShoppingBag,
   ShoppingCart,
   CheckCircle2,
@@ -307,70 +302,6 @@ export const TiendaMerch: React.FC<TiendaMerchProps> = ({ user, onOrderCompleted
       setIsCardModalOpen(false);
       setSubmittingOrder(false);
       setCompletedMerchOrder(generatedOrder);
-
-      // Envío automático al correo del anfitrión de la tienda con formato digital oficial
-      try {
-        const nowFormatted = new Date().toLocaleString('es-MX');
-        const itemsList = orderItems
-          .map((i) => `• ${i.quantity}x ${i.name} - $${(i.price * i.quantity).toFixed(2)} MXN`)
-          .join('\n');
-        const itemsHtml = `
-          <div style="font-size: 9px; font-weight: 800; color: #64748B; text-transform: uppercase; margin-bottom: 6px;">ARTÍCULOS ORDENADOS:</div>
-          ${orderItems
-            .map(
-              (i) => `
-            <div style="font-size: 11px; color: #ffffff; margin-bottom: 4px;">
-              • ${i.quantity}x ${i.name} — <strong style="color: #10B981;">$${(i.price * i.quantity).toFixed(2)} MXN</strong>
-            </div>
-          `
-            )
-            .join('')}
-        `;
-        const emailPayload: HostEmailPayload = {
-          orderType: 'merch',
-          hostName: storeProfile.teamName ? `Tienda Oficial ${storeProfile.teamName}` : 'Tienda Oficial',
-          hostEmail: 'soportevxp@gmail.com',
-          customerName: generatedOrder.customerName,
-          customerEmail: generatedOrder.customerEmail,
-          orderIdOrCode: `#${localOrderId.slice(-8)}`,
-          date: nowFormatted,
-          subject: `[ORDEN TIENDA OFICIAL] Pedido #${localOrderId.slice(-8)} — ${generatedOrder.customerName} ($${total.toFixed(2)} MXN)`,
-          bodyText: `Estimado Anfitrión de Tienda Oficial,\n\nSe ha recibido una nueva orden de productos oficiales:\n\nPEDIDO:    #${localOrderId}\nCLIENTE:   ${generatedOrder.customerName}\nTOTAL:     $${total.toFixed(2)} MXN\nFECHA:     ${nowFormatted}\n\nARTÍCULOS:\n${itemsList}\n`,
-          htmlBody: generateHostDigitalPassHtml({
-            badgeTitle: 'ORDEN TIENDA OFICIAL',
-            eventTitle: storeProfile.teamName ? `TIENDA OFICIAL ${storeProfile.teamName.toUpperCase()}` : 'TIENDA OFICIAL VENADOS',
-            leagueOrCategory: 'Souvenirs & Jerseys Oficiales',
-            qrCodeValue: localOrderId,
-            orderCode: `#${localOrderId.slice(-8)}`,
-            eventDateText: nowFormatted,
-            venueName: storeProfile.stadiumName || 'Estadio Teodoro Mariscal',
-            zoneSection: shippingType === 'domicilio' ? 'Envío a Domicilio' : 'Retiro en Tienda',
-            rowNumber: 'VXP Store',
-            seatNumber: `${orderItems.reduce((s, i) => s + i.quantity, 0)} pzas`,
-            gate: shippingType === 'domicilio' ? 'DHL Express' : 'Mostrador Tienda',
-            totalAmountFormatted: `$${total.toFixed(2)} MXN`,
-            referenceId: `#${localOrderId.slice(-8)}`,
-            customerName: generatedOrder.customerName,
-            customerEmail: generatedOrder.customerEmail,
-            notesOrItemsHtml: itemsHtml,
-          }),
-          summary: {
-            total,
-            paymentMethod: generatedOrder.paymentMethod,
-            itemsCount: orderItems.reduce((s, i) => s + i.quantity, 0),
-            destinationOrSeat: shippingType === 'domicilio' ? 'Envío a Domicilio' : 'Retiro en Tienda',
-            venueName: storeProfile.stadiumName || 'Estadio Teodoro Mariscal',
-            gate: shippingType === 'domicilio' ? 'DHL Express' : 'Mostrador Tienda',
-            zoneSection: shippingType === 'domicilio' ? 'Envío a Domicilio' : 'Retiro en Tienda',
-            row: 'Store',
-            seat: `${orderItems.reduce((s, i) => s + i.quantity, 0)} pzas`,
-            eventTitle: `Tienda Oficial ${storeProfile.teamName || 'Venados'}`,
-          },
-        };
-        sendHostOrderEmailAutomatically(emailPayload).catch(() => {});
-      } catch (e) {
-        console.warn('Envío automático de correo de tienda al anfitrión:', e);
-      }
 
       // 2. Persistir en Firestore en segundo plano
       createMerchOrder(orderPayload)

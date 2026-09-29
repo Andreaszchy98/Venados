@@ -21,12 +21,14 @@ const firebaseConfig = {
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 const databaseId = firebaseConfigData.firestoreDatabaseId || undefined;
 
-// Inicializar Firestore detectando automáticamente long-polling para maximizar rendimiento en Vercel
+// Inicializar Firestore forzando long-polling para evitar errores de streaming WebChannel/WebSockets
+// provocados por el reverse proxy nginx y entornos embebidos en iframe.
 let firestoreDb;
 try {
   firestoreDb = initializeFirestore(
     app,
     {
+      experimentalForceLongPolling: true,
       experimentalAutoDetectLongPolling: true,
     },
     databaseId

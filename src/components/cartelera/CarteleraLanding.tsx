@@ -233,16 +233,10 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
   // Escuchar todos los eventos activos en tiempo real
   useEffect(() => {
     setLoadingEvents(true);
-    // Timeout de seguridad para garantizar respuesta visual inmediata (evita spinners infinitos)
-    const safetyTimer = setTimeout(() => {
-      setLoadingEvents(false);
-    }, 800);
-
     const q = query(collection(db, 'venueEvents'), limit(50));
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        clearTimeout(safetyTimer);
         if (!snapshot.empty) {
           const docs = snapshot.docs.map((d) => {
             const data = d.data();
@@ -260,16 +254,13 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
         setLoadingEvents(false);
       },
       (err) => {
-        clearTimeout(safetyTimer);
         console.warn('Error al escuchar eventos de cartelera:', err);
         setAllEvents(DEFAULT_FALLBACK_EVENTS);
         setLoadingEvents(false);
       }
     );
-    return () => {
-      clearTimeout(safetyTimer);
-      unsubscribe();
-    };
+
+    return () => unsubscribe();
   }, []);
 
   // Categorías disponibles según el recinto seleccionado:

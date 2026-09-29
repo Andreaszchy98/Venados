@@ -30,10 +30,6 @@ import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { CardPaymentModal } from '../../components/shared/CardPaymentModal';
 import { DirectPaymentResult } from '../../lib/stripe';
 import {
-  buildFoodOrderHostEmail,
-  sendHostOrderEmailAutomatically,
-} from '../../lib/orderEmailService';
-import {
   Utensils,
   ShoppingBag,
   Clock,
@@ -568,18 +564,6 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
           totalAmount: total,
         });
         setCompletedFoodOrders(createdOrders);
-
-        // Envío automático al correo del anfitrión con el formato digital oficial y seguridad anticaptura
-        try {
-          const emailPayload = buildFoodOrderHostEmail(
-            createdOrders,
-            selectedStand,
-            currentVenueName || 'Estadio Teodoro Mariscal'
-          );
-          sendHostOrderEmailAutomatically(emailPayload).catch(() => {});
-        } catch (e) {
-          console.warn('Envío automático de correo al anfitrión en background:', e);
-        }
       }
 
       // Vaciar todos los carritos tras éxito

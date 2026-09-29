@@ -18,7 +18,6 @@ import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './er
 import { DEFAULT_VENUE_ID } from './defaultVenue';
 import { normalizeGoogleDriveImageUrl, getDefaultProductPlaceholder } from './imageUtils';
 import { getCachedData, setCachedData, invalidateCache } from './clientCache';
-import { registerUploadedMedia } from './mediaRegistry';
 
 const COLLECTION_NAME = 'inventory';
 
@@ -503,28 +502,15 @@ export async function seedInitialProducts(venueId: string = DEFAULT_VENUE_ID): P
 
   for (const item of curated) {
     const docRef = doc(db, COLLECTION_NAME, item.id);
-    const existingSnap = await getDoc(docRef);
-
-    if (!existingSnap.exists()) {
-      const defaultCategoryImg = getDefaultProductPlaceholder(item.category);
-      const product: InventoryProduct = {
-        ...item,
-        venueId,
-        image: normalizeGoogleDriveImageUrl(item.image) || defaultCategoryImg,
-        createdAt: now,
-        updatedAt: now,
-      };
-      await setDoc(docRef, sanitizeFirestoreData(product));
-      seeded.push(product);
-    } else {
-      // Si el documento ya existe en Firestore, respetar íntegramente los datos y la imagen que el usuario haya subido
-      const existingData = existingSnap.data() as InventoryProduct;
-      seeded.push({
-        ...existingData,
-        id: existingSnap.id,
-        image: normalizeGoogleDriveImageUrl(existingData.image) || getDefaultProductPlaceholder(existingData.category),
-      });
-    }
+    const product: InventoryProduct = {
+      ...item,
+      venueId,
+      image: normalizeGoogleDriveImageUrl(item.image) || getDefaultProductPlaceholder(item.category),
+      createdAt: now,
+      updatedAt: now,
+    };
+    await setDoc(docRef, sanitizeFirestoreData(product), { merge: true });
+    seeded.push(product);
   }
 
   return seeded;
@@ -587,21 +573,6 @@ export async function saveInventoryProduct(
       };
       await setDoc(docRef, sanitizeFirestoreData(newProduct));
       savedProduct = newProduct;
-    }
-
-    // Registrar permanentemente la imagen en la galería de Firestore y como candidata de categoría
-    if (savedProduct.image && !savedProduct.image.includes('images.unsplash.com')) {
-      try {
-        await registerUploadedMedia({
-          url: savedProduct.image,
-          title: `${savedProduct.name} (${savedProduct.sku})`,
-          category: savedProduct.category || 'Jerseys',
-          targetVenueId: targetVenueId,
-          isCategoryDefault: true,
-        });
-      } catch (mediaErr) {
-        console.warn('Nota al registrar imagen en appMediaRegistry:', mediaErr);
-      }
     }
 
     // Si viene costPrice en los datos, guardarlo por separado en la subcolección cost

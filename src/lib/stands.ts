@@ -341,25 +341,6 @@ export async function getMenuItemsByStand(standId: string): Promise<MenuItem[]> 
       where('standId', '==', standId)
     );
     const snap = await getDocs(q);
-
-    if (snap.empty) {
-      // Fallback con datos de muestra para el puesto si aún no se han sembrado en Firestore
-      const initialStand = INITIAL_STANDS.find((s) => s.id === standId);
-      if (initialStand && INITIAL_MENU_ITEMS[initialStand.name]) {
-        const fallbackItems = INITIAL_MENU_ITEMS[initialStand.name].map((item, idx) => ({
-          ...item,
-          id: `menu-${standId}-${idx + 1}`,
-          standId,
-          venueId: DEFAULT_VENUE_ID,
-          createdAt: '2026-01-01T00:00:00.000Z',
-          image: normalizeGoogleDriveImageUrl(item.image) || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80',
-        })) as MenuItem[];
-        setCachedData(cacheKey, fallbackItems, 15);
-        return fallbackItems;
-      }
-      return [];
-    }
-
     const result = snap.docs.map((d) => {
       const data = d.data() as MenuItem;
       return {
@@ -372,17 +353,6 @@ export async function getMenuItemsByStand(standId: string): Promise<MenuItem[]> 
     return result;
   } catch (err) {
     handleFirestoreError(err, OperationType.LIST, MENU_COLLECTION);
-    const initialStand = INITIAL_STANDS.find((s) => s.id === standId);
-    if (initialStand && INITIAL_MENU_ITEMS[initialStand.name]) {
-      return INITIAL_MENU_ITEMS[initialStand.name].map((item, idx) => ({
-        ...item,
-        id: `menu-${standId}-${idx + 1}`,
-        standId,
-        venueId: DEFAULT_VENUE_ID,
-        createdAt: '2026-01-01T00:00:00.000Z',
-        image: normalizeGoogleDriveImageUrl(item.image) || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80',
-      })) as MenuItem[];
-    }
     return [];
   }
 }
@@ -439,7 +409,7 @@ export async function getAllMenuItems(venueId?: string): Promise<MenuItem[]> {
 export async function toggleMenuItemAvailability(itemId: string, available: boolean): Promise<void> {
   try {
     const docRef = doc(db, MENU_COLLECTION, itemId);
-    await setDoc(docRef, { available, updatedAt: new Date().toISOString() }, { merge: true });
+    await updateDoc(docRef, { available });
     invalidateCache('concessions_menu_');
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `${MENU_COLLECTION}/${itemId}`);
@@ -544,13 +514,11 @@ export async function updateStadiumStand(
 ): Promise<void> {
   try {
     const docRef = doc(db, STANDS_COLLECTION, standId);
-    const initialDefault = INITIAL_STANDS.find((s) => s.id === standId);
     const payload = {
-      ...(initialDefault || {}),
       ...updates,
       updatedAt: new Date().toISOString(),
     };
-    await setDoc(docRef, sanitizeFirestoreData(payload), { merge: true });
+    await updateDoc(docRef, sanitizeFirestoreData(payload));
     invalidateCache('concessions_');
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `${STANDS_COLLECTION}/${standId}`);
@@ -563,13 +531,10 @@ export async function updateStadiumStand(
 export async function toggleStandActive(standId: string, active: boolean): Promise<void> {
   try {
     const docRef = doc(db, STANDS_COLLECTION, standId);
-    const initialDefault = INITIAL_STANDS.find((s) => s.id === standId);
-    const payload = {
-      ...(initialDefault || {}),
+    await updateDoc(docRef, {
       active,
       updatedAt: new Date().toISOString(),
-    };
-    await setDoc(docRef, sanitizeFirestoreData(payload), { merge: true });
+    });
     invalidateCache('concessions_');
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `${STANDS_COLLECTION}/${standId}`);
