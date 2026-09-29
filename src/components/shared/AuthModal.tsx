@@ -229,6 +229,63 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 {t('auth.google_btn', 'Continuar con Google')}
               </button>
 
+              {/* Botón de Acceso Rápido / Demo directo sin bloqueos de Google */}
+              <div className="p-3 bg-slate-900/90 rounded-2xl border border-slate-700/70 space-y-2">
+                <p className="text-[11px] font-black text-amber-400 font-sports uppercase tracking-wider text-center">
+                  ⚡ Acceso Rápido Directo (Sin Google 403)
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={async () => {
+                      setLoading(true);
+                      setErrorMessage(null);
+                      try {
+                        try {
+                          await signInWithEmail('aficionado.demo@vxp.com', 'DemoPassword2026!');
+                        } catch {
+                          await registerWithEmail('aficionado.demo@vxp.com', 'DemoPassword2026!', 'Aficionado Demo', 'aficionado');
+                        }
+                        if (onSuccess) onSuccess();
+                        onClose(true);
+                      } catch (e: any) {
+                        setErrorMessage(e.message || 'Error en acceso demo');
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    className="py-2 px-2 bg-red-600/20 hover:bg-red-600/40 border border-red-500/40 text-red-200 rounded-xl text-xs font-bold transition-all text-center cursor-pointer"
+                  >
+                    👤 Entrar como Aficionado
+                  </button>
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={async () => {
+                      setLoading(true);
+                      setErrorMessage(null);
+                      try {
+                        try {
+                          await signInWithEmail('admin.demo@vxp.com', 'DemoPassword2026!');
+                        } catch {
+                          await registerWithEmail('admin.demo@vxp.com', 'DemoPassword2026!', 'Admin Estadio Demo', 'admin');
+                        }
+                        if (onSuccess) onSuccess();
+                        onClose(true);
+                      } catch (e: any) {
+                        setErrorMessage(e.message || 'Error en acceso demo');
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    className="py-2 px-2 bg-amber-600/20 hover:bg-amber-600/40 border border-amber-500/40 text-amber-200 rounded-xl text-xs font-bold transition-all text-center cursor-pointer"
+                  >
+                    👑 Entrar como Admin
+                  </button>
+                </div>
+              </div>
+
               <div className="flex items-center gap-3">
                 <div className="flex-1 border-t border-slate-800"></div>
                 <span className="text-xs text-slate-400 font-bold uppercase tracking-wider font-sports">{t('auth.or_email', 'o con correo')}</span>
