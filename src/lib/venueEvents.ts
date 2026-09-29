@@ -844,15 +844,16 @@ export async function deleteVenueEvent(eventId: string, forcedVenueId?: string):
 
 export async function seedDefaultEventsToFirestore() {
   try {
+    const snap = await getDocs(query(collection(db, COLLECTION_NAME), limit(1)));
+    if (!snap.empty) {
+      return;
+    }
     for (const ev of DEFAULT_FALLBACK_EVENTS) {
       const docRef = doc(db, COLLECTION_NAME, ev.id);
-      const docSnap = await getDoc(docRef);
-      if (!docSnap.exists()) {
-        await setDoc(docRef, {
-          ...ev,
-          createdAt: ev.createdAt || new Date().toISOString(),
-        });
-      }
+      await setDoc(docRef, {
+        ...ev,
+        createdAt: ev.createdAt || new Date().toISOString(),
+      }, { merge: true });
     }
   } catch (e) {
     console.warn('Error seeding default events to Firestore:', e);
@@ -864,7 +865,7 @@ export async function seedDefaultEventsToFirestore() {
  */
 export async function getActiveEventsForVenue(venueId: string): Promise<VenueEvent[]> {
   try {
-    await seedDefaultEventsToFirestore();
+    seedDefaultEventsToFirestore().catch(() => {});
     const q = query(
       collection(db, COLLECTION_NAME),
       where('venueId', '==', venueId),
@@ -1170,7 +1171,7 @@ export async function getUpcomingHeroEvents(
   const targetCity = city ? normalizeStr(city) : null;
 
   try {
-    await seedDefaultEventsToFirestore();
+    seedDefaultEventsToFirestore().catch(() => {});
     // 1. Obtener información de todas las sedes registradas para asociar nombres de estadio y ciudades
     const venuesMap = new Map<string, { name: string; city: string }>();
     DEFAULT_VENUES.forEach((v) => {

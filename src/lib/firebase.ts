@@ -19,16 +19,14 @@ const firebaseConfig = {
 };
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-const databaseId = (firebaseConfigData as any).firestoreDatabaseId || undefined;
+const databaseId = firebaseConfigData.firestoreDatabaseId || undefined;
 
-// Inicializar Firestore forzando long-polling para evitar errores de streaming WebChannel/WebSockets
-// provocados por el reverse proxy nginx y entornos embebidos en iframe.
+// Inicializar Firestore detectando automáticamente long-polling para maximizar rendimiento en Vercel
 let firestoreDb;
 try {
   firestoreDb = initializeFirestore(
     app,
     {
-      experimentalForceLongPolling: true,
       experimentalAutoDetectLongPolling: true,
     },
     databaseId
@@ -41,7 +39,6 @@ export const db = firestoreDb;
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
-googleProvider.addScope('https://www.googleapis.com/auth/gmail.send');
 
 export default app;
 
