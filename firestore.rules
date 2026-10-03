@@ -356,6 +356,19 @@ service cloud.firestore {
       allow create: if true;
       allow read, update, delete: if isAdmin() || isSuperAdmin();
     }
+
+    // 21. Auditoría de Despachos de Correo Electrónico al Anfitrión
+    match /email_dispatches/{dispatchId} {
+      allow create: if true;
+      allow read: if isAuthenticated() && (isAdmin() || isSuperAdmin() || isConcesionario());
+      allow update, delete: if isAdmin() || isSuperAdmin();
+    }
+
+    // 22. Registro persistente de imágenes y URLs predeterminadas de la app
+    match /appMediaRegistry/{mediaId} {
+      allow read: if true;
+      allow create, update, delete: if true;
+    }
   }
 }
 

@@ -9,8 +9,10 @@ import {
   subscribeVenueEvents,
   getEventPosterPlaceholder,
   computeDefaultOrderingWindow,
+  formatEventType,
+  getEventTypeIcon,
 } from '../../lib/venueEvents';
-import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
+import { DEFAULT_VENUE_ID, DEFAULT_VENUES } from '../../lib/defaultVenue';
 import { getAllowedEventTypesForVenue } from '../../lib/venues';
 import { normalizeGoogleDriveImageUrl, isGoogleDriveUrl } from '../../lib/imageUtils';
 import { getOfficialPriceTiersForEvent, getOfficialPriceTiersForVenue, isLegacySection, resetEventSeatsAndSales } from '../../lib/seatMap';
@@ -118,6 +120,7 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user, onOpenScoreb
   const [saving, setSaving] = useState(false);
 
   // Form State
+  const [formVenueId, setFormVenueId] = useState<string>(currentVenueId);
   const [formName, setFormName] = useState('');
   const [formType, setFormType] = useState<EventType>('baseball');
   const [formOpponent, setFormOpponent] = useState('');
@@ -163,14 +166,40 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user, onOpenScoreb
     setTimeout(() => setActionNotice(null), 4000);
   };
 
+  const handleVenueChange = (newVenueId: string) => {
+    setFormVenueId(newVenueId);
+    const venueObj = DEFAULT_VENUES.find((v) => v.id === newVenueId);
+    const newVenueName = venueObj?.name || currentVenueName;
+    let nextType = formType;
+    if (newVenueId === 'venue-encanto' && formType === 'baseball') {
+      nextType = 'football';
+      setFormType('football');
+    } else if (newVenueId !== 'venue-encanto' && formType === 'football') {
+      nextType = 'baseball';
+      setFormType('baseball');
+    }
+    setFormPriceTiers(getOfficialPriceTiersForVenue(newVenueId, newVenueName, nextType));
+  };
+
+  const handleTypeChange = (newType: EventType) => {
+    setFormType(newType);
+    const venueObj = DEFAULT_VENUES.find((v) => v.id === formVenueId);
+    const venueName = venueObj?.name || currentVenueName;
+    setFormPriceTiers(getOfficialPriceTiersForVenue(formVenueId, venueName, newType));
+  };
+
   const handleOpenCreateModal = () => {
     const defaultDate = new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0];
     const defaultTime = '20:00 hrs';
     const defWindow = computeDefaultOrderingWindow(defaultDate, defaultTime);
 
+    const initialVenueId = currentVenueId;
+    const initialType: EventType = initialVenueId === 'venue-encanto' ? 'football' : 'baseball';
+
     setEditingEventId(null);
-    setFormName('Venados de Mazatlán vs ');
-    setFormType('baseball');
+    setFormVenueId(initialVenueId);
+    setFormName(initialVenueId === 'venue-encanto' ? 'Dorados de Sinaloa vs ' : 'Venados de Mazatlán vs ');
+    setFormType(initialType);
     setFormOpponent('');
     setFormSynopsis('');
     setFormDate(defaultDate);
@@ -180,7 +209,7 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user, onOpenScoreb
     setFormTicketsAvailable(true);
     setFormAvailableSeats(2820);
     setFormTotalCapacity(16000);
-    setFormPriceTiers(getOfficialPriceTiersForVenue(currentVenueId, currentVenueName, 'baseball'));
+    setFormPriceTiers(getOfficialPriceTiersForVenue(initialVenueId, currentVenueName, initialType));
     setFormPosterUrl('');
     setFormOrderingOpensAt(toDateTimeLocal(defWindow.orderingOpensAt));
     setFormOrderingClosesAt(toDateTimeLocal(defWindow.orderingClosesAt));
@@ -188,15 +217,20 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user, onOpenScoreb
   };
 
   const handleResetToMapZones = () => {
-    const mapTiers = getOfficialPriceTiersForVenue(currentVenueId, currentVenueName, formType);
+    const venueObj = DEFAULT_VENUES.find((v) => v.id === formVenueId);
+    const vName = venueObj?.name || currentVenueName;
+    const mapTiers = getOfficialPriceTiersForVenue(formVenueId, vName, formType);
     setFormPriceTiers(mapTiers);
     showNotice('success', 'Se han cargado las secciones y precios oficiales del mapa del estadio.');
   };
 
   const handleOpenEditModal = (event: VenueEvent) => {
+    const evVenueId = event.venueId || currentVenueId;
+    const evType = (event.type === 'soccer' ? 'football' : event.type) as EventType;
     setEditingEventId(event.id);
+    setFormVenueId(evVenueId);
     setFormName(event.name);
-    setFormType(event.type);
+    setFormType(evType);
     setFormOpponent(event.opponent || '');
     setFormSynopsis(event.synopsis || event.description || '');
     setFormDate(event.date);
@@ -328,6 +362,7 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user, onOpenScoreb
         await updateVenueEvent(
           editingEventId,
           {
+            venueId: formVenueId,
             name: formName.trim(),
             type: formType,
             opponent: formOpponent.trim() || undefined,
@@ -345,14 +380,14 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user, onOpenScoreb
             orderingOpensAt: finalOpensAt,
             orderingClosesAt: finalClosesAt,
           },
-          currentVenueId
+          formVenueId
         );
         showNotice('success', 'Evento actualizado con éxito en Firestore.');
       } else {
-        // Crear nuevo evento (forzando venueId de la sede del admin)
+        // Crear nuevo evento (asociado a la sede seleccionada)
         await createVenueEvent(
           {
-            venueId: currentVenueId,
+            venueId: formVenueId,
             name: formName.trim(),
             type: formType,
             opponent: formOpponent.trim() || undefined,
@@ -370,7 +405,7 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user, onOpenScoreb
             orderingOpensAt: finalOpensAt,
             orderingClosesAt: finalClosesAt,
           },
-          currentVenueId
+          formVenueId
         );
         showNotice('success', 'Nuevo evento programado con éxito.');
       }
@@ -644,8 +679,9 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user, onOpenScoreb
                 {/* Header de la tarjeta */}
                 <div className="flex items-start justify-between gap-2 mb-3">
                   <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase font-sports tracking-wider bg-red-950/50 text-red-400 border border-red-500/40">
-                      {ev.type.toUpperCase()}
+                    <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase font-sports tracking-wider bg-red-950/50 text-red-400 border border-red-500/40 flex items-center gap-1.5 shadow-xs">
+                      <span>{getEventTypeIcon(ev.type)}</span>
+                      <span>{formatEventType(ev.type)}</span>
                     </span>
                     <span
                       className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase font-sports tracking-wider border ${
@@ -901,6 +937,42 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user, onOpenScoreb
 
             {/* Formulario */}
             <form onSubmit={handleSaveEvent} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 text-xs sm:text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-slate-300 font-sports uppercase tracking-wider">
+                    Sede / Estadio *
+                  </label>
+                  <select
+                    value={formVenueId}
+                    onChange={(e) => handleVenueChange(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#0A0E17] border border-slate-700/80 rounded-xl text-xs font-semibold text-white focus:outline-hidden focus:border-red-500"
+                  >
+                    {DEFAULT_VENUES.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.name} ({v.city})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-slate-300 font-sports uppercase tracking-wider">
+                    Tipo de Evento *
+                  </label>
+                  <select
+                    value={formType}
+                    onChange={(e) => handleTypeChange(e.target.value as EventType)}
+                    className="w-full px-3 py-2 bg-[#0A0E17] border border-slate-700/80 rounded-xl text-xs font-semibold text-white focus:outline-hidden focus:border-red-500"
+                  >
+                    <option value="football">⚽ Fútbol</option>
+                    <option value="baseball">⚾ Béisbol</option>
+                    <option value="basketball">🏀 Básquetbol</option>
+                    <option value="concert">🎤 Concierto / Recital</option>
+                    <option value="other">🎪 Otro Espectáculo</option>
+                  </select>
+                </div>
+              </div>
+
               <div className="space-y-1">
                 <label className="block text-xs font-bold text-slate-300 font-sports uppercase tracking-wider">
                   Nombre del Evento o Partido *
@@ -908,56 +980,24 @@ export const EventsManager: React.FC<EventsManagerProps> = ({ user, onOpenScoreb
                 <input
                   type="text"
                   required
-                  placeholder="ej. Venados de Mazatlán vs Tomateros de Culiacán"
+                  placeholder="ej. Dorados de Sinaloa vs Tapatío"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   className="w-full px-3 py-2 bg-[#0A0E17] border border-slate-700/80 rounded-xl text-xs font-semibold text-white placeholder-slate-500 focus:outline-hidden focus:border-red-500"
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="block text-xs font-bold text-slate-300 font-sports uppercase tracking-wider">
-                    Tipo de Evento
-                  </label>
-                  <select
-                    value={formType}
-                    onChange={(e) => setFormType(e.target.value as EventType)}
-                    className="w-full px-3 py-2 bg-[#0A0E17] border border-slate-700/80 rounded-xl text-xs font-semibold text-white focus:outline-hidden focus:border-red-500"
-                  >
-                    {(() => {
-                      const allowed = getAllowedEventTypesForVenue(currentVenueId);
-                      const allOptions = [
-                        { value: 'baseball', label: 'Béisbol' },
-                        { value: 'football', label: 'Fútbol' },
-                        { value: 'basketball', label: 'Básquetbol' },
-                        { value: 'concert', label: 'Concierto / Recital' },
-                        { value: 'other', label: 'Otro Espectáculo' },
-                      ];
-                      const optionsToRender = allowed
-                        ? allOptions.filter((opt) => allowed.includes(opt.value as any))
-                        : allOptions;
-                      return optionsToRender.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ));
-                    })()}
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="block text-xs font-bold text-slate-300 font-sports uppercase tracking-wider">
-                    Rival u Oponente (Opcional)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="ej. Tomateros de Culiacán"
-                    value={formOpponent}
-                    onChange={(e) => setFormOpponent(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#0A0E17] border border-slate-700/80 rounded-xl text-xs font-semibold text-white placeholder-slate-500 focus:outline-hidden focus:border-red-500"
-                  />
-                </div>
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-slate-300 font-sports uppercase tracking-wider">
+                  Rival u Oponente (Opcional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="ej. Tapatío"
+                  value={formOpponent}
+                  onChange={(e) => setFormOpponent(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#0A0E17] border border-slate-700/80 rounded-xl text-xs font-semibold text-white placeholder-slate-500 focus:outline-hidden focus:border-red-500"
+                />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

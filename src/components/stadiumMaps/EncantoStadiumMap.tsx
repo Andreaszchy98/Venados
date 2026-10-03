@@ -1,12 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { SeatSection, VenueEvent } from '../../types';
 import { ENCANTO_ZONES, getZonePrice } from '../../lib/seatMap';
+import { useStadiumPanZoom, StadiumRegionPreset } from './useStadiumPanZoom';
+import { StadiumZoomToolbar } from './StadiumZoomToolbar';
+import { Sparkles } from 'lucide-react';
+
+const ENCANTO_PRESETS: StadiumRegionPreset[] = [
+  { id: 'all', label: 'Todo el Estadio', shortLabel: 'Estadio', icon: '🏟️', normX: 0.5, normY: 0.5, scale: 1 },
+  { id: 'poniente', label: 'Tribuna Poniente', shortLabel: 'Poniente', icon: '⬇️', normX: 0.50, normY: 0.80, scale: 2.0 },
+  { id: 'oriente', label: 'Tribuna Oriente', shortLabel: 'Oriente', icon: '⬆️', normX: 0.50, normY: 0.20, scale: 2.0 },
+  { id: 'norte', label: 'Cabecera Norte (Izq)', shortLabel: 'Cab. Norte', icon: '⬅️', normX: 0.18, normY: 0.50, scale: 2.0 },
+  { id: 'sur', label: 'Cabecera Sur (Der)', shortLabel: 'Cab. Sur', icon: '➡️', normX: 0.82, normY: 0.50, scale: 2.0 },
+];
 
 interface EncantoStadiumMapProps {
   sections: SeatSection[];
   activeSectionNumber: string;
-  activeZoneFilter: string | null;
-  onSelectSection: (sectionNumber: string) => void;
+  activeZoneFilter?: string | null;
+  onSelectSection: (sectionNumber: string, zoneName?: string) => void;
   event?: VenueEvent | null;
   soldOutSectionsSet?: Set<string>;
 }
@@ -20,12 +31,31 @@ const EncantoStadiumMapComponent = React.memo<EncantoStadiumMapProps>(({
   soldOutSectionsSet,
 }) => {
   const [hoveredSection, setHoveredSection] = useState<string | null>(null);
+  const [showZoneGuide, setShowZoneGuide] = useState<boolean>(false);
 
-  // Determinar si una sección está atenuada por filtro de zona
-  const isDimmed = (zoneName: string) => {
-    if (!activeZoneFilter) return false;
-    return activeZoneFilter !== zoneName;
-  };
+  const {
+    scale,
+    isDragging,
+    hasMovedRef,
+    containerRef,
+    activeRegionId,
+    zoomToRegion,
+    handleZoomIn,
+    handleZoomOut,
+    handleResetZoom,
+    handleDoubleClick,
+    handleMouseDown,
+    handleMouseMove,
+    handleMouseUp,
+    handleMouseLeave,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
+    transformStyle,
+  } = useStadiumPanZoom({ minScale: 0.75, maxScale: 3.8 });
+
+  // Sin atenuación por filtro de zona: todos los bloques visibles con máxima claridad
+  const isDimmed = (_zoneName: string) => false;
 
   const isSelected = (secNumber: string) => activeSectionNumber === secNumber;
 
@@ -56,7 +86,10 @@ const EncantoStadiumMapComponent = React.memo<EncantoStadiumMapProps>(({
       <g
         key={secNumber}
         className={isSoldOut ? 'cursor-not-allowed opacity-40' : 'cursor-pointer transition-all duration-150'}
-        onClick={() => onSelectSection(secNumber)}
+        onClick={() => {
+          if (hasMovedRef.current) return;
+          onSelectSection(secNumber, zoneName);
+        }}
         onMouseEnter={() => setHoveredSection(secNumber)}
         onMouseLeave={() => setHoveredSection(null)}
       >
@@ -90,16 +123,30 @@ const EncantoStadiumMapComponent = React.memo<EncantoStadiumMapProps>(({
     );
   };
 
+  const activeZoneMeta = useMemo(() => {
+    if (!activeSectionNumber) return null;
+    const sec = sections.find((s) => s.sectionNumber === activeSectionNumber);
+    if (sec && ENCANTO_ZONES[sec.zoneName]) {
+      return { name: sec.zoneName, ...ENCANTO_ZONES[sec.zoneName] };
+    }
+    return null;
+  }, [activeSectionNumber, sections]);
+
   return (
-    <div className="relative w-full overflow-hidden rounded-2xl bg-slate-950 p-2 sm:p-4 border border-slate-800 shadow-2xl select-none">
+    <div className="space-y-2.5">
       {/* Indicador de estadio y hover flotante */}
-      <div className="flex flex-wrap items-center justify-between gap-2 pb-2 text-xs border-b border-slate-800/80 mb-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 pb-1 text-xs border-b border-slate-800/80 px-1">
         <div className="flex items-center gap-2">
           <span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
-          <span className="font-bold text-slate-200">Plano Arquitectónico Oficial: Estadio El Encanto</span>
+          <span className="font-bold text-slate-200">Plano Oficial: Estadio El Encanto</span>
           <span className="text-[10px] px-2 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-800/40 font-bold">
-            Dorados de Sinaloa • El Gran Pez
+            Dorados de Sinaloa
           </span>
+          {activeZoneMeta && (
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded-lg border bg-amber-500/10 border-amber-500/30 text-amber-400">
+              {activeZoneMeta.name} • ${getZonePrice(activeZoneMeta.name, event)} MXN
+            </span>
+          )}
         </div>
         {hoveredSection && (
           <div className="flex items-center gap-2 bg-slate-900 px-3 py-1 rounded-lg border border-slate-700 text-xs text-amber-300 font-semibold animate-in fade-in">
@@ -112,11 +159,41 @@ const EncantoStadiumMapComponent = React.memo<EncantoStadiumMapProps>(({
         )}
       </div>
 
-      <svg
-        viewBox="0 0 940 640"
-        className="w-full h-auto max-h-[580px] drop-shadow-md"
-        xmlns="http://www.w3.org/2000/svg"
+      {/* Barra de herramientas de Zoom y Selector de Regiones */}
+      <StadiumZoomToolbar
+        scale={scale}
+        presets={ENCANTO_PRESETS}
+        activeRegionId={activeRegionId}
+        onSelectPreset={(preset) => zoomToRegion(preset.normX, preset.normY, preset.scale, preset.id)}
+        onZoomIn={handleZoomIn}
+        onZoomOut={handleZoomOut}
+        onReset={handleResetZoom}
+        showZoneGuide={showZoneGuide}
+        onToggleZoneGuide={() => setShowZoneGuide(!showZoneGuide)}
+        hintText="Estadio El Encanto • Mazatlán"
+      />
+
+      <div
+        ref={containerRef}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onDoubleClick={handleDoubleClick}
+        className={`relative w-full overflow-hidden rounded-2xl bg-slate-950 p-2 sm:p-4 border border-slate-800 shadow-2xl select-none touch-none ${
+          isDragging ? 'cursor-grabbing' : 'cursor-grab'
+        }`}
+        title="Arrastra para moverte • Rueda o doble clic en cualquier zona para hacer zoom"
       >
+        <svg
+          viewBox="0 0 940 640"
+          className="w-full h-auto max-h-[580px] drop-shadow-md"
+          style={transformStyle}
+          xmlns="http://www.w3.org/2000/svg"
+        >
         <defs>
           {/* Degradado para el césped */}
           <linearGradient id="grassStripes" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -386,7 +463,7 @@ const EncantoStadiumMapComponent = React.memo<EncantoStadiumMapProps>(({
         {/* ========================================================= */}
         <g
           className="cursor-pointer"
-          onClick={() => onSelectSection('Palco 1')}
+          onClick={() => onSelectSection('Palco 1', 'Palcos')}
           onMouseEnter={() => setHoveredSection('Palcos 1 al 22')}
           onMouseLeave={() => setHoveredSection(null)}
         >
@@ -457,7 +534,7 @@ const EncantoStadiumMapComponent = React.memo<EncantoStadiumMapProps>(({
         {/* ========================================================= */}
         <g
           className="cursor-pointer"
-          onClick={() => onSelectSection('Palco 23')}
+          onClick={() => onSelectSection('Palco 23', 'Palcos')}
           onMouseEnter={() => setHoveredSection('Palcos 23 al 42')}
           onMouseLeave={() => setHoveredSection(null)}
         >
@@ -510,7 +587,7 @@ const EncantoStadiumMapComponent = React.memo<EncantoStadiumMapProps>(({
         {/* ZONA LOUNGE (Barra Rosa Vertical) */}
         <g
           className="cursor-pointer"
-          onClick={() => onSelectSection('ZL-1')}
+          onClick={() => onSelectSection('ZL-1', 'Zona Lounge')}
           onMouseEnter={() => setHoveredSection('Zona Lounge')}
           onMouseLeave={() => setHoveredSection(null)}
         >
@@ -592,6 +669,50 @@ const EncantoStadiumMapComponent = React.memo<EncantoStadiumMapProps>(({
           CABECERA SUR
         </text>
       </svg>
+      </div>
+
+      {/* Guía expandible de Zonas y Precios */}
+      {showZoneGuide && (
+        <div className="p-3.5 bg-slate-900 border border-slate-800 rounded-2xl space-y-2.5 shadow-xl animate-in fade-in duration-200">
+          <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
+            <div className="flex items-center gap-1.5 text-xs font-black uppercase text-amber-400 tracking-wider">
+              <Sparkles className="w-3.5 h-3.5" />
+              Zonas y Precios Oficiales (Estadio El Encanto)
+            </div>
+            <button
+              onClick={() => setShowZoneGuide(false)}
+              className="text-[10px] text-slate-400 hover:text-white cursor-pointer px-2 py-0.5 rounded bg-slate-800"
+            >
+              Cerrar
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {Object.entries(ENCANTO_ZONES).map(([name, zone]) => {
+              const price = getZonePrice(name, event);
+              return (
+                <div
+                  key={name}
+                  className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-800/60 border border-slate-700/50"
+                >
+                  <span
+                    className="w-4 h-4 rounded-md shrink-0 border border-white/20 shadow-xs"
+                    style={{ backgroundColor: zone.colorHex }}
+                  />
+                  <div className="min-w-0">
+                    <span className="text-[11px] font-bold text-slate-200 block truncate">
+                      {name}
+                    </span>
+                    <span className="text-[10px] text-amber-400 font-extrabold block">
+                      ${price} MXN
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 });

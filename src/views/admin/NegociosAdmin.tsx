@@ -17,6 +17,7 @@ import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
 import { normalizeGoogleDriveImageUrl, isGoogleDriveUrl } from '../../lib/imageUtils';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { ConfirmationModal } from '../../components/shared/ConfirmationModal';
+import { MediaRegistryModal } from '../../components/shared/MediaRegistryModal';
 import {
   Store,
   Plus,
@@ -42,6 +43,8 @@ import {
   ChevronRight,
   TrendingUp,
   Tag,
+  Layers,
+  ImageIcon,
 } from 'lucide-react';
 
 const CATEGORIES: StandCategoryTag[] = [
@@ -139,6 +142,10 @@ export const NegociosAdmin: React.FC<NegociosAdminProps> = ({ user }) => {
   const [deletingStand, setDeletingStand] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<MenuItem | null>(null);
   const [deletingItem, setDeletingItem] = useState(false);
+
+  // Galería de Imágenes de Firestore
+  const [isMediaGalleryOpen, setIsMediaGalleryOpen] = useState(false);
+  const [galleryTarget, setGalleryTarget] = useState<'stand' | 'item'>('stand');
 
   const loadData = async () => {
     setLoading(true);
@@ -1230,6 +1237,21 @@ export const NegociosAdmin: React.FC<NegociosAdminProps> = ({ user }) => {
         confirmText="Eliminar Platillo"
         cancelText="Cancelar"
         variant="danger"
+      />
+
+      {/* Modal de Galería de Imágenes de Firestore */}
+      <MediaRegistryModal
+        isOpen={isMediaGalleryOpen}
+        onClose={() => setIsMediaGalleryOpen(false)}
+        currentCategory="concesiones"
+        venueId={venueId}
+        onSelectImage={(url) => {
+          if (galleryTarget === 'stand') {
+            setStandForm((prev) => ({ ...prev, image: url }));
+          } else {
+            setItemForm((prev) => ({ ...prev, image: url }));
+          }
+        }}
       />
     </div>
   );

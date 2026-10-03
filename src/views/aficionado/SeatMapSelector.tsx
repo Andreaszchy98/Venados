@@ -20,10 +20,18 @@ import {
   MAX_TICKETS_PER_PURCHASE,
   getZonePrice,
   MARISCAL_ZONES,
+  TOMATEROS_ZONES,
+  CHARROS_ZONES,
   MARISCAL_SECTION_ZONE_MAP,
   getMariscalSectionZone,
+  getTomaterosSectionZone,
+  getCharrosSectionZone,
+  buildTomaterosSectionsData,
+  buildCharrosSectionsData,
   getStadiumZones,
   isEncantoVenue,
+  isTomaterosVenue,
+  isCharrosVenue,
   ENCANTO_GATES_GUIDE,
   SeatPurchaseItem,
   buildSectionsForVenue,
@@ -31,6 +39,8 @@ import {
 import { isEventPassed } from '../../lib/venueEvents';
 import { EncantoStadiumMap } from '../../components/stadiumMaps/EncantoStadiumMap';
 import { TeodoroMariscalStadiumMap } from '../../components/stadiumMaps/TeodoroMariscalStadiumMap';
+import { TomaterosStadiumMap } from '../../components/stadiumMaps/TomaterosStadiumMap';
+import { CharrosStadiumMap } from '../../components/stadiumMaps/CharrosStadiumMap';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { useTheme } from '../../context/ThemeContext';
 import { createStripeCheckoutSession } from '../../lib/stripe';
@@ -92,35 +102,86 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
   const { theme } = useTheme();
 
   const isEncanto = useMemo(
-    () => isEncantoVenue(event.venueId, stadiumName, event.type),
-    [event.venueId, stadiumName, event.type]
+    () => isEncantoVenue(event.venueId, `${stadiumName} ${event.venueName || ''}`, event.type),
+    [event.venueId, stadiumName, event.venueName, event.type]
   );
 
-  const stadiumZones = useMemo(
-    () => (isEncanto ? getStadiumZones(event.venueId, stadiumName, event.type) : MARISCAL_ZONES),
-    [isEncanto, event.venueId, stadiumName, event.type]
+  const isCharros = useMemo(
+    () => !isEncanto && isCharrosVenue(event.venueId, `${stadiumName} ${event.venueName || ''}`, event.type),
+    [isEncanto, event.venueId, stadiumName, event.venueName, event.type]
   );
+
+  const isTomateros = useMemo(
+    () => !isEncanto && !isCharros && isTomaterosVenue(event.venueId, `${stadiumName} ${event.venueName || ''}`, event.type),
+    [isEncanto, isCharros, event.venueId, stadiumName, event.venueName, event.type]
+  );
+
+  const stadiumZones = useMemo(() => {
+    if (isCharros) {
+      return CHARROS_ZONES;
+    }
+    if (isTomateros) {
+      return TOMATEROS_ZONES;
+    }
+    if (isEncanto) {
+      return getStadiumZones(event.venueId, stadiumName, event.type);
+    }
+    return MARISCAL_ZONES;
+  }, [isEncanto, isCharros, isTomateros, event.venueId, stadiumName, event.type]);
 
   // Gráfico central del recinto/cancha según el tipo de evento
   const FieldGraphic = getFieldGraphic(event.type);
 
+  // Zona explícita seleccionada (por clic directo en mapa)
+  const [selectedZoneOverride, setSelectedZoneOverride] = useState<string | null>(null);
+
   // Cargar instantáneamente las secciones maestro de memoria para un render inicial sin pantalla de carga (< 5ms)
   const [sections, setSections] = useState<SeatSection[]>(() => {
-    const initial = buildSectionsForVenue(event.venueId, event.type);
+    const initial = isCharros
+      ? buildCharrosSectionsData(event.venueId)
+      : isTomateros
+      ? buildTomaterosSectionsData(event.venueId)
+      : buildSectionsForVenue(event.venueId, event.type);
     return initial.map((d) => ({
       id: `${event.venueId}_sec_${d.sectionNumber.replace(/\s+/g, '_')}`,
       ...d,
     }));
   });
+
+  // Refrescar secciones maestras cuando cambie la sede o tipo de evento
+  useEffect(() => {
+    if (isCharros) {
+      const charrosSections = buildCharrosSectionsData(event.venueId);
+      setSections(charrosSections.map((d) => ({
+        id: `${event.venueId}_sec_${d.sectionNumber.replace(/\s+/g, '_')}`,
+        ...d,
+      })));
+    } else if (isTomateros) {
+      const tomSections = buildTomaterosSectionsData(event.venueId);
+      setSections(tomSections.map((d) => ({
+        id: `${event.venueId}_sec_${d.sectionNumber.replace(/\s+/g, '_')}`,
+        ...d,
+      })));
+    } else if (!isEncanto) {
+      const mariscalSections = buildSectionsForVenue(event.venueId, event.type);
+      setSections(mariscalSections.map((d) => ({
+        id: `${event.venueId}_sec_${d.sectionNumber.replace(/\s+/g, '_')}`,
+        ...d,
+      })));
+    }
+  }, [isCharros, isTomateros, isEncanto, event.venueId, event.type]);
+
   const [eventSeats, setEventSeats] = useState<EventSeat[]>([]);
   const [loading, setLoading] = useState(false);
   const [generating] = useState(false);
 
   // Sección activa para visualizar la cuadrícula
-  const [activeSectionNumber, setActiveSectionNumber] = useState<string>(
-    isEncanto ? 'PC-1' : '104'
-  );
-  const [activeZoneFilter, setActiveZoneFilter] = useState<string>('Todas');
+  const [activeSectionNumber, setActiveSectionNumber] = useState<string>(() => {
+    if (isEncanto) return 'PC-1';
+    if (isCharros) return 'cyan-01';
+    if (isTomateros) return 'platea-1';
+    return '104';
+  });
 
   // Asientos seleccionados para la compra conjunta (restaurado de sessionStorage para no perder progreso)
   const [selectedSeats, setSelectedSeats] = useState<SeatPurchaseItem[]>(() => {
@@ -387,92 +448,77 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
     return set;
   }, [sections, seatsBySection]);
 
-  // Mapa de zonas totalmente agotadas
-  const soldOutZonesSet = useMemo(() => {
-    const set = new Set<string>();
-    const zoneSecsMap = new Map<string, SeatSection[]>();
-    sections.forEach((sec) => {
-      if (!zoneSecsMap.has(sec.zoneName)) {
-        zoneSecsMap.set(sec.zoneName, []);
-      }
-      zoneSecsMap.get(sec.zoneName)!.push(sec);
-    });
-
-    zoneSecsMap.forEach((zoneSecs, zoneName) => {
-      const allSoldOut = zoneSecs.length > 0 && zoneSecs.every((sec) => {
-        const secKey = normalizeSec(sec.sectionNumber);
-        const seats = seatsBySection.get(secKey) || [];
-        const totalSeats = sec.totalSeats || (sec.rows || 3) * (sec.seatsPerRow || 10);
-        const soldCount = seats.filter((s) => s.status === 'vendido' || s.status === 'reservado').length;
-        return seats.length > 0 && soldCount >= totalSeats;
-      });
-      if (allSoldOut) {
-        set.add(zoneName);
-      }
-    });
-    return set;
-  }, [sections, seatsBySection]);
-
   // Sección actualmente seleccionada: resuelve dinámicamente según la sección seleccionada por el usuario
   const currentSection = useMemo<SeatSection | null>(() => {
-    const targetNumber = activeSectionNumber || (isEncanto ? 'PC-1' : '104');
+    const defaultSection = isEncanto ? 'PC-1' : isTomateros ? 'platea-1' : '104';
+    const targetNumber = activeSectionNumber || defaultSection;
     const normTarget = normalizeSec(targetNumber);
 
-    // 1. Coincidencia exacta o normalizada en las secciones obtenidas de Firestore
+    // 1. Determinar la zona canónica exacta según el estadio y el número de sección
+    let canonicalZone: string | null = null;
+    if (isEncanto) {
+      if (normTarget.startsWith('TE')) canonicalZone = 'Tiro de Esquina';
+      else if (normTarget.startsWith('PL')) canonicalZone = 'Poniente Lateral';
+      else if (normTarget.startsWith('PC')) canonicalZone = 'Poniente Central';
+      else if (normTarget.startsWith('PS')) canonicalZone = 'Poniente Superior';
+      else if (normTarget.startsWith('OC')) canonicalZone = 'Oriente Central';
+      else if (normTarget.startsWith('OL')) canonicalZone = 'Oriente Lateral';
+      else if (normTarget.startsWith('OS')) canonicalZone = 'Oriente Superior';
+      else if (normTarget.startsWith('CS')) canonicalZone = 'Cabecera Superior';
+      else if (normTarget.startsWith('GN')) canonicalZone = 'General Norte';
+      else if (normTarget.startsWith('GS')) canonicalZone = 'General Sur';
+      else if (normTarget.startsWith('SB')) canonicalZone = 'Sky Boxes';
+      else if (normTarget.startsWith('ZL')) canonicalZone = 'Zona Lounge';
+      else if (normTarget.startsWith('PALCO')) canonicalZone = 'Palcos';
+    } else if (isTomateros) {
+      canonicalZone = getTomaterosSectionZone(targetNumber);
+    } else {
+      canonicalZone = getMariscalSectionZone(targetNumber);
+    }
+
+    // 2. Coincidencia exacta o normalizada en las secciones obtenidas de Firestore / estado
     let found = sections.find((s) => s.sectionNumber === targetNumber);
     if (!found) {
       found = sections.find((s) => normalizeSec(s.sectionNumber) === normTarget);
     }
     if (found) {
-      if (!isEncanto) {
-        const canonicalZone = getMariscalSectionZone(found.sectionNumber) || getMariscalSectionZone(targetNumber);
-        if (canonicalZone) {
-          return { ...found, zoneName: canonicalZone };
-        }
-      }
-      return found;
+      const resolvedZone =
+        selectedZoneOverride ||
+        canonicalZone ||
+        (isTomateros
+          ? getTomaterosSectionZone(found.sectionNumber)
+          : !isEncanto
+          ? getMariscalSectionZone(found.sectionNumber)
+          : null) ||
+        found.zoneName;
+      return { ...found, zoneName: resolvedZone };
     }
 
-    // 2. Coincidencia en catálogo maestro de la sede
-    const masterSections = buildSectionsForVenue(event.venueId, event.type);
+    // 3. Coincidencia en catálogo maestro de la sede
+    const masterSections = isTomateros
+      ? buildTomaterosSectionsData(event.venueId)
+      : buildSectionsForVenue(event.venueId, event.type);
     const masterFound = masterSections.find((s) => normalizeSec(s.sectionNumber) === normTarget);
     if (masterFound) {
-      const canonicalZone = !isEncanto
-        ? getMariscalSectionZone(masterFound.sectionNumber) || masterFound.zoneName
-        : masterFound.zoneName;
+      const resolvedZone = selectedZoneOverride || canonicalZone || masterFound.zoneName;
       return {
         id: `${event.venueId}_sec_${masterFound.sectionNumber.replace(/\s+/g, '_')}`,
         ...masterFound,
-        zoneName: canonicalZone,
+        zoneName: resolvedZone,
       };
     }
 
-    // 3. Inferencia precisa para Estadio El Encanto por prefijo de zona oficial
+    // 4. Inferencia fidedigna para El Encanto
     if (isEncanto) {
-      let zoneName = 'Poniente Central';
       let rows = 3;
       let seatsPerRow = 10;
-
-      if (normTarget.startsWith('TE')) zoneName = 'Tiro de Esquina';
-      else if (normTarget.startsWith('PL')) zoneName = 'Poniente Lateral';
-      else if (normTarget.startsWith('PC')) zoneName = 'Poniente Central';
-      else if (normTarget.startsWith('PS')) zoneName = 'Poniente Superior';
-      else if (normTarget.startsWith('OC')) zoneName = 'Oriente Central';
-      else if (normTarget.startsWith('OL')) zoneName = 'Oriente Lateral';
-      else if (normTarget.startsWith('OS')) zoneName = 'Oriente Superior';
-      else if (normTarget.startsWith('CS')) zoneName = 'Cabecera Superior';
-      else if (normTarget.startsWith('GN')) zoneName = 'General Norte';
-      else if (normTarget.startsWith('GS')) zoneName = 'General Sur';
-      else if (normTarget.startsWith('SB')) {
-        zoneName = 'Sky Boxes';
+      if (normTarget.startsWith('SB')) {
         rows = 2;
         seatsPerRow = 8;
       } else if (normTarget.startsWith('ZL')) {
-        zoneName = 'Zona Lounge';
         rows = 2;
         seatsPerRow = 10;
       } else if (normTarget.startsWith('PALCO')) {
-        zoneName = 'Palcos';
         rows = 2;
         seatsPerRow = 6;
       }
@@ -481,28 +527,39 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
         id: `${event.venueId}_sec_${targetNumber.replace(/\s+/g, '_')}`,
         venueId: event.venueId,
         sectionNumber: targetNumber,
-        zoneName,
+        zoneName: selectedZoneOverride || canonicalZone || 'Poniente Central',
         rows,
         seatsPerRow,
         totalSeats: rows * seatsPerRow,
       };
     }
 
-    // 4. Si no se encuentra en las anteriores, preservar estrictamente el targetNumber y zona oficial de Teodoro Mariscal
-    const fallbackZone = !isEncanto
-      ? getMariscalSectionZone(targetNumber) || sections[0]?.zoneName || 'Plus'
-      : sections[0]?.zoneName || 'General';
+    // 5. Inferencia para Estadio Tomateros
+    if (isTomateros) {
+      const tomaterosZone = selectedZoneOverride || canonicalZone || 'Platino';
+      return {
+        id: `${event.venueId}_sec_${targetNumber.replace(/\s+/g, '_')}`,
+        venueId: event.venueId,
+        sectionNumber: targetNumber,
+        zoneName: tomaterosZone,
+        rows: 3,
+        seatsPerRow: 10,
+        totalSeats: 30,
+      };
+    }
 
+    // 6. Inferencia para Estadio Teodoro Mariscal
+    const mariscalZone = selectedZoneOverride || canonicalZone || 'Oro';
     return {
       id: `${event.venueId}_sec_${targetNumber.replace(/\s+/g, '_')}`,
       venueId: event.venueId,
       sectionNumber: targetNumber,
-      zoneName: fallbackZone,
+      zoneName: mariscalZone,
       rows: 3,
       seatsPerRow: 10,
       totalSeats: 30,
     };
-  }, [sections, activeSectionNumber, isEncanto, event.venueId, event.type]);
+  }, [sections, activeSectionNumber, selectedZoneOverride, isEncanto, isTomateros, event.venueId, event.type]);
 
   // Asientos de la sección activa
   const currentSectionSeats = useMemo(() => {
@@ -808,20 +865,10 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
       });
   };
 
-  // Lista única de zonas para filtrar
-  const availableZones = useMemo(() => {
-    return Object.keys(stadiumZones);
-  }, [stadiumZones]);
-
-  // Secciones filtradas
-  const filteredSections = useMemo(() => {
-    if (activeZoneFilter === 'Todas') return sections;
-    return sections.filter((s) => s.zoneName === activeZoneFilter);
-  }, [sections, activeZoneFilter]);
-
   // Selección de sección con auto-scroll directo a la cuadrícula de butacas en móvil
-  const handleSelectSection = (secNum: string) => {
+  const handleSelectSection = (secNum: string, zoneName?: string) => {
     setActiveSectionNumber(secNum);
+    setSelectedZoneOverride(zoneName || null);
     if (typeof window !== 'undefined' && window.innerWidth < 1024) {
       setTimeout(() => {
         document.getElementById('seat-grid-container')?.scrollIntoView({ behavior: 'smooth' });
@@ -853,20 +900,30 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
   const activeZoneMeta = useMemo(() => {
     if (!currentSection) return null;
     const cleanZone = currentSection.zoneName.trim().toLowerCase();
-    const zonesToSearch = isEncanto ? stadiumZones : MARISCAL_ZONES;
+    const zonesToSearch = isEncanto ? stadiumZones : isCharros ? CHARROS_ZONES : isTomateros ? TOMATEROS_ZONES : MARISCAL_ZONES;
     const foundKey = Object.keys(zonesToSearch).find(
       (k) => k.trim().toLowerCase() === cleanZone
     );
     if (foundKey) return zonesToSearch[foundKey];
 
-    if (!isEncanto) {
+    if (isCharros) {
+      const canonicalZone = getCharrosSectionZone(currentSection.sectionNumber);
+      if (canonicalZone && CHARROS_ZONES[canonicalZone]) {
+        return CHARROS_ZONES[canonicalZone];
+      }
+    } else if (isTomateros) {
+      const canonicalZone = getTomaterosSectionZone(currentSection.sectionNumber);
+      if (canonicalZone && TOMATEROS_ZONES[canonicalZone]) {
+        return TOMATEROS_ZONES[canonicalZone];
+      }
+    } else if (!isEncanto) {
       const canonicalZone = getMariscalSectionZone(currentSection.sectionNumber);
       if (canonicalZone && MARISCAL_ZONES[canonicalZone]) {
         return MARISCAL_ZONES[canonicalZone];
       }
     }
     return null;
-  }, [currentSection, isEncanto, stadiumZones]);
+  }, [currentSection, isEncanto, isCharros, isTomateros, stadiumZones]);
 
   return (
     <div className="space-y-4 pb-24">
@@ -937,93 +994,7 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
         </div>
       )}
 
-      {/* 2. Selección de Zona Minimalista-Dinámica (Grid Adaptativo sin scroll horizontal) */}
-      <div className={`border rounded-2xl p-3.5 shadow-lg space-y-2.5 transition-colors ${
-        theme === 'light'
-          ? 'bg-white border-slate-200 text-slate-900 shadow-sm'
-          : 'bg-[#0E1626] border-slate-800/90 text-white shadow-lg'
-      }`}>
-        <div className="flex items-center justify-between gap-2">
-          <span className={`text-xs font-black uppercase tracking-wider flex items-center gap-1.5 font-sports ${
-            theme === 'light' ? 'text-slate-800' : 'text-slate-300'
-          }`}>
-            <Layers className={`w-4 h-4 ${isEncanto ? 'text-amber-500' : 'text-red-500'}`} />
-            Filtrar Zona del Estadio
-          </span>
-
-          {activeZoneFilter !== 'Todas' && (
-            <button
-              onClick={() => setActiveZoneFilter('Todas')}
-              className="text-[11px] font-bold text-red-500 hover:text-red-600 font-sports uppercase tracking-wider transition-colors cursor-pointer"
-            >
-              Ver Todas ({sections.length})
-            </button>
-          )}
-        </div>
-
-        {/* Grid Adaptativo Minimalista de Zonas */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 font-sports">
-          <button
-            onClick={() => setActiveZoneFilter('Todas')}
-            className={`p-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer border ${
-              activeZoneFilter === 'Todas'
-                ? isEncanto
-                  ? 'bg-amber-500 text-black border-amber-400 font-black shadow-md'
-                  : 'bg-red-600 text-white border-red-500 font-black shadow-md'
-                : theme === 'light'
-                ? 'bg-slate-100 text-slate-800 border-slate-200 hover:bg-slate-200'
-                : 'bg-[#141E34] text-slate-300 border-slate-700/60 hover:border-slate-600'
-            }`}
-          >
-            <span>Todas</span>
-            <span className="text-[10px] opacity-80 font-mono">({sections.length})</span>
-          </button>
-
-          {availableZones.map((zName) => {
-            const zMeta = stadiumZones[zName];
-            const price = getZonePrice(zName, event);
-            const isFilterActive = activeZoneFilter === zName;
-            const isZoneSoldOut = soldOutZonesSet.has(zName);
-
-            return (
-              <button
-                key={zName}
-                onClick={() => setActiveZoneFilter(zName)}
-                className={`p-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between gap-1.5 cursor-pointer border ${
-                  isZoneSoldOut
-                    ? theme === 'light'
-                      ? 'border-slate-200 bg-slate-100 text-slate-400 opacity-60'
-                      : 'border-slate-800/80 bg-[#101827]/60 text-slate-500 opacity-60'
-                    : isFilterActive
-                    ? 'ring-2 ring-red-500 text-white bg-red-600 border-red-500 shadow-md scale-[1.02]'
-                    : theme === 'light'
-                    ? 'border-slate-200 bg-slate-100 text-slate-800 hover:bg-slate-200'
-                    : 'border-slate-800 bg-[#141E34] text-slate-300 hover:bg-[#1A2846] hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span
-                    className={`w-2.5 h-2.5 rounded-full shrink-0 shadow-xs ${isZoneSoldOut ? 'bg-slate-400' : ''}`}
-                    style={isZoneSoldOut ? undefined : { backgroundColor: zMeta.colorHex }}
-                  />
-                  <span className={`truncate ${isZoneSoldOut ? 'line-through opacity-70' : ''}`}>{zName}</span>
-                </div>
-                <span className={`text-[10px] font-mono font-black shrink-0 ${
-                  isZoneSoldOut
-                    ? 'text-red-500 font-sans uppercase'
-                    : theme === 'light'
-                    ? 'text-emerald-700 font-bold'
-                    : 'text-emerald-400'
-                }`}>
-                  {isZoneSoldOut ? 'Agotado' : `$${price}`}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 3. Panel Principal: Mapa Interactivo SVG + Cuadrícula de Asientos */}
+      {/* Panel Principal: Mapa Interactivo SVG + Cuadrícula de Asientos */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* LADO IZQUIERDO: Mapa del Estadio (Herradura / Diamante de Béisbol o Cancha Fútbol Encanto) */}
         <div className={`lg:col-span-7 p-4 sm:p-5 rounded-3xl border shadow-xl space-y-4 flex flex-col transition-colors ${
@@ -1031,17 +1002,30 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
             ? 'bg-white border-slate-200 text-slate-900 shadow-sm'
             : 'bg-[#0F1626] border-slate-700/80 text-white shadow-xl'
         }`}>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h3 className={`text-sm font-black flex items-center gap-2 font-sports tracking-wide uppercase ${
-                theme === 'light' ? 'text-slate-900' : 'text-white'
-              }`}>
-                <Maximize2 className={`w-4 h-4 ${isEncanto ? 'text-amber-500' : 'text-red-500'}`} />
-                {isEncanto ? `Distribución Oficial: ${stadiumName}` : 'Mapa Físico del Estadio'}
-              </h3>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className={`text-sm font-black flex items-center gap-2 font-sports tracking-wide uppercase ${
+                  theme === 'light' ? 'text-slate-900' : 'text-white'
+                }`}>
+                  <Maximize2 className={`w-4 h-4 ${isEncanto ? 'text-amber-500' : isCharros ? 'text-blue-500' : isTomateros ? 'text-emerald-500' : 'text-red-500'}`} />
+                  {isEncanto
+                    ? `Distribución Oficial: ${stadiumName}`
+                    : isCharros
+                    ? 'Distribución Oficial: Estadio Charros de Jalisco (Zapopan)'
+                    : isTomateros
+                    ? 'Distribución Oficial: Estadio Tomateros (Culiacán)'
+                    : 'Mapa Físico: Estadio Teodoro Mariscal'}
+                </h3>
+              </div>
+
               <p className={`text-[11px] ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
                 {isEncanto
                   ? 'Toca cualquier sección directamente en el mapa para ver sus butacas'
+                  : isCharros
+                  ? 'Toca cualquier polígono SVG del Estadio Charros de Jalisco para seleccionar asientos'
+                  : isTomateros
+                  ? 'Toca cualquier bloque SVG del Estadio Tomateros para seleccionar asientos'
                   : 'Selecciona una sección directamente en el estadio o en el listado inferior'}
               </p>
             </div>
@@ -1051,6 +1035,10 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                 className={`px-2.5 py-1 rounded-xl text-xs font-bold border font-sports tracking-wider ${
                   isEncanto
                     ? 'bg-amber-950/60 text-amber-300 border-amber-500/60'
+                    : isCharros
+                    ? 'bg-blue-950/60 text-blue-300 border-blue-500/60'
+                    : isTomateros
+                    ? 'bg-emerald-950/60 text-emerald-300 border-emerald-500/60'
                     : 'bg-red-950/60 text-red-300 border-red-700/60'
                 }`}
               >
@@ -1064,7 +1052,22 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
             <EncantoStadiumMap
               sections={sections}
               activeSectionNumber={activeSectionNumber}
-              activeZoneFilter={activeZoneFilter === 'Todas' ? null : activeZoneFilter}
+              onSelectSection={handleSelectSection}
+              event={event}
+              soldOutSectionsSet={soldOutSectionsSet}
+            />
+          ) : isCharros ? (
+            <CharrosStadiumMap
+              sections={sections}
+              activeSectionNumber={activeSectionNumber}
+              onSelectSection={handleSelectSection}
+              event={event}
+              soldOutSectionsSet={soldOutSectionsSet}
+            />
+          ) : isTomateros ? (
+            <TomaterosStadiumMap
+              sections={sections}
+              activeSectionNumber={activeSectionNumber}
               onSelectSection={handleSelectSection}
               event={event}
               soldOutSectionsSet={soldOutSectionsSet}
@@ -1073,7 +1076,6 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
             <TeodoroMariscalStadiumMap
               sections={sections}
               activeSectionNumber={activeSectionNumber}
-              activeZoneFilter={activeZoneFilter === 'Todas' ? null : activeZoneFilter}
               onSelectSection={handleSelectSection}
               event={event}
               soldOutSectionsSet={soldOutSectionsSet}

@@ -35,8 +35,8 @@ export function getAllowedEventTypesForVenue(venueOrIdOrName?: Venue | string | 
   const name = typeof venueOrIdOrName === 'string' ? venueOrIdOrName : venueOrIdOrName.name || '';
   const str = `${id} ${name}`.toLowerCase();
 
-  // Estadio Teodoro Mariscal: solo béisbol y conciertos
-  if (str.includes('teodoro') || str.includes('mariscal') || id === DEFAULT_VENUE_ID) {
+  // Estadio Teodoro Mariscal, Estadio Tomateros, Estadio Charros: béisbol y conciertos
+  if (str.includes('teodoro') || str.includes('mariscal') || id === DEFAULT_VENUE_ID || str.includes('charros') || str.includes('jalisco') || id === 'venue-charros' || str.includes('tomateros') || id === 'venue-tomateros') {
     return ['baseball', 'concert'];
   }
 
@@ -216,7 +216,7 @@ export async function updateVenueStorePromo(
       ...(promoData.storePromoActive !== undefined ? { storePromoActive: promoData.storePromoActive } : {}),
       updatedAt: new Date().toISOString(),
     };
-    await updateDoc(docRef, sanitizeFirestoreData(updates));
+    await setDoc(docRef, sanitizeFirestoreData(updates), { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `${VENUES_COLLECTION}/${venueId}`);
     throw err;

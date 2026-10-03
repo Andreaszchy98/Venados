@@ -21,12 +21,11 @@ const STANDS_COLLECTION = 'stands';
 const MENU_COLLECTION = 'menuItems';
 
 // =========================================================================================
-// ⚠️ DATOS DE MUESTRA CANÓNICOS - EXCLUSIVOS DEL ESTADIO TEODORO MARISCAL (DEFAULT_VENUE_ID)
-// Estos negocios son propios y representativos exclusivamente del Estadio Teodoro Mariscal
-// en Mazatlán. NO son un fallback genérico ni deben sembrarse o devolverse para ninguna
-// otra sede deportiva o estadio (ej. venue-encanto).
+// ⚠️ DATOS CANÓNICOS POR SEDE - CADA NEGOCIO PERTENECE A UNA SEDE/ESTADIO ESPECÍFICO
+// Ningún negocio puede compartirse ni mezclarse entre recintos deportivos.
 // =========================================================================================
 export const INITIAL_STANDS: StadiumStand[] = [
+  // 1. Estadio Teodoro Mariscal (DEFAULT_VENUE_ID)
   {
     id: 'stand-mariscos-muchacho-alegre',
     venueId: DEFAULT_VENUE_ID,
@@ -59,6 +58,74 @@ export const INITIAL_STANDS: StadiumStand[] = [
     estimatedWaitMinutes: 3,
     image: 'https://images.unsplash.com/photo-1608270199996-51f786fa05d8?w=600&auto=format&fit=crop&q=80',
     createdAt: '2026-01-01T00:00:03.000Z',
+  },
+  // 2. Estadio Tomateros de Culiacán ('venue-tomateros')
+  {
+    id: 'stand-tomateros-culichi-sushi',
+    venueId: 'venue-tomateros',
+    name: 'Sushi & Roll Culichi Tomateros',
+    location: 'Nivel Central - Pasillo Principal',
+    categoryTag: 'Mariscos & Botaneros',
+    active: true,
+    estimatedWaitMinutes: 10,
+    image: 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=600&auto=format&fit=crop&q=80',
+    createdAt: '2026-01-01T00:00:10.000Z',
+  },
+  {
+    id: 'stand-tomateros-asador-guinda',
+    venueId: 'venue-tomateros',
+    name: 'Asador Nación Guinda BBQ',
+    location: 'Zona Lateral 1ra Base',
+    categoryTag: 'Tacos & Parrilla',
+    active: true,
+    estimatedWaitMinutes: 8,
+    image: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=600&auto=format&fit=crop&q=80',
+    createdAt: '2026-01-01T00:00:11.000Z',
+  },
+  {
+    id: 'stand-tomateros-barra-guinda',
+    venueId: 'venue-tomateros',
+    name: 'Barra Oficial Cerveza Guinda',
+    location: 'Herraje Central y Suites',
+    categoryTag: 'Cerveza & Coctelería',
+    active: true,
+    estimatedWaitMinutes: 3,
+    image: 'https://images.unsplash.com/photo-1608270199996-51f786fa05d8?w=600&auto=format&fit=crop&q=80',
+    createdAt: '2026-01-01T00:00:12.000Z',
+  },
+  // 3. Estadio El Encanto ('venue-encanto')
+  {
+    id: 'stand-encanto-tacos-gran-pez',
+    venueId: 'venue-encanto',
+    name: 'Tacos de Asada El Gran Pez',
+    location: 'Cabecera Norte - Puerta 1',
+    categoryTag: 'Tacos & Parrilla',
+    active: true,
+    estimatedWaitMinutes: 7,
+    image: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=600&auto=format&fit=crop&q=80',
+    createdAt: '2026-01-01T00:00:20.000Z',
+  },
+  {
+    id: 'stand-encanto-mariscos-dorados',
+    venueId: 'venue-encanto',
+    name: 'Mariscos Dorados Sinaloa',
+    location: 'Zona Poniente - Planta Baja',
+    categoryTag: 'Mariscos & Botaneros',
+    active: true,
+    estimatedWaitMinutes: 9,
+    image: 'https://images.unsplash.com/photo-1535400255456-984241443b29?w=600&auto=format&fit=crop&q=80',
+    createdAt: '2026-01-01T00:00:21.000Z',
+  },
+  {
+    id: 'stand-encanto-barra-dorada',
+    venueId: 'venue-encanto',
+    name: 'Barra Dorada Estadio El Encanto',
+    location: 'Zona Oriente Alta',
+    categoryTag: 'Cerveza & Coctelería',
+    active: true,
+    estimatedWaitMinutes: 3,
+    image: 'https://images.unsplash.com/photo-1608270119293-1b9195b45265?w=600&auto=format&fit=crop&q=80',
+    createdAt: '2026-01-01T00:00:22.000Z',
   },
 ];
 
@@ -179,6 +246,164 @@ const INITIAL_MENU_ITEMS: Record<string, Omit<MenuItem, 'id' | 'standId' | 'crea
       image: 'https://images.unsplash.com/photo-1548839140-29a749e1bc4e?w=600&auto=format&fit=crop&q=80',
     },
   ],
+  // 2. Estadio Tomateros de Culiacán ('venue-tomateros')
+  'Sushi & Roll Culichi Tomateros': [
+    {
+      name: 'Roll Culichi Especial Estadio',
+      description: 'Rollo empanizado relleno de carne asada y camarón con aguacate y queso crema, bañado en salsa de anguila.',
+      price: 185,
+      category: 'comida',
+      available: true,
+      prepTimeMinutes: 12,
+      image: 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=600&auto=format&fit=crop&q=80',
+    },
+    {
+      name: 'Roll Horneado Nación Guinda',
+      description: 'Rollo horneado con topping de salmón y cangrejo bañado en aderezo spicy y ajonjolí tostado.',
+      price: 195,
+      category: 'comida',
+      available: true,
+      prepTimeMinutes: 14,
+      image: 'https://images.unsplash.com/photo-1617196034796-73dfa7b1fd56?w=600&auto=format&fit=crop&q=80',
+    },
+    {
+      name: 'Kushiages de Queso Manchego (3 pzas)',
+      description: 'Brochetas empanizadas de queso derretido acompañadas de salsa kushiage.',
+      price: 95,
+      category: 'snack',
+      available: true,
+      prepTimeMinutes: 5,
+      image: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?w=600&auto=format&fit=crop&q=80',
+    },
+    {
+      name: 'Té Jazmín Frío con Limón 1L',
+      description: 'Té negro con jazmín helado, toque de limón y endulzado al gusto.',
+      price: 60,
+      category: 'bebida',
+      available: true,
+      prepTimeMinutes: 2,
+      image: 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=600&auto=format&fit=crop&q=80',
+    },
+  ],
+  'Asador Nación Guinda BBQ': [
+    {
+      name: 'Tacos de Asada Culiacán (3 pzas)',
+      description: 'Carne de res selecta asada al carbón en tortilla de harina con frijoles puercos y guacamole.',
+      price: 170,
+      category: 'comida',
+      available: true,
+      prepTimeMinutes: 8,
+      image: 'https://images.unsplash.com/photo-1551504734-5ee1c4a1479b?w=600&auto=format&fit=crop&q=80',
+    },
+    {
+      name: 'Dogo Culichi Gigante con Tocino',
+      description: 'Salchicha de res envuelta en tocino crujiente, cebolla guisada, tomate y aderezo especial.',
+      price: 110,
+      category: 'comida',
+      available: true,
+      prepTimeMinutes: 6,
+      image: 'https://images.unsplash.com/photo-1619740455993-9e612b1af08a?w=600&auto=format&fit=crop&q=80',
+    },
+    {
+      name: 'Nachos con Carne Asada y Queso',
+      description: 'Totopos bañados en queso caliente con porción generosa de carne asada y jalapeños.',
+      price: 135,
+      category: 'snack',
+      available: true,
+      prepTimeMinutes: 5,
+      image: 'https://images.unsplash.com/photo-1513456852971-30c0b8199d4d?w=600&auto=format&fit=crop&q=80',
+    },
+  ],
+  'Barra Oficial Cerveza Guinda': [
+    {
+      name: 'Cerveza de Barril Guinda 1L',
+      description: 'Cerveza bien fría servida en vaso conmemorativo Tomateros.',
+      price: 120,
+      category: 'cerveza',
+      available: true,
+      prepTimeMinutes: 2,
+      image: 'https://images.unsplash.com/photo-1608270199996-51f786fa05d8?w=600&auto=format&fit=crop&q=80',
+    },
+    {
+      name: 'Michelada Guinda Especial 1L',
+      description: 'Preparada con clamato, salsa inglesa, limón, sal y escarchado de chamoy.',
+      price: 155,
+      category: 'cerveza',
+      available: true,
+      prepTimeMinutes: 3,
+      image: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=600&auto=format&fit=crop&q=80',
+    },
+    {
+      name: 'Agua Purificada / Refresco 600ml',
+      description: 'Bebidas refrescantes frías.',
+      price: 45,
+      category: 'bebida',
+      available: true,
+      prepTimeMinutes: 1,
+      image: 'https://images.unsplash.com/photo-1548839140-29a749e1bc4e?w=600&auto=format&fit=crop&q=80',
+    },
+  ],
+  // 3. Estadio El Encanto ('venue-encanto')
+  'Tacos de Asada El Gran Pez': [
+    {
+      name: 'Orden de 3 Tacos Dorados de Asada El Gran Pez',
+      description: 'Tortilla dorada al comal con carne asada, repollo, guacamole y salsa tatemada.',
+      price: 160,
+      category: 'comida',
+      available: true,
+      prepTimeMinutes: 7,
+      image: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=600&auto=format&fit=crop&q=80',
+    },
+    {
+      name: 'Quesadilla Gigante El Gran Pez',
+      description: 'Tortilla de harina grande con costra de queso y carne asada marinada.',
+      price: 140,
+      category: 'comida',
+      available: true,
+      prepTimeMinutes: 7,
+      image: 'https://images.unsplash.com/photo-1551504734-5ee1c4a1479b?w=600&auto=format&fit=crop&q=80',
+    },
+  ],
+  'Mariscos Dorados Sinaloa': [
+    {
+      name: 'Ceviche de Camarón El Encanto',
+      description: 'Camarón fresco con tomate, cebolla, pepino y cilantro bañado en jugo de limón.',
+      price: 180,
+      category: 'comida',
+      available: true,
+      prepTimeMinutes: 8,
+      image: 'https://images.unsplash.com/photo-1535400255456-984241443b29?w=600&auto=format&fit=crop&q=80',
+    },
+    {
+      name: 'Tostada de Atún Marinado Fresco',
+      description: 'Atún fresco en cubos marinado con soya, limón, aguacate y ajonjolí.',
+      price: 120,
+      category: 'comida',
+      available: true,
+      prepTimeMinutes: 5,
+      image: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=600&auto=format&fit=crop&q=80',
+    },
+  ],
+  'Barra Dorada Estadio El Encanto': [
+    {
+      name: 'Cerveza de Barril El Encanto 1L',
+      description: 'Cerveza clara helada servida en vaso conmemorativo del estadio.',
+      price: 120,
+      category: 'cerveza',
+      available: true,
+      prepTimeMinutes: 2,
+      image: 'https://images.unsplash.com/photo-1608270119293-1b9195b45265?w=600&auto=format&fit=crop&q=80',
+    },
+    {
+      name: 'Michelada El Gran Pez 1L',
+      description: 'Preparada al estilo sinaloense con limón, sal y salsas negras.',
+      price: 150,
+      category: 'cerveza',
+      available: true,
+      prepTimeMinutes: 3,
+      image: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=600&auto=format&fit=crop&q=80',
+    },
+  ],
 };
 
 /**
@@ -197,8 +422,8 @@ export function sortStandsChronologically(a: StadiumStand, b: StadiumStand): num
 }
 
 export async function getStadiumStands(venueId?: string): Promise<StadiumStand[]> {
-  const isMariscal = !venueId || venueId === DEFAULT_VENUE_ID;
   const targetVenueId = venueId || DEFAULT_VENUE_ID;
+  const isMariscal = targetVenueId === DEFAULT_VENUE_ID;
   const cacheKey = `concessions_stands_${targetVenueId}`;
 
   // 1. Revisar caché local primero
@@ -209,40 +434,45 @@ export async function getStadiumStands(venueId?: string): Promise<StadiumStand[]
   }
 
   try {
-    const q = venueId
-      ? query(collection(db, STANDS_COLLECTION), where('venueId', '==', venueId), limit(150))
-      : query(collection(db, STANDS_COLLECTION), limit(150));
+    const q = query(
+      collection(db, STANDS_COLLECTION),
+      where('venueId', '==', targetVenueId),
+      limit(150)
+    );
     const snap = await getDocs(q);
 
     if (snap.empty) {
-      // Si la sede solicitada es distinta al Mariscal (ej. venue-encanto) y no tiene negocios
-      // registrados en Firestore, DEBE devolverse un arreglo VACÍO. NUNCA sembrar ni retornar
-      // los negocios del Mariscal como fallback.
-      if (!isMariscal) {
-        return [];
+      // Si hay negocios iniciales definidos para esta sede, sembrarlos con su sede exacta
+      const initialForVenue = INITIAL_STANDS.filter(
+        (s) => (s.venueId || DEFAULT_VENUE_ID) === targetVenueId
+      );
+
+      if (initialForVenue.length > 0) {
+        try {
+          const seeded = await seedInitialStandsAndMenu(targetVenueId);
+          const match = seeded.filter(
+            (s) => (s.venueId || DEFAULT_VENUE_ID) === targetVenueId
+          );
+          match.sort(sortStandsChronologically);
+          setCachedData(cacheKey, match, 15);
+          return match;
+        } catch (seedErr) {
+          console.warn('Error sembrando puestos para la sede:', seedErr);
+          const fallback = [...initialForVenue].sort(sortStandsChronologically);
+          setCachedData(cacheKey, fallback, 15);
+          return fallback;
+        }
       }
 
-      // Únicamente para el Estadio Teodoro Mariscal sembramos sus datos de muestra iniciales si está vacío
-      try {
-        const seeded = await seedInitialStandsAndMenu();
-        const match = seeded.filter((s) => (s.venueId || DEFAULT_VENUE_ID) === DEFAULT_VENUE_ID);
-        match.sort(sortStandsChronologically);
-        setCachedData(cacheKey, match, 15);
-        return match;
-      } catch (seedErr) {
-        console.warn('No se pudieron sembrar los puestos en Firestore para Mariscal. Usando datos iniciales:', seedErr);
-        const fallback = [...INITIAL_STANDS].sort(sortStandsChronologically);
-        setCachedData(cacheKey, fallback, 15);
-        return fallback;
-      }
+      return [];
     }
 
     const allDocs = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StadiumStand[];
 
-    // Si se especificó una sede, asegurar en memoria que no haya puestos de otra sede
-    const venueFilteredDocs = venueId
-      ? allDocs.filter((s) => (s.venueId || DEFAULT_VENUE_ID) === venueId)
-      : allDocs;
+    // Aislamiento estricto: asegurar en memoria que no haya puestos de otra sede
+    const venueFilteredDocs = allDocs.filter(
+      (s) => (s.venueId || DEFAULT_VENUE_ID) === targetVenueId
+    );
 
     if (venueFilteredDocs.length === 0) {
       return [];
@@ -264,9 +494,11 @@ export async function getStadiumStands(venueId?: string): Promise<StadiumStand[]
     return deduplicated;
   } catch (err) {
     handleFirestoreError(err, OperationType.LIST, STANDS_COLLECTION);
-    // En caso de fallo de red: solo devolver datos de muestra si es la sede del Mariscal.
-    if (isMariscal) {
-      const fallback = [...INITIAL_STANDS].sort(sortStandsChronologically);
+    const initialForVenue = INITIAL_STANDS.filter(
+      (s) => (s.venueId || DEFAULT_VENUE_ID) === targetVenueId
+    );
+    if (initialForVenue.length > 0) {
+      const fallback = [...initialForVenue].sort(sortStandsChronologically);
       setCachedData(cacheKey, fallback, 10);
       return fallback;
     }
@@ -282,21 +514,26 @@ export async function cleanupDuplicateStands(): Promise<void> {
 }
 
 // =========================================================================================
-// ⚠️ DATOS POR DEFECTO - DETERMINISTAS EXCLUSIVOS DEL ESTADIO TEODORO MARISCAL (DEFAULT_VENUE_ID)
-// Sembrado determinista únicamente para el Estadio Teodoro Mariscal.
+// ⚠️ DATOS POR DEFECTO - DETERMINISTAS EXCLUSIVOS POR CADA SEDE
+// Cada negocio pertenece a una sede/estadio en específico y preserva su propio venueId.
 // =========================================================================================
-export async function seedInitialStandsAndMenu(): Promise<StadiumStand[]> {
+export async function seedInitialStandsAndMenu(targetVenueId?: string): Promise<StadiumStand[]> {
   const createdStands: StadiumStand[] = [];
   const now = new Date().toISOString();
 
-  for (const standData of INITIAL_STANDS) {
+  const standsToSeed = targetVenueId
+    ? INITIAL_STANDS.filter((s) => (s.venueId || DEFAULT_VENUE_ID) === targetVenueId)
+    : INITIAL_STANDS;
+
+  for (const standData of standsToSeed) {
     const standDocRef = doc(db, STANDS_COLLECTION, standData.id);
     const snap = await getDoc(standDocRef);
+    const standVenue = standData.venueId || DEFAULT_VENUE_ID;
 
     if (!snap.exists()) {
       const fullStand: StadiumStand = {
         ...standData,
-        venueId: DEFAULT_VENUE_ID,
+        venueId: standVenue,
         createdAt: standData.createdAt || now,
         updatedAt: now,
       };
@@ -314,7 +551,7 @@ export async function seedInitialStandsAndMenu(): Promise<StadiumStand[]> {
             ...item,
             id: `menu-${standData.id}-${idx + 1}`,
             standId: standData.id,
-            venueId: DEFAULT_VENUE_ID,
+            venueId: standVenue,
             createdAt: now,
           };
           await setDoc(itemDocRef, fullItem);
@@ -341,6 +578,25 @@ export async function getMenuItemsByStand(standId: string): Promise<MenuItem[]> 
       where('standId', '==', standId)
     );
     const snap = await getDocs(q);
+
+    if (snap.empty) {
+      // Fallback con datos de muestra para el puesto si aún no se han sembrado en Firestore
+      const initialStand = INITIAL_STANDS.find((s) => s.id === standId);
+      if (initialStand && INITIAL_MENU_ITEMS[initialStand.name]) {
+        const fallbackItems = INITIAL_MENU_ITEMS[initialStand.name].map((item, idx) => ({
+          ...item,
+          id: `menu-${standId}-${idx + 1}`,
+          standId,
+          venueId: initialStand.venueId || DEFAULT_VENUE_ID,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          image: normalizeGoogleDriveImageUrl(item.image) || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80',
+        })) as MenuItem[];
+        setCachedData(cacheKey, fallbackItems, 15);
+        return fallbackItems;
+      }
+      return [];
+    }
+
     const result = snap.docs.map((d) => {
       const data = d.data() as MenuItem;
       return {
@@ -353,6 +609,17 @@ export async function getMenuItemsByStand(standId: string): Promise<MenuItem[]> 
     return result;
   } catch (err) {
     handleFirestoreError(err, OperationType.LIST, MENU_COLLECTION);
+    const initialStand = INITIAL_STANDS.find((s) => s.id === standId);
+    if (initialStand && INITIAL_MENU_ITEMS[initialStand.name]) {
+      return INITIAL_MENU_ITEMS[initialStand.name].map((item, idx) => ({
+        ...item,
+        id: `menu-${standId}-${idx + 1}`,
+        standId,
+        venueId: initialStand.venueId || DEFAULT_VENUE_ID,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        image: normalizeGoogleDriveImageUrl(item.image) || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80',
+      })) as MenuItem[];
+    }
     return [];
   }
 }
@@ -409,7 +676,7 @@ export async function getAllMenuItems(venueId?: string): Promise<MenuItem[]> {
 export async function toggleMenuItemAvailability(itemId: string, available: boolean): Promise<void> {
   try {
     const docRef = doc(db, MENU_COLLECTION, itemId);
-    await updateDoc(docRef, { available });
+    await setDoc(docRef, { available, updatedAt: new Date().toISOString() }, { merge: true });
     invalidateCache('concessions_menu_');
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `${MENU_COLLECTION}/${itemId}`);
@@ -514,11 +781,13 @@ export async function updateStadiumStand(
 ): Promise<void> {
   try {
     const docRef = doc(db, STANDS_COLLECTION, standId);
+    const initialDefault = INITIAL_STANDS.find((s) => s.id === standId);
     const payload = {
+      ...(initialDefault || {}),
       ...updates,
       updatedAt: new Date().toISOString(),
     };
-    await updateDoc(docRef, sanitizeFirestoreData(payload));
+    await setDoc(docRef, sanitizeFirestoreData(payload), { merge: true });
     invalidateCache('concessions_');
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `${STANDS_COLLECTION}/${standId}`);
@@ -531,10 +800,13 @@ export async function updateStadiumStand(
 export async function toggleStandActive(standId: string, active: boolean): Promise<void> {
   try {
     const docRef = doc(db, STANDS_COLLECTION, standId);
-    await updateDoc(docRef, {
+    const initialDefault = INITIAL_STANDS.find((s) => s.id === standId);
+    const payload = {
+      ...(initialDefault || {}),
       active,
       updatedAt: new Date().toISOString(),
-    });
+    };
+    await setDoc(docRef, sanitizeFirestoreData(payload), { merge: true });
     invalidateCache('concessions_');
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `${STANDS_COLLECTION}/${standId}`);

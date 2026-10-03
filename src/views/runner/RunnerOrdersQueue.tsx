@@ -6,6 +6,7 @@ import { TeodoroMariscalStadiumMap } from '../../components/stadiumMaps/TeodoroM
 import { cleanRowValue, cleanSeatValue, cleanSectionValue, formatDeliverySeat, isGeneralAdmissionRow } from '../../lib/seatUtils';
 import { RunnerQrScannerModal } from './RunnerQrScannerModal';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
+import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
 import {
   Bike,
   MapPin,
@@ -72,30 +73,40 @@ export const RunnerOrdersQueue: React.FC<RunnerOrdersQueueProps> = ({ user }) =>
   };
 
   useEffect(() => {
-    // Escuchar órdenes de comida en tiempo real del negocio asignado
+    // Escuchar órdenes de comida en tiempo real del negocio y sede asignados
     setLoading(true);
+    const targetVenueId = user.venueId || DEFAULT_VENUE_ID;
     const unsubscribe = listenToStandFoodOrders(
       user.standId || null,
       (liveOrders) => {
+        // Filtrar órdenes in-seat pertinentes para este runner
+        // Si el runner tiene standId asignado, solo de ese negocio; si no, de su sede
+        const relevantOrders = liveOrders.filter((o) => {
+          const matchVenue = (o.venueId || DEFAULT_VENUE_ID) === targetVenueId;
+          const matchStand = user.standId ? o.standId === user.standId : true;
+          return matchVenue && matchStand;
+        });
+
         // Si llegaron nuevas órdenes, emitir chime
-        if (liveOrders.length > prevOrdersCountRef.current && prevOrdersCountRef.current > 0) {
+        if (relevantOrders.length > prevOrdersCountRef.current && prevOrdersCountRef.current > 0) {
           playNotificationSound();
         }
-        prevOrdersCountRef.current = liveOrders.length;
+        prevOrdersCountRef.current = relevantOrders.length;
 
-        setOrders(liveOrders);
+        setOrders(relevantOrders);
         setLoading(false);
       },
       (err) => {
         console.warn('Error escuchando órdenes en runner:', err);
         setLoading(false);
-      }
+      },
+      targetVenueId
     );
 
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [user.standId]);
+  }, [user.standId, user.venueId]);
 
   const handleClaimOrder = async (orderId: string) => {
     setActionLoading(orderId);

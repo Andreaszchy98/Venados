@@ -155,7 +155,12 @@ export function subscribeAllScoreboards(
       });
       callback(result);
     },
-    (error) => {
+    (error: any) => {
+      if (error?.message?.includes('Quota') || error?.message?.includes('resource-exhausted') || error?.code === 'resource-exhausted') {
+        console.warn('Firestore quota exceeded in subscribeAllScoreboards. Returning empty scoreboards.');
+        callback({});
+        return;
+      }
       console.error('Error en subscribeAllScoreboards:', error);
       callback({});
     }

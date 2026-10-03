@@ -55,7 +55,23 @@ import {
   Calendar,
   AlertTriangle,
   Bike,
+  Mail,
+  DollarSign,
+  Receipt,
+  Printer,
+  ShieldCheck,
+  TrendingUp,
+  Package,
+  Users,
+  FileText,
+  CreditCard,
+  ArrowRight,
 } from 'lucide-react';
+import { SendToHostEmailModal } from '../../components/shared/SendToHostEmailModal';
+import {
+  HostEmailPayload,
+  buildFoodOrderHostEmail,
+} from '../../lib/orderEmailService';
 
 const PRESET_FOOD_IMAGES = [
   {
@@ -100,13 +116,17 @@ const PRESET_FOOD_IMAGES = [
   },
 ];
 
+export type ConcesionarioTab = 'comanda' | 'menu' | 'ventas' | 'logistica';
+
 interface ConcesionarioViewProps {
   user: UserProfile;
 }
 
 export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) => {
+  const targetVenueId = user.venueId || DEFAULT_VENUE_ID;
   const [selectedStand, setSelectedStand] = useState<StadiumStand | null>(null);
-  const [activeTab, setActiveTab] = useState<'comanda' | 'menu'>('comanda');
+  const [allVenueStands, setAllVenueStands] = useState<StadiumStand[]>([]);
+  const [activeTab, setActiveTab] = useState<ConcesionarioTab>('comanda');
 
   // Comanda en tiempo real y runners del negocio
   const [orders, setOrders] = useState<FoodOrder[]>([]);
@@ -115,13 +135,45 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
+  // Estados para Corte de Caja y Filtros de Ventas
+  const [isCorteModalOpen, setIsCorteModalOpen] = useState(false);
+  const [ventasSearch, setVentasSearch] = useState('');
+  const [ventasFilter, setVentasFilter] = useState<'todos' | 'pagado' | 'pendiente'>('todos');
+
+  // Ref para contar cambios de órdenes y sonido de alerta en cocina
+  const prevOrdersCountRef = React.useRef<number>(0);
+  const playNotificationSound = () => {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+      osc.frequency.setValueAtTime(880, ctx.currentTime + 0.15);
+      gain.gain.setValueAtTime(0.25, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.35);
+    } catch {}
+  };
+
+  const venueDisplayName =
+    user.venueName ||
+    (targetVenueId === 'venue-tomateros'
+      ? 'Estadio Tomateros'
+      : targetVenueId === 'venue-encanto'
+      ? 'Estadio El Encanto'
+      : 'Estadio Teodoro Mariscal');
+
   useEffect(() => {
     if (selectedStand) {
-      getRunnersForStand(selectedStand.id, user.venueId)
+      getRunnersForStand(selectedStand.id, targetVenueId)
         .then((list) => setRunners(list))
         .catch(() => {});
     }
-  }, [selectedStand, user.venueId]);
+  }, [selectedStand, targetVenueId]);
 
   const handleAssignRunner = async (orderId: string, runnerUid: string) => {
     setActionLoading(orderId);
@@ -143,6 +195,8 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
 
   // Modal para agregar / editar producto al menú
   const [isMenuModalOpen, setIsMenuModalOpen] = useState(false);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [emailModalPayload, setEmailModalPayload] = useState<HostEmailPayload | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<Partial<MenuItem>>({
     name: '',
@@ -167,10 +221,9 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
   const checkEventStatus = async () => {
     setCheckingEvent(true);
     try {
-      const vId = user.venueId || DEFAULT_VENUE_ID;
-      const active = await getActiveOrderingEvent(vId);
+      const active = await getActiveOrderingEvent(targetVenueId);
       setActiveEvent(active);
-      const next = await getNextUpcomingEvent(vId);
+      const next = await getNextUpcomingEvent(targetVenueId);
       setUpcomingEvent(next);
     } catch (err) {
       console.error('Error checking active ordering event in ConcesionarioView:', err);
@@ -181,9 +234,8 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
 
   useEffect(() => {
     setCheckingEvent(true);
-    const vId = user.venueId || DEFAULT_VENUE_ID;
     const unsubscribe = subscribeVenueEventStatus(
-      vId,
+      targetVenueId,
       (status) => {
         setActiveEvent(status.activeEvent);
         setUpcomingEvent(status.upcomingEvent);
@@ -194,42 +246,78 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
       }
     );
     return () => unsubscribe();
-  }, [user.venueId]);
+  }, [targetVenueId]);
 
+  // Cargar negocios pertenecientes estrictamente a la sede actual
   useEffect(() => {
     const fetchStands = async () => {
       setLoading(true);
       try {
-        const data = await getStadiumStands();
+        const data = await getStadiumStands(targetVenueId);
+        setAllVenueStands(data);
+
         if (data.length > 0) {
-          // Asignar el stand correspondiente al concesionario (por standId o por ownerId)
-          const matched =
-            data.find((s) => s.id === user.standId) ||
-            data.find((s) => s.ownerId === user.uid) ||
-            data[0];
-          setSelectedStand(matched);
+          // Asignar el stand correspondiente al concesionario estrictamente en esta sede
+          let matched: StadiumStand | undefined = undefined;
+          if (user.standId) {
+            matched = data.find(
+              (s) => s.id === user.standId && (s.venueId || DEFAULT_VENUE_ID) === targetVenueId
+            );
+          }
+          if (!matched && user.uid) {
+            matched = data.find(
+              (s) => s.ownerId === user.uid && (s.venueId || DEFAULT_VENUE_ID) === targetVenueId
+            );
+          }
+          // Si el usuario es administrador o superadmin explorando la vista simulada de concesionario,
+          // permitir seleccionar o visualizar el primer puesto de esta sede
+          if (!matched && (user.role === 'admin' || user.role === 'superadmin')) {
+            matched = data[0];
+          }
+
+          setSelectedStand(matched || null);
+        } else {
+          setSelectedStand(null);
         }
       } catch (err) {
-        console.error('Error fetching stands:', err);
+        console.error('Error fetching stands for venue:', err);
       } finally {
         setLoading(false);
       }
     };
     fetchStands();
-  }, [user.uid, user.standId]);
+  }, [user.uid, user.standId, targetVenueId, user.role]);
 
-  // Escuchar órdenes en tiempo real para el puesto
+  // Escuchar órdenes en tiempo real con AISLAMIENTO ESTRICTO DE NEGOCIO Y SEDE
   useEffect(() => {
-    if (!selectedStand) return;
+    if (!selectedStand) {
+      setOrders([]);
+      return;
+    }
+
+    const standVenue = selectedStand.venueId || targetVenueId;
 
     const unsubscribe = listenToStandFoodOrders(
       selectedStand.id,
       (liveOrders) => {
-        setOrders(liveOrders);
+        // Doble verificación inmutable de seguridad: solo órdenes que correspondan a este stand y a esta sede
+        const strictlyIsolated = liveOrders.filter(
+          (o) =>
+            o.standId === selectedStand.id &&
+            (o.venueId || DEFAULT_VENUE_ID) === standVenue
+        );
+
+        if (strictlyIsolated.length > prevOrdersCountRef.current && prevOrdersCountRef.current > 0) {
+          playNotificationSound();
+        }
+        prevOrdersCountRef.current = strictlyIsolated.length;
+
+        setOrders(strictlyIsolated);
       },
       (err) => {
         console.warn('Error escuchando órdenes del puesto en tiempo real:', err);
-      }
+      },
+      standVenue
     );
 
     const loadMenu = async () => {
@@ -241,7 +329,7 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [selectedStand]);
+  }, [selectedStand, targetVenueId]);
 
   const handleAdvanceStatus = async (orderId: string, nextStatus: FoodOrderStatus) => {
     setActionLoading(orderId);
@@ -332,11 +420,35 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
   const pendingOrders = orders.filter((o) => o.status === 'pendiente');
   const preparingOrders = orders.filter((o) => o.status === 'preparando');
   const readyOrders = orders.filter((o) => o.status === 'listo');
+  const inTransitOrders = orders.filter((o) => o.status === 'en-camino');
   const completedOrders = orders.filter((o) => o.status === 'entregado');
 
-  const totalTodayRevenue = orders
-    .filter((o) => o.status !== 'cancelado')
+  const paidOrders = orders.filter((o) => o.paymentStatus === 'pagado' || o.status === 'entregado');
+  const totalTodayRevenue = paidOrders.reduce((sum, o) => sum + o.total, 0);
+  const commissionRate = selectedStand?.commissionRate ?? 15;
+  const stadiumCommissionAmount = Math.round((totalTodayRevenue * commissionRate) / 100);
+  const netVendorRevenue = totalTodayRevenue - stadiumCommissionAmount;
+  const averageTicket = paidOrders.length > 0 ? Math.round(totalTodayRevenue / paidOrders.length) : 0;
+
+  const cardRevenue = paidOrders
+    .filter((o) => o.paymentMethod?.toLowerCase().includes('tarjeta') || o.paymentDetails)
     .reduce((sum, o) => sum + o.total, 0);
+
+  const cashRevenue = paidOrders
+    .filter((o) => !o.paymentMethod?.toLowerCase().includes('tarjeta') && !o.paymentDetails)
+    .reduce((sum, o) => sum + o.total, 0);
+
+  const filteredSalesOrders = orders.filter((order) => {
+    const matchesSearch =
+      order.customerName.toLowerCase().includes(ventasSearch.toLowerCase()) ||
+      order.pickupCode.toLowerCase().includes(ventasSearch.toLowerCase()) ||
+      order.id.toLowerCase().includes(ventasSearch.toLowerCase());
+    const matchesFilter =
+      ventasFilter === 'todos' ||
+      (ventasFilter === 'pagado' && (order.paymentStatus === 'pagado' || order.status === 'entregado')) ||
+      (ventasFilter === 'pendiente' && order.paymentStatus === 'pendiente' && order.status !== 'entregado');
+    return matchesSearch && matchesFilter;
+  });
 
   const filteredMenuItems = menuItems.filter((item) => {
     const matchesSearch =
@@ -352,31 +464,85 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
       {/* Header del Operador de Concesión Deportivo */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-3 border-b border-slate-800">
         <div>
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/40 mb-1 font-sports">
-            <span>Puesto Concesionario Oficial</span>
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/40 font-sports">
+              <Store className="w-3 h-3" />
+              <span>Sede: {venueDisplayName}</span>
+            </span>
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+              <ShieldCheck className="w-3 h-3 text-emerald-400" />
+              <span>Aislamiento Estricto Activo</span>
+            </span>
           </div>
           <h1 className="text-xl sm:text-2xl font-black text-white tracking-wide flex items-center gap-2 font-sports">
             <ChefHat className="w-6 h-6 text-amber-400" />
-            <span>Operación de Cocina & Concesiones de Estadio</span>
+            <span>{selectedStand ? selectedStand.name : 'Operación de Concesiones & Negocio'}</span>
           </h1>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Comanda express en vivo, despacho de pedidos y control de disponibilidad de menú
+          <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-2">
+            <span>📍 {selectedStand ? selectedStand.location : venueDisplayName}</span>
+            {selectedStand && (
+              <>
+                <span>•</span>
+                <span>Comisión Estadio: {commissionRate}%</span>
+                <span>•</span>
+                <span>ID Negocio: <strong className="text-slate-300 font-mono text-[11px]">{selectedStand.id}</strong></span>
+              </>
+            )}
           </p>
         </div>
 
-        {/* Información fija del Puesto Asignado */}
-        {selectedStand && (
-          <div className="flex items-center gap-2.5 bg-[#0F1626] px-4 py-2.5 rounded-2xl border border-slate-700/80 shadow-md">
-            <div className="p-2 bg-amber-500/20 text-amber-400 rounded-xl border border-amber-500/30">
-              <Store className="w-4 h-4" />
+        {/* Información fija o selector de puesto si es admin */}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {(user.role === 'admin' || user.role === 'superadmin') && allVenueStands.length > 1 && (
+            <div className="flex items-center gap-2 bg-[#0F1626] px-3 py-1.5 rounded-2xl border border-slate-700/80 shadow-md">
+              <span className="text-[10px] text-slate-400 font-bold uppercase font-sports">Cambiar Local:</span>
+              <select
+                value={selectedStand?.id || ''}
+                onChange={(e) => {
+                  const s = allVenueStands.find((st) => st.id === e.target.value);
+                  if (s) setSelectedStand(s);
+                }}
+                className="bg-[#141C2E] border border-slate-600 text-white rounded-xl px-2.5 py-1 text-xs font-bold focus:outline-none focus:border-amber-400 cursor-pointer"
+              >
+                {allVenueStands.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.location})
+                  </option>
+                ))}
+              </select>
             </div>
-            <div>
-              <p className="text-xs font-black text-white leading-none font-sports uppercase tracking-wider">{selectedStand.name}</p>
-              <p className="text-[10px] font-semibold text-slate-400 mt-0.5">{selectedStand.location}</p>
+          )}
+
+          {selectedStand && (
+            <div className="flex items-center gap-2.5 bg-[#0F1626] px-4 py-2 rounded-2xl border border-slate-700/80 shadow-md">
+              <div className="p-2 bg-amber-500/20 text-amber-400 rounded-xl border border-amber-500/30">
+                <Store className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-black text-white leading-none font-sports uppercase tracking-wider">{selectedStand.name}</p>
+                <p className="text-[10px] font-semibold text-slate-400 mt-0.5">{selectedStand.location}</p>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
+
+      {/* Si el concesionario no tiene puesto vinculado en esta sede */}
+      {!loading && !selectedStand && (
+        <div className="p-8 bg-[#0F1626] border border-amber-500/40 rounded-3xl text-center space-y-4 shadow-xl">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto border border-amber-500/40 shadow-inner">
+            <Store className="w-8 h-8" />
+          </div>
+          <div className="max-w-md mx-auto space-y-2">
+            <h3 className="text-lg font-black text-white font-sports uppercase tracking-wider">
+              Negocio No Vinculado en {venueDisplayName}
+            </h3>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Tu cuenta de concesionario no tiene asignado un negocio comercial en <strong>{venueDisplayName}</strong>. Para garantizar la estricta seguridad del negocio y evitar que veas pedidos de otros locales u otras sedes, un administrador debe vincular tu negocio en el módulo <strong>"Personal y Accesos"</strong>.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Banner de Estado de Evento en Sede */}
       {!checkingEvent && !activeEvent && (
@@ -531,7 +697,7 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
         </div>
       )}
 
-      {/* Tarjetas KPI de Cocina - Marcador Deportivo */}
+      {/* Tarjetas KPI de Cocina y Ventas del Negocio */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
         <div className="bg-[#0F1626] border border-amber-500/50 rounded-2xl p-4 shadow-lg">
           <p className="text-[11px] font-black uppercase tracking-wider text-amber-400 font-sports">1. Por Preparar</p>
@@ -544,8 +710,8 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
         </div>
 
         <div className="bg-[#0F1626] border border-emerald-500/50 rounded-2xl p-4 shadow-lg">
-          <p className="text-[11px] font-black uppercase tracking-wider text-emerald-400 font-sports">3. Listos para Despacho</p>
-          <p className="text-2xl sm:text-3xl font-black text-white mt-1 font-scoreboard">{readyOrders.length}</p>
+          <p className="text-[11px] font-black uppercase tracking-wider text-emerald-400 font-sports">3. Listos / En Camino</p>
+          <p className="text-2xl sm:text-3xl font-black text-white mt-1 font-scoreboard">{readyOrders.length + inTransitOrders.length}</p>
         </div>
 
         <div className="bg-[#0F1626] border border-slate-700/80 text-white rounded-2xl p-4 shadow-lg">
@@ -554,30 +720,54 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
         </div>
       </div>
 
-      {/* Pestañas de Comanda vs Gestión de Menú */}
-      <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+      {/* 4 Pestañas de Gestión Completa del Negocio */}
+      <div className="flex items-center gap-2 border-b border-slate-800 pb-2 overflow-x-auto">
         <button
           onClick={() => setActiveTab('comanda')}
-          className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider transition-all flex items-center gap-2 font-sports cursor-pointer ${
+          className={`px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider transition-all flex items-center gap-2 font-sports cursor-pointer shrink-0 ${
             activeTab === 'comanda'
               ? 'bg-red-700 text-white shadow-lg shadow-red-950/40 border border-red-500/50'
               : 'bg-[#101625] text-slate-300 hover:bg-[#162035] border border-slate-700/80 hover:text-white'
           }`}
         >
           <Bell className="w-4 h-4 text-amber-400" />
-          <span>Comanda en Vivo ({pendingOrders.length + preparingOrders.length + readyOrders.length} activas)</span>
+          <span>Comanda en Vivo ({pendingOrders.length + preparingOrders.length + readyOrders.length})</span>
         </button>
 
         <button
           onClick={() => setActiveTab('menu')}
-          className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider transition-all flex items-center gap-2 font-sports cursor-pointer ${
+          className={`px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider transition-all flex items-center gap-2 font-sports cursor-pointer shrink-0 ${
             activeTab === 'menu'
               ? 'bg-red-700 text-white shadow-lg shadow-red-950/40 border border-red-500/50'
               : 'bg-[#101625] text-slate-300 hover:bg-[#162035] border border-slate-700/80 hover:text-white'
           }`}
         >
           <Utensils className="w-4 h-4 text-red-400" />
-          <span>Control de Menú ({menuItems.length} platillos)</span>
+          <span>Menú e Inventario ({menuItems.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('ventas')}
+          className={`px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider transition-all flex items-center gap-2 font-sports cursor-pointer shrink-0 ${
+            activeTab === 'ventas'
+              ? 'bg-red-700 text-white shadow-lg shadow-red-950/40 border border-red-500/50'
+              : 'bg-[#101625] text-slate-300 hover:bg-[#162035] border border-slate-700/80 hover:text-white'
+          }`}
+        >
+          <DollarSign className="w-4 h-4 text-emerald-400" />
+          <span>Administración de Ventas</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('logistica')}
+          className={`px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider transition-all flex items-center gap-2 font-sports cursor-pointer shrink-0 ${
+            activeTab === 'logistica'
+              ? 'bg-red-700 text-white shadow-lg shadow-red-950/40 border border-red-500/50'
+              : 'bg-[#101625] text-slate-300 hover:bg-[#162035] border border-slate-700/80 hover:text-white'
+          }`}
+        >
+          <Bike className="w-4 h-4 text-blue-400" />
+          <span>Logística & Entregas ({runners.length} runners)</span>
         </button>
       </div>
 
@@ -764,6 +954,21 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
                           ✓ Pedido Entregado
                         </div>
                       )}
+
+                      {/* Botón de Enviar copia de la orden al correo del anfitrión */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const payload = buildFoodOrderHostEmail([order], selectedStand, 'Estadio Teodoro Mariscal');
+                          setEmailModalPayload(payload);
+                          setIsEmailModalOpen(true);
+                        }}
+                        className="w-full py-1.5 px-2 bg-slate-900/80 hover:bg-red-950/40 border border-slate-700/80 hover:border-red-600/50 text-slate-300 hover:text-red-300 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                        title="Enviar orden al correo del anfitrión / cocina"
+                      >
+                        <Mail className="w-3 h-3 text-red-400" />
+                        <span>Enviar al correo del anfitrión / cocina</span>
+                      </button>
                     </div>
                   </div>
                 );
@@ -976,7 +1181,340 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
         </div>
       )}
 
-      {/* Modal para Agregar o Editar Platillo */}
+      {/* Vista de Administración de Ventas & Corte de Caja */}
+      {activeTab === 'ventas' && (
+        <div className="space-y-6">
+          {/* Tarjetas de Métricas Financieras del Negocio */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-[#0F1626] border border-emerald-500/50 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-3 opacity-10">
+                <DollarSign className="w-16 h-16 text-emerald-400" />
+              </div>
+              <p className="text-[11px] font-black uppercase tracking-wider text-slate-400 font-sports">Ventas Brutas Cobradas</p>
+              <p className="text-2xl sm:text-3xl font-black text-emerald-400 mt-1 font-scoreboard">
+                ${totalTodayRevenue.toLocaleString('es-MX')} <span className="text-xs text-slate-400">MXN</span>
+              </p>
+              <p className="text-[11px] text-slate-400 mt-2 flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span>{paidOrders.length} transacciones exitosas</span>
+              </p>
+            </div>
+
+            <div className="bg-[#0F1626] border border-blue-500/50 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-3 opacity-10">
+                <TrendingUp className="w-16 h-16 text-blue-400" />
+              </div>
+              <p className="text-[11px] font-black uppercase tracking-wider text-slate-400 font-sports">Ticket Promedio</p>
+              <p className="text-2xl sm:text-3xl font-black text-blue-400 mt-1 font-scoreboard">
+                ${averageTicket.toLocaleString('es-MX')} <span className="text-xs text-slate-400">MXN</span>
+              </p>
+              <p className="text-[11px] text-slate-400 mt-2">
+                Promedio por comanda despachada
+              </p>
+            </div>
+
+            <div className="bg-[#0F1626] border border-amber-500/50 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-3 opacity-10">
+                <Receipt className="w-16 h-16 text-amber-400" />
+              </div>
+              <p className="text-[11px] font-black uppercase tracking-wider text-slate-400 font-sports">Comisión Estadio ({commissionRate}%)</p>
+              <p className="text-2xl sm:text-3xl font-black text-amber-400 mt-1 font-scoreboard">
+                -${stadiumCommissionAmount.toLocaleString('es-MX')} <span className="text-xs text-slate-400">MXN</span>
+              </p>
+              <p className="text-[11px] text-slate-400 mt-2">
+                Canon operativo del recinto deportivo
+              </p>
+            </div>
+
+            <div className="bg-[#0F1626] border border-purple-500/50 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-3 opacity-10">
+                <Store className="w-16 h-16 text-purple-400" />
+              </div>
+              <p className="text-[11px] font-black uppercase tracking-wider text-slate-400 font-sports">Ingreso Neto Negocio ({100 - commissionRate}%)</p>
+              <p className="text-2xl sm:text-3xl font-black text-purple-400 mt-1 font-scoreboard">
+                ${netVendorRevenue.toLocaleString('es-MX')} <span className="text-xs text-slate-400">MXN</span>
+              </p>
+              <p className="text-[11px] text-slate-400 mt-2">
+                Utilidad líquida exclusiva del concesionario
+              </p>
+            </div>
+          </div>
+
+          {/* Desglose por Método de Pago & Botón de Corte de Caja */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="bg-[#0F1626] border border-slate-700/80 rounded-2xl p-5 shadow-lg space-y-3">
+              <h3 className="text-sm font-black text-white uppercase tracking-wider font-sports flex items-center gap-2">
+                <CreditCard className="w-4 h-4 text-amber-400" />
+                <span>Tarjeta en Línea / Stripe</span>
+              </h3>
+              <p className="text-2xl font-black text-white font-scoreboard">
+                ${cardRevenue.toLocaleString('es-MX')} <span className="text-xs text-slate-400">MXN</span>
+              </p>
+              <p className="text-xs text-slate-400">
+                Pagos procesados y verificados digitalmente a través de la pasarela Stripe y Venados Pay.
+              </p>
+            </div>
+
+            <div className="bg-[#0F1626] border border-slate-700/80 rounded-2xl p-5 shadow-lg space-y-3">
+              <h3 className="text-sm font-black text-white uppercase tracking-wider font-sports flex items-center gap-2">
+                <DollarSign className="w-4 h-4 text-emerald-400" />
+                <span>Efectivo & Terminal Presencial</span>
+              </h3>
+              <p className="text-2xl font-black text-white font-scoreboard">
+                ${cashRevenue.toLocaleString('es-MX')} <span className="text-xs text-slate-400">MXN</span>
+              </p>
+              <p className="text-xs text-slate-400">
+                Cobros presenciales registrados en mostrador de comida o recibidos por runners en butaca.
+              </p>
+            </div>
+
+            <div className="bg-[#0F1626] border border-amber-500/40 rounded-2xl p-5 shadow-lg flex flex-col justify-between space-y-3 bg-gradient-to-br from-[#0F1626] to-[#172033]">
+              <div>
+                <h3 className="text-sm font-black text-white uppercase tracking-wider font-sports flex items-center gap-2">
+                  <Printer className="w-4 h-4 text-amber-400" />
+                  <span>Corte de Caja Oficial</span>
+                </h3>
+                <p className="text-xs text-slate-300 mt-1">
+                  Genera el reporte fiscal y de auditoría del turno actual para conciliación con la administración del estadio.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCorteModalOpen(true)}
+                className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black uppercase tracking-wider rounded-xl text-xs flex items-center justify-center gap-2 shadow-md transition-all font-sports cursor-pointer"
+              >
+                <FileText className="w-4 h-4" />
+                <span>Generar Corte de Caja</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Tabla de Auditoría de Comandas del Negocio */}
+          <div className="bg-[#0F1626] border border-slate-700/80 rounded-2xl p-5 shadow-lg space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-black text-white font-sports uppercase tracking-wider flex items-center gap-2">
+                  <Receipt className="w-5 h-5 text-amber-400" />
+                  <span>Auditoría de Comandas del Negocio</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Registro exclusivo de órdenes vinculadas a este puesto y sede ({orders.length} totales)
+                </p>
+              </div>
+
+              {/* Filtros */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Buscar cliente, código..."
+                    value={ventasSearch}
+                    onChange={(e) => setVentasSearch(e.target.value)}
+                    className="pl-8 pr-3 py-1.5 bg-[#141C2E] border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                  />
+                </div>
+
+                <select
+                  value={ventasFilter}
+                  onChange={(e) => setVentasFilter(e.target.value as any)}
+                  className="bg-[#141C2E] border border-slate-700 text-white rounded-xl px-3 py-1.5 text-xs font-bold focus:outline-none focus:border-amber-400 cursor-pointer"
+                >
+                  <option value="todos">Todos los pagos</option>
+                  <option value="pagado">Pagados</option>
+                  <option value="pendiente">Pendientes</option>
+                </select>
+              </div>
+            </div>
+
+            {filteredSalesOrders.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 space-y-1">
+                <Receipt className="w-8 h-8 text-slate-600 mx-auto" />
+                <p className="text-xs font-bold">No se encontraron comandas con los filtros aplicados</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-slate-300">
+                  <thead className="bg-[#141C2E] text-slate-400 text-[10px] font-black uppercase font-sports tracking-wider border-b border-slate-700">
+                    <tr>
+                      <th className="py-2.5 px-3">Hora</th>
+                      <th className="py-2.5 px-3">Código</th>
+                      <th className="py-2.5 px-3">Tipo</th>
+                      <th className="py-2.5 px-3">Cliente</th>
+                      <th className="py-2.5 px-3">Platillos</th>
+                      <th className="py-2.5 px-3">Método</th>
+                      <th className="py-2.5 px-3">Estado</th>
+                      <th className="py-2.5 px-3 text-right">Monto</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {filteredSalesOrders.map((order) => {
+                      const isPaid = order.paymentStatus === 'pagado' || order.status === 'entregado';
+                      return (
+                        <tr key={order.id} className="hover:bg-slate-800/40 transition-colors">
+                          <td className="py-2.5 px-3 whitespace-nowrap text-[11px] text-slate-400 font-mono">
+                            {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                          <td className="py-2.5 px-3 font-scoreboard font-bold text-amber-400 text-sm whitespace-nowrap">
+                            {order.pickupCode}
+                          </td>
+                          <td className="py-2.5 px-3 whitespace-nowrap">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase font-sports ${
+                              order.orderType === 'in-seat'
+                                ? 'bg-purple-900/60 text-purple-300 border border-purple-500/40'
+                                : 'bg-amber-900/60 text-amber-300 border border-amber-500/40'
+                            }`}>
+                              {order.orderType === 'in-seat' ? '🚴 Butaca' : '⚡ Pickup'}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 font-bold text-white whitespace-nowrap">
+                            {order.customerName}
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-300 max-w-xs truncate" title={order.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')}>
+                            {order.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')}
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-400 whitespace-nowrap text-[11px]">
+                            {order.paymentDetails ? `Tarjeta ${order.paymentDetails.cardBrand || ''} ****${order.paymentDetails.cardLast4 || ''}` : order.paymentMethod || 'Efectivo'}
+                          </td>
+                          <td className="py-2.5 px-3 whitespace-nowrap">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase font-sports ${
+                              isPaid
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                            }`}>
+                              {isPaid ? '✓ Pagado' : '⏳ Pendiente'}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-scoreboard font-black text-sm text-emerald-400 whitespace-nowrap">
+                            ${order.total} MXN
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Vista de Logística & Entregas */}
+      {activeTab === 'logistica' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-[#0F1626] border border-amber-500/50 rounded-2xl p-5 shadow-lg">
+              <p className="text-[11px] font-black uppercase tracking-wider text-amber-400 font-sports">Entregas en Mostrador</p>
+              <p className="text-2xl sm:text-3xl font-black text-white mt-1 font-scoreboard">
+                {orders.filter((o) => o.orderType === 'pickup').length}
+              </p>
+              <p className="text-[11px] text-slate-400 mt-2">Pickup Express con código en pantalla</p>
+            </div>
+
+            <div className="bg-[#0F1626] border border-purple-500/50 rounded-2xl p-5 shadow-lg">
+              <p className="text-[11px] font-black uppercase tracking-wider text-purple-400 font-sports">Entregas en Butaca</p>
+              <p className="text-2xl sm:text-3xl font-black text-white mt-1 font-scoreboard">
+                {orders.filter((o) => o.orderType === 'in-seat').length}
+              </p>
+              <p className="text-[11px] text-slate-400 mt-2">Despachadas por Runners del estadio</p>
+            </div>
+
+            <div className="bg-[#0F1626] border border-blue-500/50 rounded-2xl p-5 shadow-lg">
+              <p className="text-[11px] font-black uppercase tracking-wider text-blue-400 font-sports">Runners Vinculados</p>
+              <p className="text-2xl sm:text-3xl font-black text-white mt-1 font-scoreboard">
+                {runners.length}
+              </p>
+              <p className="text-[11px] text-slate-400 mt-2">Personal disponible para entrega en butaca</p>
+            </div>
+
+            <div className="bg-[#0F1626] border border-emerald-500/50 rounded-2xl p-5 shadow-lg">
+              <p className="text-[11px] font-black uppercase tracking-wider text-emerald-400 font-sports">Comandas en Camino</p>
+              <p className="text-2xl sm:text-3xl font-black text-emerald-400 mt-1 font-scoreboard">
+                {inTransitOrders.length}
+              </p>
+              <p className="text-[11px] text-slate-400 mt-2">En ruta hacia la butaca del aficionado</p>
+            </div>
+          </div>
+
+          {/* Runners Disponibles en este Puesto */}
+          <div className="bg-[#0F1626] border border-slate-700/80 rounded-2xl p-5 shadow-lg space-y-4">
+            <h3 className="text-base font-black text-white font-sports uppercase tracking-wider flex items-center gap-2">
+              <Users className="w-5 h-5 text-blue-400" />
+              <span>Equipo de Runners Asignados</span>
+            </h3>
+            {runners.length === 0 ? (
+              <div className="p-6 text-center text-slate-400 space-y-2">
+                <Bike className="w-8 h-8 text-slate-600 mx-auto" />
+                <p className="text-xs">No hay runners vinculados directamente a este puesto en {venueDisplayName}.</p>
+                <p className="text-[11px] text-slate-500">Un administrador puede asignar runners a tu puesto o zona desde el módulo Personal y Accesos.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {runners.map((r) => (
+                  <div key={r.uid} className="bg-[#141C2E] border border-slate-700/80 rounded-xl p-3.5 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center font-black font-sports shrink-0">
+                      <Bike className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-white truncate">{r.displayName || r.email}</p>
+                      <p className="text-[10px] text-slate-400 truncate">{r.assignedZone || 'Zona General'}</p>
+                      <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[9px] font-black uppercase font-sports ${
+                        r.runnerStatus === 'disponible'
+                          ? 'bg-emerald-500/20 text-emerald-300'
+                          : r.runnerStatus === 'en_entrega'
+                          ? 'bg-amber-500/20 text-amber-300'
+                          : 'bg-slate-700 text-slate-300'
+                      }`}>
+                        {r.runnerStatus || 'disponible'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Cola de Entregas Activas en Butaca */}
+          <div className="bg-[#0F1626] border border-slate-700/80 rounded-2xl p-5 shadow-lg space-y-4">
+            <h3 className="text-base font-black text-white font-sports uppercase tracking-wider flex items-center gap-2">
+              <Package className="w-5 h-5 text-amber-400" />
+              <span>Monitoreo de Despacho a Butacas en Vivo</span>
+            </h3>
+
+            {orders.filter((o) => o.orderType === 'in-seat' && o.status !== 'entregado' && o.status !== 'cancelado').length === 0 ? (
+              <div className="p-8 text-center text-slate-400 space-y-1">
+                <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto" />
+                <p className="text-xs font-bold text-white">Todas las entregas en butaca están al día</p>
+                <p className="text-[11px] text-slate-400">Las nuevas órdenes in-seat aparecerán aquí para seguimiento logístico.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {orders
+                  .filter((o) => o.orderType === 'in-seat' && o.status !== 'entregado' && o.status !== 'cancelado')
+                  .map((order) => (
+                    <div key={order.id} className="bg-[#141C2E] border border-purple-500/40 rounded-xl p-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-scoreboard text-lg font-bold text-amber-400">{order.pickupCode}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-purple-900/60 text-purple-300 border border-purple-500/40 uppercase font-black font-sports">
+                          {order.status}
+                        </span>
+                      </div>
+                      <p className="text-xs font-bold text-white">{order.customerName}</p>
+                      <p className="text-[11px] text-red-300 font-sports">📍 {formatDeliverySeat(order.section, order.row, order.seat)}</p>
+                      <div className="text-[11px] text-slate-300">
+                        {order.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')}
+                      </div>
+                      <div className="pt-2 border-t border-slate-700/60 flex items-center justify-between text-[11px]">
+                        <span className="text-slate-400">Runner: <strong className="text-white">{order.runnerId ? runners.find((r) => r.uid === order.runnerId)?.displayName || 'Asignado' : 'Sin asignar'}</strong></span>
+                        <span className="font-scoreboard text-emerald-400 font-bold">${order.total} MXN</span>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {isMenuModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 bg-slate-950/80 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-150">
           <div className="bg-[#0F1626] w-full max-w-lg rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-700/90 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[88vh] my-auto animate-in zoom-in-95 duration-150 text-white">
@@ -1194,6 +1732,125 @@ export const ConcesionarioView: React.FC<ConcesionarioViewProps> = ({ user }) =>
         cancelText="Cancelar"
         variant="danger"
       />
+
+      {/* Modal de Envío de Orden al Correo del Anfitrión */}
+      {emailModalPayload && (
+        <SendToHostEmailModal
+          isOpen={isEmailModalOpen}
+          onClose={() => {
+            setIsEmailModalOpen(false);
+            setEmailModalPayload(null);
+          }}
+          emailPayload={emailModalPayload}
+        />
+      )}
+
+      {/* Modal de Corte de Caja Oficial del Negocio */}
+      {isCorteModalOpen && selectedStand && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-[#0F1626] w-full max-w-lg rounded-2xl sm:rounded-3xl shadow-2xl border border-amber-500/50 overflow-hidden flex flex-col max-h-[92vh] my-auto text-white animate-in zoom-in-95 duration-150">
+            <div className="bg-[#141C2E] p-4 sm:p-5 flex items-center justify-between border-b border-slate-700">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-amber-500/20 text-amber-400 rounded-xl border border-amber-500/30">
+                  <Receipt className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm sm:text-base font-sports uppercase tracking-wider">
+                    Corte de Caja Oficial
+                  </h3>
+                  <p className="text-[11px] text-amber-300 font-medium">
+                    {selectedStand.name} • {venueDisplayName}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsCorteModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 overflow-y-auto text-xs flex-1">
+              <div className="bg-[#141C2E] p-4 rounded-xl border border-slate-700 space-y-2">
+                <div className="flex justify-between text-slate-300">
+                  <span>Fecha & Hora de Emisión:</span>
+                  <strong className="text-white">{new Date().toLocaleString('es-MX')}</strong>
+                </div>
+                <div className="flex justify-between text-slate-300">
+                  <span>Operador Responsable:</span>
+                  <strong className="text-white">{user.displayName || user.email}</strong>
+                </div>
+                <div className="flex justify-between text-slate-300">
+                  <span>Sede Deportiva:</span>
+                  <strong className="text-white">{venueDisplayName}</strong>
+                </div>
+                <div className="flex justify-between text-slate-300">
+                  <span>Local Comercial:</span>
+                  <strong className="text-white">{selectedStand.name} ({selectedStand.location})</strong>
+                </div>
+              </div>
+
+              {/* Desglose Monetario */}
+              <div className="bg-[#141C2E] p-4 rounded-xl border border-slate-700 space-y-2.5">
+                <h4 className="font-black text-amber-400 font-sports uppercase tracking-wide text-xs">
+                  Resumen de Movimientos del Negocio
+                </h4>
+                <div className="flex justify-between text-slate-300">
+                  <span>Comandas Cobradas:</span>
+                  <strong className="text-white font-scoreboard text-sm">{paidOrders.length}</strong>
+                </div>
+                <div className="flex justify-between text-slate-300">
+                  <span>Cobros Tarjeta en Línea / Stripe:</span>
+                  <span className="text-white font-scoreboard">${cardRevenue.toLocaleString('es-MX')} MXN</span>
+                </div>
+                <div className="flex justify-between text-slate-300">
+                  <span>Cobros Efectivo / Presencial:</span>
+                  <span className="text-white font-scoreboard">${cashRevenue.toLocaleString('es-MX')} MXN</span>
+                </div>
+                <div className="pt-2 border-t border-slate-700 flex justify-between text-sm font-black text-white">
+                  <span>Ventas Brutas Totales:</span>
+                  <span className="text-emerald-400 font-scoreboard text-base">${totalTodayRevenue.toLocaleString('es-MX')} MXN</span>
+                </div>
+                <div className="flex justify-between text-xs text-amber-300">
+                  <span>Comisión Retenida Estadio ({commissionRate}%):</span>
+                  <span className="font-scoreboard">-${stadiumCommissionAmount.toLocaleString('es-MX')} MXN</span>
+                </div>
+                <div className="pt-2 border-t border-slate-700 flex justify-between text-sm font-black text-purple-300">
+                  <span>Ingreso Líquido Negocio ({100 - commissionRate}%):</span>
+                  <span className="font-scoreboard text-base text-purple-400">${netVendorRevenue.toLocaleString('es-MX')} MXN</span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-[11px] text-amber-200">
+                ✓ Documento de conciliación oficial verificado para auditoría entre la administración de la sede y el concesionario.
+              </div>
+            </div>
+
+            <div className="p-4 bg-[#141C2E] border-t border-slate-700 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsCorteModalOpen(false)}
+                className="px-4 py-2 border border-slate-700 hover:bg-slate-800 rounded-xl font-bold text-slate-300 cursor-pointer"
+              >
+                Cerrar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    window.print();
+                  } catch {}
+                }}
+                className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black uppercase tracking-wider rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer font-sports"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Imprimir Recibo</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

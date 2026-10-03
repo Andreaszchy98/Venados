@@ -143,6 +143,8 @@ export function listenToStandFoodOrders(
     let q = query(collection(db, COLLECTION_NAME));
     if (standId) {
       q = query(collection(db, COLLECTION_NAME), where('standId', '==', standId));
+    } else if (venueId) {
+      q = query(collection(db, COLLECTION_NAME), where('venueId', '==', venueId));
     }
 
     return onSnapshot(
@@ -153,6 +155,12 @@ export function listenToStandFoodOrders(
           ...d.data(),
         })) as FoodOrder[];
 
+        // Aislamiento estricto obligatorio:
+        // 1. Si se especificó standId, filtrar exclusivamente por ese negocio
+        if (standId) {
+          orders = orders.filter((o) => o.standId === standId);
+        }
+        // 2. Si se especificó venueId, filtrar exclusivamente por esa sede
         if (venueId) {
           orders = orders.filter((o) => (o.venueId || DEFAULT_VENUE_ID) === venueId);
         }

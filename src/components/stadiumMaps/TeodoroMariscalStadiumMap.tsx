@@ -1,12 +1,23 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { SeatSection, VenueEvent } from '../../types';
 import { MARISCAL_ZONES, getZonePrice } from '../../lib/seatMap';
-import { ZoomIn, ZoomOut, RotateCcw, Info, Sparkles } from 'lucide-react';
+import { useStadiumPanZoom, StadiumRegionPreset } from './useStadiumPanZoom';
+import { StadiumZoomToolbar } from './StadiumZoomToolbar';
+import { Info, Sparkles, Move } from 'lucide-react';
+
+const MARISCAL_PRESETS: StadiumRegionPreset[] = [
+  { id: 'all', label: 'Todo el Estadio', shortLabel: 'Estadio', icon: '🏟️', normX: 0.5, normY: 0.5, scale: 1 },
+  { id: 'home', label: 'Home Plate / Diamante / Central', shortLabel: 'Home / Central', icon: '⚾', normX: 0.50, normY: 0.74, scale: 2.1 },
+  { id: 'first_base', label: 'Lateral 1ra Base (Der)', shortLabel: '1ra Base', icon: '1️⃣', normX: 0.75, normY: 0.55, scale: 2.0 },
+  { id: 'third_base', label: 'Lateral 3ra Base (Izq)', shortLabel: '3ra Base', icon: '3️⃣', normX: 0.25, normY: 0.55, scale: 2.0 },
+  { id: 'outfield', label: 'Jardines & Bleachers', shortLabel: 'Jardines', icon: '🌳', normX: 0.50, normY: 0.20, scale: 1.9 },
+  { id: 'upper', label: 'Palcos & Balcón', shortLabel: 'Palcos', icon: '🏢', normX: 0.50, normY: 0.88, scale: 1.85 },
+];
 
 interface TeodoroMariscalStadiumMapProps {
   sections: SeatSection[];
   activeSectionNumber: string;
-  activeZoneFilter: string | null;
+  activeZoneFilter?: string | null;
   onSelectSection: (sectionNumber: string, zoneName?: string) => void;
   event?: VenueEvent | null;
   soldOutSectionsSet?: Set<string>;
@@ -250,8 +261,28 @@ const TeodoroMariscalStadiumMapComponent = React.memo<TeodoroMariscalStadiumMapP
   highlightOnlyActiveSection = false,
 }) => {
   const [hoveredSection, setHoveredSection] = useState<string | null>(null);
-  const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [showZoneGuide, setShowZoneGuide] = useState<boolean>(false);
+
+  const {
+    scale,
+    isDragging,
+    hasMovedRef,
+    containerRef,
+    activeRegionId,
+    zoomToRegion,
+    handleZoomIn,
+    handleZoomOut,
+    handleResetZoom,
+    handleDoubleClick,
+    handleMouseDown,
+    handleMouseMove,
+    handleMouseUp,
+    handleMouseLeave,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
+    transformStyle,
+  } = useStadiumPanZoom({ minScale: 0.75, maxScale: 3.8 });
 
   // Centro geométrico global del campo circular y las gradas
   const CX = 500;
@@ -283,12 +314,11 @@ const TeodoroMariscalStadiumMapComponent = React.memo<TeodoroMariscalStadiumMapP
     return cleanActive === cleanSec;
   };
 
-  const isDimmed = (secNumber: string, zoneName: string) => {
+  const isDimmed = (secNumber: string) => {
     if (highlightOnlyActiveSection && activeSectionNumber && activeSectionNumber.trim()) {
       return !isSelected(secNumber);
     }
-    if (!activeZoneFilter || activeZoneFilter === 'Todas' || activeZoneFilter === 'todos') return false;
-    return activeZoneFilter !== zoneName;
+    return false;
   };
 
   // Mapa de secciones para rápido acceso
@@ -300,60 +330,69 @@ const TeodoroMariscalStadiumMapComponent = React.memo<TeodoroMariscalStadiumMapP
     return map;
   }, [sections]);
 
+  const activeZoneMeta = useMemo(() => {
+    if (!activeSectionNumber) return null;
+    const sec = sectionMetaMap.get(activeSectionNumber);
+    if (sec && MARISCAL_ZONES[sec.zoneName]) {
+      return { name: sec.zoneName, ...MARISCAL_ZONES[sec.zoneName] };
+    }
+    return null;
+  }, [activeSectionNumber, sectionMetaMap]);
+
   return (
     <div className="space-y-2.5">
-      {/* Barra superior de herramientas limpia fuera del mapa para no tapar ninguna butaca */}
-      <div className="flex items-center justify-between gap-2 px-1">
+      {/* Indicador de sección y zona activa */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
         <div className="flex items-center gap-2">
           {activeSectionNumber ? (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs font-black text-amber-700">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs font-black text-amber-500 shadow-sm">
               <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
               Sección #{activeSectionNumber} elegida
             </span>
           ) : (
-            <span className="text-xs font-bold text-slate-500">
+            <span className="text-xs font-bold text-slate-400">
               Toca cualquier bloque del mapa para elegir asientos
             </span>
           )}
-        </div>
 
-        {/* Controles de zoom compactos */}
-        <div className="flex items-center gap-1 bg-[#0F1626] border border-slate-700/80 rounded-xl p-0.5 shadow-sm">
-          <button
-            onClick={() => setZoomLevel((z) => Math.min(1.5, z + 0.15))}
-            className="p-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-            title="Acercar"
-          >
-            <ZoomIn className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setZoomLevel((z) => Math.max(0.8, z - 0.15))}
-            className="p-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-            title="Alejar"
-          >
-            <ZoomOut className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setZoomLevel(1)}
-            className="p-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-            title="Restablecer vista"
-          >
-            <RotateCcw className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setShowZoneGuide(!showZoneGuide)}
-            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-              showZoneGuide ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-300 hover:text-white hover:bg-slate-800'
-            }`}
-            title="Guía de colores y precios"
-          >
-            <Info className="w-4 h-4" />
-          </button>
+          {activeZoneMeta && (
+            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-lg border ${activeZoneMeta.badgeBg}`}>
+              {activeZoneMeta.name} • ${getZonePrice(activeZoneMeta.name, event)} MXN
+            </span>
+          )}
         </div>
       </div>
 
-      {/* Contenedor del mapa 100% libre de overlays obstructivos */}
-      <div className="relative w-full aspect-square max-h-[720px] bg-[#0A0E17] rounded-3xl overflow-hidden border border-slate-800/80 shadow-2xl flex flex-col items-center justify-center p-1 sm:p-3 select-none">
+      {/* Barra de herramientas con selector de áreas y zoom focal */}
+      <StadiumZoomToolbar
+        scale={scale}
+        presets={MARISCAL_PRESETS}
+        activeRegionId={activeRegionId}
+        onSelectPreset={(preset) => zoomToRegion(preset.normX, preset.normY, preset.scale, preset.id)}
+        onZoomIn={handleZoomIn}
+        onZoomOut={handleZoomOut}
+        onReset={handleResetZoom}
+        showZoneGuide={showZoneGuide}
+        onToggleZoneGuide={() => setShowZoneGuide(!showZoneGuide)}
+        hintText="Estadio Teodoro Mariscal"
+      />
+
+      {/* Contenedor interactivo del SVG con Pan & Zoom focal libre */}
+      <div
+        ref={containerRef}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onDoubleClick={handleDoubleClick}
+        className={`relative w-full aspect-square max-h-[720px] bg-[#0A0E17] rounded-3xl overflow-hidden border border-slate-800/80 shadow-2xl flex flex-col items-center justify-center p-1 sm:p-3 select-none touch-none ${
+          isDragging ? 'cursor-grabbing' : 'cursor-grab'
+        }`}
+        title="Arrastra para moverte • Rueda o doble clic en cualquier zona para hacer zoom"
+      >
         {/* Fondo sutil con luces de estadio nocturno */}
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,_rgba(30,41,59,0.5)_0%,_rgba(10,14,23,0.95)_75%,_#050811_100%)] pointer-events-none" />
         <div className="absolute top-0 left-1/4 w-80 h-80 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
@@ -364,8 +403,8 @@ const TeodoroMariscalStadiumMapComponent = React.memo<TeodoroMariscalStadiumMapP
         <div className="w-full h-full flex items-center justify-center overflow-hidden">
           <svg
             viewBox="0 0 1000 1000"
-            className="w-full h-full max-h-[680px] transition-transform duration-200"
-            style={{ transform: `scale(${zoomLevel})` }}
+            className="w-full h-full max-h-[680px]"
+            style={transformStyle}
           >
             <defs>
               {/* Filtro de sección seleccionada */}
@@ -482,7 +521,7 @@ const TeodoroMariscalStadiumMapComponent = React.memo<TeodoroMariscalStadiumMapP
 
                 const selected = isSelected(sec.num);
                 const hovered = hoveredSection === sec.num;
-                const dimmed = isDimmed(sec.num, sec.zone);
+                const dimmed = isDimmed(sec.num);
                 const price = getZonePrice(sec.zone, event);
                 const isSoldOut = soldOutSectionsSet ? (soldOutSectionsSet.has(sec.num) || soldOutSectionsSet.has(sec.num.toLowerCase())) : false;
 
@@ -490,7 +529,10 @@ const TeodoroMariscalStadiumMapComponent = React.memo<TeodoroMariscalStadiumMapP
                   <g
                     key={sec.num}
                     className={isSoldOut ? 'cursor-not-allowed opacity-40' : 'cursor-pointer transition-transform duration-100'}
-                    onClick={() => onSelectSection(sec.num, sec.zone)}
+                    onClick={() => {
+                      if (hasMovedRef.current) return;
+                      onSelectSection(sec.num, sec.zone);
+                    }}
                     onMouseEnter={() => setHoveredSection(sec.num)}
                     onMouseLeave={() => setHoveredSection(null)}
                   >

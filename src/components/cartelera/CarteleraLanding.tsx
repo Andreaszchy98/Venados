@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { VenueEvent, Venue, EventType, UserProfile, EventPriceTier, GameScoreboard } from '../../types';
 import { DEFAULT_VENUES, DEFAULT_VENUE_ID, DEFAULT_FALLBACK_EVENT } from '../../lib/defaultVenue';
 import { subscribeVenues, getAllowedEventTypesForVenue } from '../../lib/venues';
-import { DEFAULT_FALLBACK_EVENTS } from '../../lib/venueEvents';
+import { DEFAULT_FALLBACK_EVENTS, formatEventType, getEventTypeIcon } from '../../lib/venueEvents';
 import { normalizeGoogleDriveImageUrl, getEventPosterPlaceholder } from '../../lib/imageUtils';
 import { SeatMapSelector } from '../../views/aficionado/SeatMapSelector';
 import { MarcadorEnVivo } from '../../views/aficionado/MarcadorEnVivo';
@@ -233,34 +233,49 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
   // Escuchar todos los eventos activos en tiempo real
   useEffect(() => {
     setLoadingEvents(true);
+    // Timeout de seguridad para garantizar respuesta visual inmediata (evita spinners infinitos)
+    const safetyTimer = setTimeout(() => {
+      setLoadingEvents(false);
+    }, 800);
+
     const q = query(collection(db, 'venueEvents'), limit(50));
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
+        clearTimeout(safetyTimer);
         if (!snapshot.empty) {
           const docs = snapshot.docs.map((d) => {
             const data = d.data();
+            const rawType = data.type === 'soccer' ? 'football' : (data.type || 'baseball');
             const rawPoster = typeof data.posterUrl === 'string' ? data.posterUrl.trim() : '';
             return {
               id: d.id,
               ...data,
-              posterUrl: normalizeGoogleDriveImageUrl(rawPoster) || getEventPosterPlaceholder(data.type || 'baseball'),
+              type: rawType,
+              posterUrl: normalizeGoogleDriveImageUrl(rawPoster) || getEventPosterPlaceholder(rawType),
             } as VenueEvent;
           });
-          setAllEvents(docs);
+          // Si una sede (ej. Estadio El Encanto o Estadio Tomateros) aún no tiene eventos personalizados en Firestore,
+          // fusionar sus eventos por defecto para que el aficionado siempre vea partidos disponibles
+          const venueIdsInDocs = new Set(docs.map((e) => e.venueId));
+          const missingDefaults = DEFAULT_FALLBACK_EVENTS.filter((e) => !venueIdsInDocs.has(e.venueId));
+          setAllEvents([...docs, ...missingDefaults]);
         } else {
           setAllEvents(DEFAULT_FALLBACK_EVENTS);
         }
         setLoadingEvents(false);
       },
       (err) => {
+        clearTimeout(safetyTimer);
         console.warn('Error al escuchar eventos de cartelera:', err);
         setAllEvents(DEFAULT_FALLBACK_EVENTS);
         setLoadingEvents(false);
       }
     );
-
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(safetyTimer);
+      unsubscribe();
+    };
   }, []);
 
   // Categorías disponibles según el recinto seleccionado:
@@ -317,13 +332,16 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
       const selectedVenueObj = venueMap.get(selectedVenueId);
       const allowed = getAllowedEventTypesForVenue(selectedVenueObj || selectedVenueId);
       if (allowed) {
-        list = list.filter((e) => allowed.includes(e.type));
+        list = list.filter((e) => allowed.includes(e.type === 'soccer' ? 'football' : e.type));
       }
     }
 
     // 4. Filtrar por categoría
     if (selectedCategory !== 'todos') {
-      list = list.filter((e) => e.type === selectedCategory);
+      list = list.filter((e) => {
+        const norm = e.type === 'soccer' ? 'football' : e.type;
+        return norm === selectedCategory;
+      });
     }
 
     // Ordenar cronológicamente

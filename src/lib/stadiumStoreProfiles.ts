@@ -67,6 +67,22 @@ export const STADIUM_STORE_PROFILES: Record<string, StadiumStoreProfile> = {
     membershipSubtitle: 'Abono de Temporada Oficial • Estadio El Encanto',
     membershipBadge: 'Club Dorados de Sinaloa',
   },
+  'venue-charros': {
+    venueId: 'venue-charros',
+    stadiumName: 'Estadio Panamericano',
+    teamName: 'Charros de Jalisco',
+    storeName: 'Tienda Oficial Charros Store',
+    badgeLabel: 'Tienda Oficial Charros de Jalisco',
+    headline: 'Colección Todos Somos Charros',
+    tagline: 'Viste con honor la franela albiazul de Jalisco. Envíos a todo México o retiro express en la tienda oficial del Estadio Panamericano.',
+    pickupLocation: 'Tienda Oficial Estadio Panamericano (Zapopan, Jal.)',
+    headerGradient: 'from-slate-950 via-blue-950 to-indigo-950 border-blue-500/40',
+    accentBadgeClass: 'bg-blue-600/30 text-blue-200 border-blue-400/40',
+    buttonClass: 'bg-blue-600 hover:bg-blue-500 text-white font-black',
+    membershipName: 'Pase Charro',
+    membershipSubtitle: 'Abono de Temporada Oficial • Estadio Panamericano',
+    membershipBadge: 'Club Charros de Jalisco',
+  },
 };
 
 /**

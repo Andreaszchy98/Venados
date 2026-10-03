@@ -21,6 +21,42 @@ import { normalizeGoogleDriveImageUrl, DEFAULT_STORE_PROMO_BANNER, getEventPoste
 
 export { getEventPosterPlaceholder };
 
+export function formatEventType(type?: string): string {
+  switch ((type || '').toLowerCase()) {
+    case 'football':
+    case 'soccer':
+      return 'FÚTBOL';
+    case 'baseball':
+      return 'BÉISBOL';
+    case 'basketball':
+      return 'BÁSQUETBOL';
+    case 'concert':
+      return 'CONCIERTO';
+    case 'other':
+      return 'ESPECTÁCULO';
+    default:
+      return (type || 'EVENTO').toUpperCase();
+  }
+}
+
+export function getEventTypeIcon(type?: string): string {
+  switch ((type || '').toLowerCase()) {
+    case 'football':
+    case 'soccer':
+      return '⚽';
+    case 'baseball':
+      return '⚾';
+    case 'basketball':
+      return '🏀';
+    case 'concert':
+      return '🎤';
+    case 'other':
+      return '🎪';
+    default:
+      return '🎟️';
+  }
+}
+
 const COLLECTION_NAME = 'venueEvents';
 
 export const MARISCAL_PRICE_TIERS: EventPriceTier[] = [
@@ -49,6 +85,35 @@ export const ENCANTO_PRICE_TIERS: EventPriceTier[] = [
   { section: 'Palcos', price: 1200 },
   { section: 'Sky Boxes', price: 1400 },
   { section: 'Zona Lounge', price: 1100 },
+];
+
+export const CHARROS_PRICE_TIERS: EventPriceTier[] = [
+  { section: 'VIP / Local / Visitante', price: 950 },
+  { section: 'Premier', price: 850 },
+  { section: 'Palco Esquina', price: 650 },
+  { section: 'Lateral Premier', price: 550 },
+  { section: 'Planta Baja', price: 480 },
+  { section: 'Lateral Base', price: 420 },
+  { section: 'Butaca Preferente', price: 380 },
+  { section: 'Planta Alta y Suites', price: 280 },
+  { section: 'Jardín / Esquinas', price: 160 },
+];
+
+export const TOMATEROS_PRICE_TIERS: EventPriceTier[] = [
+  { section: 'Central Home', price: 900 },
+  { section: 'Plateas 3A', price: 650 },
+  { section: 'Plateas 1A', price: 650 },
+  { section: 'Palcos Campo 3A', price: 550 },
+  { section: 'Palcos Campo 1A', price: 550 },
+  { section: 'Lateral 3A', price: 420 },
+  { section: 'Lateral 1A', price: 420 },
+  { section: 'Lateral Superior 3A', price: 320 },
+  { section: 'Lateral Superior 1A', price: 320 },
+  { section: 'Jardines', price: 180 },
+  { section: 'Zona Especial Jardines', price: 250 },
+  { section: 'Suites Home', price: 1200 },
+  { section: 'Suites 3A', price: 1100 },
+  { section: 'Suites 1A', price: 1100 },
 ];
 
 export function isDeletedMazatlanFCEvent(e: { id?: string; name?: string }): boolean {
@@ -150,12 +215,14 @@ export function isEventPassed(event: { date: string; time?: string; orderingClos
  * y verificando priceTiers oficiales.
  */
 export function parseVenueEventDoc(id: string, data: any): VenueEvent {
+  const rawType = data.type === 'soccer' ? 'football' : (data.type || 'baseball');
   const rawPoster = typeof data.posterUrl === 'string' ? data.posterUrl.trim() : '';
-  const resolvedPoster = normalizeGoogleDriveImageUrl(rawPoster) || getEventPosterPlaceholder(data.type || 'baseball');
+  const resolvedPoster = normalizeGoogleDriveImageUrl(rawPoster) || getEventPosterPlaceholder(rawType);
 
   const baseEvent = {
     id,
     ...data,
+    type: rawType,
     posterUrl: resolvedPoster,
   } as VenueEvent;
 
@@ -657,9 +724,26 @@ export const DEFAULT_FALLBACK_EVENTS: VenueEvent[] = [
     createdAt: '2026-01-01T00:00:26.000Z',
   },
   {
+    id: 'event-dorados-tapatio-2026',
+    venueId: 'venue-encanto',
+    type: 'football',
+    name: 'Dorados de Sinaloa vs Tapatío',
+    opponent: 'Tapatío',
+    date: '2026-10-06',
+    time: '20:00 hrs',
+    gate: 'Puertas 1, 2, 4 y 8',
+    active: true,
+    ticketsAvailable: true,
+    venueName: 'Estadio El Encanto',
+    posterUrl: getEventPosterPlaceholder('football'),
+    ...computeDefaultOrderingWindow('2026-10-06', '20:00 hrs'),
+    priceTiers: ENCANTO_PRICE_TIERS,
+    createdAt: '2026-01-14T00:00:00.000Z',
+  },
+  {
     id: 'event-dorados-morelia-2026',
     venueId: 'venue-encanto',
-    type: 'soccer',
+    type: 'football',
     name: 'Dorados de Sinaloa vs Atlético Morelia',
     opponent: 'Atlético Morelia',
     date: '2026-11-06',
@@ -668,10 +752,44 @@ export const DEFAULT_FALLBACK_EVENTS: VenueEvent[] = [
     active: true,
     ticketsAvailable: true,
     venueName: 'Estadio El Encanto',
-    posterUrl: getEventPosterPlaceholder('soccer'),
+    posterUrl: getEventPosterPlaceholder('football'),
     ...computeDefaultOrderingWindow('2026-11-06', '21:00 hrs'),
     priceTiers: ENCANTO_PRICE_TIERS,
     createdAt: '2026-01-13T00:00:00.000Z',
+  },
+  {
+    id: 'event-tomateros-venados-culiacan-2026',
+    venueId: 'venue-tomateros',
+    type: 'baseball',
+    name: 'Tomateros de Culiacán vs Venados de Mazatlán',
+    opponent: 'Venados de Mazatlán',
+    date: '2026-10-18',
+    time: '19:00 hrs',
+    gate: 'Puertas 1, 2, 3 y 4',
+    active: true,
+    ticketsAvailable: true,
+    venueName: 'Estadio Tomateros',
+    posterUrl: getEventPosterPlaceholder('baseball'),
+    ...computeDefaultOrderingWindow('2026-10-18', '19:00 hrs'),
+    priceTiers: TOMATEROS_PRICE_TIERS,
+    createdAt: '2026-01-15T00:00:00.000Z',
+  },
+  {
+    id: 'event-charros-venados-jalisco-2026',
+    venueId: 'venue-charros',
+    type: 'baseball',
+    name: 'Charros de Jalisco vs Venados de Mazatlán',
+    opponent: 'Venados de Mazatlán',
+    date: '2026-10-25',
+    time: '19:00 hrs',
+    gate: 'Puertas 1, 2, 3 y 4',
+    active: true,
+    ticketsAvailable: true,
+    venueName: 'Estadio Panamericano Charros de Jalisco',
+    posterUrl: getEventPosterPlaceholder('baseball'),
+    ...computeDefaultOrderingWindow('2026-10-25', '19:00 hrs'),
+    priceTiers: CHARROS_PRICE_TIERS,
+    createdAt: '2026-01-16T00:00:00.000Z',
   },
 ];
 
@@ -844,15 +962,16 @@ export async function deleteVenueEvent(eventId: string, forcedVenueId?: string):
 
 export async function seedDefaultEventsToFirestore() {
   try {
+    const snap = await getDocs(query(collection(db, COLLECTION_NAME), limit(1)));
+    if (!snap.empty) {
+      return;
+    }
     for (const ev of DEFAULT_FALLBACK_EVENTS) {
       const docRef = doc(db, COLLECTION_NAME, ev.id);
-      const docSnap = await getDoc(docRef);
-      if (!docSnap.exists()) {
-        await setDoc(docRef, {
-          ...ev,
-          createdAt: ev.createdAt || new Date().toISOString(),
-        });
-      }
+      await setDoc(docRef, {
+        ...ev,
+        createdAt: ev.createdAt || new Date().toISOString(),
+      }, { merge: true });
     }
   } catch (e) {
     console.warn('Error seeding default events to Firestore:', e);
@@ -864,7 +983,7 @@ export async function seedDefaultEventsToFirestore() {
  */
 export async function getActiveEventsForVenue(venueId: string): Promise<VenueEvent[]> {
   try {
-    await seedDefaultEventsToFirestore();
+    seedDefaultEventsToFirestore().catch(() => {});
     const q = query(
       collection(db, COLLECTION_NAME),
       where('venueId', '==', venueId),
@@ -1170,7 +1289,7 @@ export async function getUpcomingHeroEvents(
   const targetCity = city ? normalizeStr(city) : null;
 
   try {
-    await seedDefaultEventsToFirestore();
+    seedDefaultEventsToFirestore().catch(() => {});
     // 1. Obtener información de todas las sedes registradas para asociar nombres de estadio y ciudades
     const venuesMap = new Map<string, { name: string; city: string }>();
     DEFAULT_VENUES.forEach((v) => {

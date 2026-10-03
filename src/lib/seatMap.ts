@@ -14,10 +14,38 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { SeatSection, EventSeat, SeatStatus, VenueEvent, Ticket } from '../types';
-import { DEFAULT_VENUE_ID } from './defaultVenue';
+import { DEFAULT_VENUE_ID } from './constants';
 import { handleFirestoreError, OperationType } from './errorHandler';
 import { getCachedData, setCachedData } from './clientCache';
-import { isEventPassed } from './venueEvents';
+
+/**
+ * Determina si la fecha y horario del evento ya concluyeron.
+ */
+function isEventPassed(event: { date: string; time?: string; orderingClosesAt?: string; status?: string }): boolean {
+  if (event.status === 'finalizado') return true;
+  const now = Date.now();
+  if (event.orderingClosesAt) {
+    const closesTime = new Date(event.orderingClosesAt).getTime();
+    if (!isNaN(closesTime) && now > closesTime) {
+      return true;
+    }
+  }
+  let hours = 20;
+  let minutes = 0;
+  if (event.time) {
+    const match = event.time.match(/(\d{1,2}):(\d{2})/);
+    if (match) {
+      hours = parseInt(match[1], 10);
+      minutes = parseInt(match[2], 10);
+    }
+  }
+  const dateParts = event.date.split('-');
+  const year = parseInt(dateParts[0], 10) || 2026;
+  const month = (parseInt(dateParts[1], 10) || 10) - 1;
+  const day = parseInt(dateParts[2], 10) || 15;
+  const eventStart = new Date(year, month, day, hours, minutes, 0);
+  return now > (eventStart.getTime() + 3.5 * 60 * 60 * 1000);
+}
 
 export interface ZoneMeta {
   name: string;
@@ -146,8 +174,19 @@ export const MARISCAL_SECTION_ZONE_MAP: Record<string, string> = {
  */
 export function getMariscalSectionZone(sectionNumber?: string | null): string | null {
   if (!sectionNumber) return null;
-  const clean = sectionNumber.trim().replace(/^sec(?:ci[oó]n)?[\s._#-]+/i, '');
-  return MARISCAL_SECTION_ZONE_MAP[clean] || null;
+  const clean = sectionNumber
+    .trim()
+    .replace(/^sec(?:ci[oó]n)?[\s._#-]+/i, '')
+    .replace(/^palco(?:s)?[\s._#-]+/i, '')
+    .trim();
+  if (MARISCAL_SECTION_ZONE_MAP[clean]) {
+    return MARISCAL_SECTION_ZONE_MAP[clean];
+  }
+  const digits = clean.match(/\d+/);
+  if (digits && MARISCAL_SECTION_ZONE_MAP[digits[0]]) {
+    return MARISCAL_SECTION_ZONE_MAP[digits[0]];
+  }
+  return null;
 }
 
 export const MARISCAL_ZONES: Record<string, ZoneMeta> = {
@@ -251,6 +290,336 @@ export const MARISCAL_ZONES: Record<string, ZoneMeta> = {
     description: 'Nivel 300 lateral en color morado (Sec. 301-304, 313-316)',
   },
 };
+
+export const TOMATEROS_ZONES: Record<string, ZoneMeta> = {
+  'Deluxe Supreme': {
+    name: 'Deluxe Supreme',
+    defaultPrice: 950,
+    colorHex: '#2a457c',
+    badgeBg: 'bg-blue-900/20 text-blue-400 border-blue-800/40',
+    badgeText: 'text-blue-400',
+    fillColor: '#2a457c',
+    strokeColor: '#ffffff',
+    description: 'Suites exclusivas, fila inferior (3 bloques)',
+    gate: 'Puerta Principal / VIP',
+  },
+  'Platino': {
+    name: 'Platino',
+    defaultPrice: 750,
+    colorHex: '#2a457c',
+    badgeBg: 'bg-indigo-900/20 text-indigo-400 border-indigo-800/40',
+    badgeText: 'text-indigo-400',
+    fillColor: '#2a457c',
+    strokeColor: '#ffffff',
+    description: 'Platea en anillo exterior (16 bloques)',
+    gate: 'Puertas 1 y 2',
+  },
+  'Oro': {
+    name: 'Oro',
+    defaultPrice: 480,
+    colorHex: '#2a457c',
+    badgeBg: 'bg-amber-900/20 text-amber-400 border-amber-800/40',
+    badgeText: 'text-amber-400',
+    fillColor: '#2a457c',
+    strokeColor: '#ffffff',
+    description: 'Numerado detrás de home plate (3 bloques)',
+    gate: 'Puerta Central Home',
+  },
+  'Sky Plus': {
+    name: 'Sky Plus',
+    defaultPrice: 400,
+    colorHex: '#186687',
+    badgeBg: 'bg-teal-900/20 text-teal-400 border-teal-800/40',
+    badgeText: 'text-teal-400',
+    fillColor: '#186687',
+    strokeColor: '#ffffff',
+    description: 'Numerado bajo lateral (6 bloques)',
+    gate: 'Puerta Lateral Baja',
+  },
+  'Plus': {
+    name: 'Plus',
+    defaultPrice: 350,
+    colorHex: '#2e80bb',
+    badgeBg: 'bg-sky-900/20 text-sky-400 border-sky-800/40',
+    badgeText: 'text-sky-400',
+    fillColor: '#2e80bb',
+    strokeColor: '#ffffff',
+    description: 'Numerado medio lateral (6 bloques)',
+    gate: 'Puerta Lateral Media',
+  },
+  'Fan Plus': {
+    name: 'Fan Plus',
+    defaultPrice: 280,
+    colorHex: '#4d9dd0',
+    badgeBg: 'bg-blue-900/20 text-blue-400 border-blue-800/40',
+    badgeText: 'text-blue-400',
+    fillColor: '#4d9dd0',
+    strokeColor: '#ffffff',
+    description: 'Numerado superior / claro (6 bloques)',
+    gate: 'Puerta Lateral Alta',
+  },
+  'Sky': {
+    name: 'Sky',
+    defaultPrice: 160,
+    colorHex: '#626a79',
+    badgeBg: 'bg-zinc-800/20 text-zinc-300 border-zinc-700/40',
+    badgeText: 'text-zinc-300',
+    fillColor: '#626a79',
+    strokeColor: '#ffffff',
+    description: 'Jardines generales (14 bloques)',
+    gate: 'Puerta Jardines / Bleachers',
+  },
+};
+
+/** Mapeo inverso de atributos data-zone SVG a nombre de zona oficial */
+export const TOMATEROS_SVG_ZONE_MAP: Record<string, string> = {
+  suite: 'Deluxe Supreme',
+  platea: 'Platino',
+  num_home: 'Oro',
+  num_bajo: 'Sky Plus',
+  num_medio: 'Plus',
+  num_claro: 'Fan Plus',
+  jardin: 'Sky',
+};
+
+/** Mapeo de cada bloque de Estadio Tomateros a su zona oficial */
+export const TOMATEROS_SECTION_ZONE_MAP: Record<string, string> = {
+  'suite-1': 'Deluxe Supreme',
+  'suite-2': 'Deluxe Supreme',
+  'suite-3': 'Deluxe Supreme',
+  ...Object.fromEntries(Array.from({ length: 16 }, (_, i) => [`platea-${i + 1}`, 'Platino'])),
+  ...Object.fromEntries(Array.from({ length: 3 }, (_, i) => [`num_home-${i + 1}`, 'Oro'])),
+  ...Object.fromEntries(Array.from({ length: 6 }, (_, i) => [`num_bajo-${i + 1}`, 'Sky Plus'])),
+  ...Object.fromEntries(Array.from({ length: 6 }, (_, i) => [`num_medio-${i + 1}`, 'Plus'])),
+  ...Object.fromEntries(Array.from({ length: 6 }, (_, i) => [`num_claro-${i + 1}`, 'Fan Plus'])),
+  ...Object.fromEntries(Array.from({ length: 14 }, (_, i) => [`jardin-${i + 1}`, 'Sky'])),
+};
+
+/**
+ * Zonas oficiales de Estadio Charros de Jalisco (Zapopan / Guadalajara)
+ * Conforme a la tabla y mapa oficial de selección de asientos:
+ * - magenta → Lateral Base → $420
+ * - purple → Palco Esquina → $650
+ * - premier → Premier → $850
+ * - orange → Lateral Premier → $550
+ * - yellow → Butaca Preferente → $380
+ * - cyan → VIP / Local / Visitante → $950
+ * - steel → Planta Baja → $480
+ * - navy → Planta Alta y Suites → $280
+ * - gray → Jardín / Esquinas → $160
+ */
+export const CHARROS_ZONES: Record<string, ZoneMeta> = {
+  'VIP / Local / Visitante': {
+    name: 'VIP / Local / Visitante',
+    defaultPrice: 950,
+    colorHex: '#1DA2D0',
+    badgeBg: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
+    badgeText: 'text-cyan-400',
+    fillColor: '#1DA2D0',
+    strokeColor: '#0E7490',
+    gate: 'Puerta Principal / VIP',
+    description: 'Zona VIP central detrás de home plate y dugouts local y visitante',
+  },
+  'Premier': {
+    name: 'Premier',
+    defaultPrice: 850,
+    colorHex: '#96BB4D',
+    badgeBg: 'bg-lime-500/15 text-lime-400 border-lime-500/30',
+    badgeText: 'text-lime-400',
+    fillColor: '#96BB4D',
+    strokeColor: '#65A30D',
+    gate: 'Puertas 1 y 2',
+    description: 'Zona Premier baja contigua al terreno de juego y dugouts',
+  },
+  'Palco Esquina': {
+    name: 'Palco Esquina',
+    defaultPrice: 650,
+    colorHex: '#753D87',
+    badgeBg: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
+    badgeText: 'text-purple-400',
+    fillColor: '#753D87',
+    strokeColor: '#581C87',
+    gate: 'Puertas 2 y 3',
+    description: 'Palcos esquinas laterales con vista privilegiada',
+  },
+  'Lateral Premier': {
+    name: 'Lateral Premier',
+    defaultPrice: 550,
+    colorHex: '#E59936',
+    badgeBg: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
+    badgeText: 'text-orange-400',
+    fillColor: '#E59936',
+    strokeColor: '#C2410C',
+    gate: 'Puertas 1 y 3',
+    description: 'Laterales Premier a lo largo de las líneas de cal',
+  },
+  'Planta Baja': {
+    name: 'Planta Baja',
+    defaultPrice: 480,
+    colorHex: '#3A74A1',
+    badgeBg: 'bg-sky-500/15 text-sky-400 border-sky-500/30',
+    badgeText: 'text-sky-400',
+    fillColor: '#3A74A1',
+    strokeColor: '#0369A1',
+    gate: 'Puertas 2 y 4',
+    description: 'Planta baja con excelente visibilidad y cercanía',
+  },
+  'Lateral Base': {
+    name: 'Lateral Base',
+    defaultPrice: 420,
+    colorHex: '#D50C79',
+    badgeBg: 'bg-pink-500/15 text-pink-400 border-pink-500/30',
+    badgeText: 'text-pink-400',
+    fillColor: '#D50C79',
+    strokeColor: '#BE185D',
+    gate: 'Puertas 1 y 4',
+    description: 'Laterales primera y tercera base',
+  },
+  'Butaca Preferente': {
+    name: 'Butaca Preferente',
+    defaultPrice: 380,
+    colorHex: '#F4E723',
+    badgeBg: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
+    badgeText: 'text-yellow-400',
+    fillColor: '#F4E723',
+    strokeColor: '#CA8A04',
+    gate: 'Puertas 2 y 3',
+    description: 'Butacas preferentes numeradas',
+  },
+  'Planta Alta y Suites': {
+    name: 'Planta Alta y Suites',
+    defaultPrice: 280,
+    colorHex: '#2E3A7E',
+    badgeBg: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30',
+    badgeText: 'text-indigo-400',
+    fillColor: '#2E3A7E',
+    strokeColor: '#1E1B4B',
+    gate: 'Rampa Nivel Superior',
+    description: 'Nivel superior techado y palcos suites superiores',
+  },
+  'Jardín / Esquinas': {
+    name: 'Jardín / Esquinas',
+    defaultPrice: 160,
+    colorHex: '#939393',
+    badgeBg: 'bg-slate-500/20 text-slate-300 border-slate-500/40',
+    badgeText: 'text-slate-300',
+    fillColor: '#939393',
+    strokeColor: '#475569',
+    gate: 'Puerta Jardines',
+    description: 'Gradas generales en jardines izquierdo y derecho y esquinas',
+  },
+};
+
+/** Mapeo de clases SVG de Estadio Charros de Jalisco a nombres oficiales de zona */
+export const CHARROS_SVG_ZONE_MAP: Record<string, string> = {
+  magenta: 'Lateral Base',
+  purple: 'Palco Esquina',
+  premier: 'Premier',
+  orange: 'Lateral Premier',
+  yellow: 'Butaca Preferente',
+  cyan: 'VIP / Local / Visitante',
+  vip: 'VIP / Local / Visitante',
+  teal: 'VIP / Local / Visitante',
+  steel: 'Planta Baja',
+  navy: 'Planta Alta y Suites',
+  gray: 'Jardín / Esquinas',
+  'Lateral Base': 'Lateral Base',
+  'Palco Esquina': 'Palco Esquina',
+  'Premier': 'Premier',
+  'Lateral Premier': 'Lateral Premier',
+  'Butaca Preferente': 'Butaca Preferente',
+  'VIP / Local / Visitante': 'VIP / Local / Visitante',
+  'Planta Baja': 'Planta Baja',
+  'Planta Alta y Suites': 'Planta Alta y Suites',
+  'Jardín / Esquinas': 'Jardín / Esquinas',
+};
+
+/** Mapeo de polígonos de Estadio Charros a su zona oficial */
+export const CHARROS_SECTION_ZONE_MAP: Record<string, string> = {
+  // magenta: Lateral Base (6 bloques)
+  ...Object.fromEntries(Array.from({ length: 6 }, (_, i) => [`magenta-0${i + 1}`, 'Lateral Base'])),
+  ...Object.fromEntries(Array.from({ length: 6 }, (_, i) => [`magenta-${i + 1}`, 'Lateral Base'])),
+
+  // purple: Palco Esquina (2 bloques)
+  ...Object.fromEntries(Array.from({ length: 2 }, (_, i) => [`purple-0${i + 1}`, 'Palco Esquina'])),
+  ...Object.fromEntries(Array.from({ length: 2 }, (_, i) => [`purple-${i + 1}`, 'Palco Esquina'])),
+
+  // premier: Premier (6 bloques)
+  ...Object.fromEntries(Array.from({ length: 6 }, (_, i) => [`premier-0${i + 1}`, 'Premier'])),
+  ...Object.fromEntries(Array.from({ length: 6 }, (_, i) => [`premier-${i + 1}`, 'Premier'])),
+
+  // orange: Lateral Premier (10 bloques)
+  ...Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`orange-0${i + 1}`, 'Lateral Premier'])),
+  'orange-10': 'Lateral Premier',
+  ...Object.fromEntries(Array.from({ length: 10 }, (_, i) => [`orange-${i + 1}`, 'Lateral Premier'])),
+
+  // yellow: Butaca Preferente (24 bloques)
+  ...Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`yellow-0${i + 1}`, 'Butaca Preferente'])),
+  ...Object.fromEntries(Array.from({ length: 15 }, (_, i) => [`yellow-${i + 10}`, 'Butaca Preferente'])),
+  ...Object.fromEntries(Array.from({ length: 24 }, (_, i) => [`yellow-${i + 1}`, 'Butaca Preferente'])),
+
+  // cyan / vip / teal: VIP / Local / Visitante
+  ...Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`cyan-0${i + 1}`, 'VIP / Local / Visitante'])),
+  ...Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`cyan-${i + 1}`, 'VIP / Local / Visitante'])),
+  ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`vip-0${i + 1}`, 'VIP / Local / Visitante'])),
+  ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`vip-${i + 1}`, 'VIP / Local / Visitante'])),
+  'teal-01': 'VIP / Local / Visitante',
+  'teal-1': 'VIP / Local / Visitante',
+
+  // steel: Planta Baja (10 bloques)
+  ...Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`steel-0${i + 1}`, 'Planta Baja'])),
+  'steel-10': 'Planta Baja',
+  ...Object.fromEntries(Array.from({ length: 10 }, (_, i) => [`steel-${i + 1}`, 'Planta Baja'])),
+
+  // navy: Planta Alta y Suites (43 bloques)
+  ...Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`navy-0${i + 1}`, 'Planta Alta y Suites'])),
+  ...Object.fromEntries(Array.from({ length: 34 }, (_, i) => [`navy-${i + 10}`, 'Planta Alta y Suites'])),
+  ...Object.fromEntries(Array.from({ length: 43 }, (_, i) => [`navy-${i + 1}`, 'Planta Alta y Suites'])),
+
+  // gray: Jardín / Esquinas (14 bloques)
+  ...Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`gray-0${i + 1}`, 'Jardín / Esquinas'])),
+  ...Object.fromEntries(Array.from({ length: 5 }, (_, i) => [`gray-${i + 10}`, 'Jardín / Esquinas'])),
+  ...Object.fromEntries(Array.from({ length: 14 }, (_, i) => [`gray-${i + 1}`, 'Jardín / Esquinas'])),
+};
+
+/**
+ * Obtiene la zona oficial de una sección en Estadio Charros de Jalisco
+ */
+export function getCharrosSectionZone(sectionNumber?: string | null): string | null {
+  if (!sectionNumber) return null;
+  const clean = sectionNumber.trim().toLowerCase().replace(/^sec(?:ci[oó]n)?[\s._#-]+/i, '');
+  if (CHARROS_SECTION_ZONE_MAP[clean]) {
+    return CHARROS_SECTION_ZONE_MAP[clean];
+  }
+  const prefix = clean.split(/[-_]/)[0];
+  if (CHARROS_SVG_ZONE_MAP[prefix]) {
+    return CHARROS_SVG_ZONE_MAP[prefix];
+  }
+  return null;
+}
+
+/**
+ * Obtiene la zona oficial de una sección en Estadio Tomateros
+ */
+export function getTomaterosSectionZone(sectionNumber?: string | null): string | null {
+  if (!sectionNumber) return null;
+  const clean = sectionNumber.trim().toLowerCase().replace(/^sec(?:ci[oó]n)?[\s._#-]+/i, '');
+  if (TOMATEROS_SECTION_ZONE_MAP[clean]) {
+    return TOMATEROS_SECTION_ZONE_MAP[clean];
+  }
+  const prefix = clean.split(/[-_]/)[0];
+  if (TOMATEROS_SVG_ZONE_MAP[prefix]) {
+    return TOMATEROS_SVG_ZONE_MAP[prefix];
+  }
+  if (clean.startsWith('suite')) return 'Deluxe Supreme';
+  if (clean.startsWith('platea')) return 'Platino';
+  if (clean.startsWith('num_home') || clean.startsWith('home')) return 'Oro';
+  if (clean.startsWith('num_bajo')) return 'Sky Plus';
+  if (clean.startsWith('num_medio')) return 'Plus';
+  if (clean.startsWith('num_claro')) return 'Fan Plus';
+  if (clean.startsWith('jardin')) return 'Sky';
+  return null;
+}
 
 /**
  * Zonas oficiales de Estadio El Encanto (Dorados de Sinaloa)
@@ -423,11 +792,94 @@ export function isEncantoVenue(venueId?: string, venueName?: string, eventType?:
   if (venueId === 'venue-encanto' || venueId === 'estadio-encanto') {
     return true;
   }
+  if (venueId === 'venue-teodoro-mariscal' || venueId === 'venue-tomateros' || venueId === 'venue-charros') {
+    return false;
+  }
   const name = (venueName || '').toLowerCase();
+  if (
+    name.includes('teodoro mariscal') ||
+    name.includes('mariscal') ||
+    name.includes('tomateros') ||
+    name.includes('charros') ||
+    name.includes('panamericano')
+  ) {
+    return false;
+  }
   if (
     name.includes('encanto') ||
     name.includes('dorados') ||
     name.includes('el gran pez')
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Detecta si la sede o evento corresponde a Estadio Charros de Jalisco
+ */
+export function isCharrosVenue(venueId?: string, venueName?: string, eventType?: string): boolean {
+  if (venueId === 'venue-charros' || venueId === 'estadio-charros') {
+    return true;
+  }
+  if (venueId === 'venue-teodoro-mariscal' || venueId === 'venue-encanto' || venueId === 'venue-tomateros') {
+    return false;
+  }
+  const name = (venueName || '').toLowerCase();
+  if (
+    name.includes('teodoro mariscal') ||
+    name.includes('mariscal') ||
+    name.includes('encanto') ||
+    name.includes('dorados') ||
+    name.includes('tomateros') ||
+    name.includes('culiacan') ||
+    name.includes('culiacán')
+  ) {
+    return false;
+  }
+  if (
+    name.includes('estadio panamericano') ||
+    name.includes('estadio charros') ||
+    name.includes('panamericano charros') ||
+    name.includes('charros de jalisco') ||
+    name.includes('zapopan') ||
+    name.includes('charros') ||
+    name.includes('panamericano')
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Detecta si la sede o evento corresponde a Estadio Tomateros de Culiacán
+ */
+export function isTomaterosVenue(venueId?: string, venueName?: string, eventType?: string): boolean {
+  if (venueId === 'venue-tomateros' || venueId === 'estadio-tomateros') {
+    return true;
+  }
+  if (venueId === 'venue-teodoro-mariscal' || venueId === 'venue-encanto' || venueId === 'venue-charros') {
+    return false;
+  }
+  const name = (venueName || '').toLowerCase();
+  if (
+    name.includes('teodoro mariscal') ||
+    name.includes('mariscal') ||
+    name.includes('encanto') ||
+    name.includes('dorados') ||
+    name.includes('charros') ||
+    name.includes('panamericano') ||
+    name.includes('zapopan')
+  ) {
+    return false;
+  }
+  if (
+    name.includes('estadio tomateros') ||
+    name.includes('nacion guinda') ||
+    name.includes('nación guinda') ||
+    name.includes('tomateros') ||
+    name.includes('culiacan') ||
+    name.includes('culiacán')
   ) {
     return true;
   }
@@ -472,6 +924,12 @@ export function getStadiumZones(
   venueName?: string,
   eventType?: string
 ): Record<string, ZoneMeta> {
+  if (isCharrosVenue(venueId, venueName, eventType)) {
+    return CHARROS_ZONES;
+  }
+  if (isTomaterosVenue(venueId, venueName, eventType)) {
+    return TOMATEROS_ZONES;
+  }
   if (isEncantoVenue(venueId, venueName, eventType)) {
     return ENCANTO_ZONES;
   }
@@ -553,6 +1011,14 @@ export function getZonePrice(zoneName: string, event?: VenueEvent | null): numbe
   );
   if (foundZoneKey) {
     return zones[foundZoneKey].defaultPrice;
+  }
+
+  // Respaldo en TOMATEROS_ZONES
+  const foundTomaterosKey = Object.keys(TOMATEROS_ZONES).find(
+    (k) => k.trim().toLowerCase() === cleanZoneName
+  );
+  if (foundTomaterosKey) {
+    return TOMATEROS_ZONES[foundTomaterosKey].defaultPrice;
   }
 
   // Respaldo insensible a mayúsculas/minúsculas en MARISCAL_ZONES
@@ -745,11 +1211,159 @@ export function buildEncantoSectionsData(venueId: string = 'venue-encanto'): Omi
 }
 
 /**
+ * Generador de las definiciones oficiales de secciones de Estadio Tomateros (Culiacán)
+ * Conforme a los 54 bloques físicos del mapa SVG:
+ * - Suites: suite-1 .. suite-3 (Deluxe Supreme)
+ * - Platea: platea-1 .. platea-16 (Platino)
+ * - Numerado Home: num_home-1 .. num_home-3 (Oro)
+ * - Numerado Bajo: num_bajo-1 .. num_bajo-6 (Sky Plus)
+ * - Numerado Medio: num_medio-1 .. num_medio-6 (Plus)
+ * - Numerado Claro: num_claro-1 .. num_claro-6 (Fan Plus)
+ * - Jardines: jardin-1 .. jardin-14 (Sky)
+ */
+export function buildTomaterosSectionsData(venueId: string): Omit<SeatSection, 'id'>[] {
+  const sections: Omit<SeatSection, 'id'>[] = [];
+  const defaultProps = {
+    venueId,
+    totalSeats: 30,
+    rows: 3,
+    seatsPerRow: 10,
+  };
+
+  // 1. Suites: suite-1 .. suite-3 (Deluxe Supreme)
+  for (let i = 1; i <= 3; i++) {
+    sections.push({ ...defaultProps, sectionNumber: `suite-${i}`, zoneName: 'Deluxe Supreme' });
+  }
+
+  // 2. Platea: platea-1 .. platea-16 (Platino)
+  for (let i = 1; i <= 16; i++) {
+    sections.push({ ...defaultProps, sectionNumber: `platea-${i}`, zoneName: 'Platino' });
+  }
+
+  // 3. Numerado Home: num_home-1 .. num_home-3 (Oro)
+  for (let i = 1; i <= 3; i++) {
+    sections.push({ ...defaultProps, sectionNumber: `num_home-${i}`, zoneName: 'Oro' });
+  }
+
+  // 4. Numerado Bajo: num_bajo-1 .. num_bajo-6 (Sky Plus)
+  for (let i = 1; i <= 6; i++) {
+    sections.push({ ...defaultProps, sectionNumber: `num_bajo-${i}`, zoneName: 'Sky Plus' });
+  }
+
+  // 5. Numerado Medio: num_medio-1 .. num_medio-6 (Plus)
+  for (let i = 1; i <= 6; i++) {
+    sections.push({ ...defaultProps, sectionNumber: `num_medio-${i}`, zoneName: 'Plus' });
+  }
+
+  // 6. Numerado Claro: num_claro-1 .. num_claro-6 (Fan Plus)
+  for (let i = 1; i <= 6; i++) {
+    sections.push({ ...defaultProps, sectionNumber: `num_claro-${i}`, zoneName: 'Fan Plus' });
+  }
+
+  // 7. Jardines: jardin-1 .. jardin-14 (Sky)
+  for (let i = 1; i <= 14; i++) {
+    sections.push({ ...defaultProps, sectionNumber: `jardin-${i}`, zoneName: 'Sky' });
+  }
+
+  return sections;
+}
+
+/**
+ * Generador de las definiciones oficiales de secciones de Estadio Charros de Jalisco
+ * Conforme a los polígonos del mapa SVG:
+ * - Lateral Base (magenta): magenta-01 .. magenta-06
+ * - Palco Esquina (purple): purple-01 .. purple-02
+ * - Premier (premier): premier-01 .. premier-06
+ * - Lateral Premier (orange): orange-01 .. orange-10
+ * - Butaca Preferente (yellow): yellow-01 .. yellow-24
+ * - VIP / Local / Visitante (cyan): cyan-01 .. cyan-09, vip-01 .. vip-08, teal-01
+ * - Planta Baja (steel): steel-01 .. steel-10
+ * - Planta Alta y Suites (navy): navy-01 .. navy-43
+ * - Jardín / Esquinas (gray): gray-01 .. gray-14
+ */
+export function buildCharrosSectionsData(venueId: string = 'venue-charros'): Omit<SeatSection, 'id'>[] {
+  const sections: Omit<SeatSection, 'id'>[] = [];
+  const defaultProps = {
+    venueId,
+    totalSeats: 30,
+    rows: 3,
+    seatsPerRow: 10,
+  };
+
+  // 1. Lateral Base: magenta-01 .. magenta-06
+  for (let i = 1; i <= 6; i++) {
+    const num = i < 10 ? `0${i}` : `${i}`;
+    sections.push({ ...defaultProps, sectionNumber: `magenta-${num}`, zoneName: 'Lateral Base' });
+  }
+
+  // 2. Palco Esquina: purple-01 .. purple-02
+  for (let i = 1; i <= 2; i++) {
+    const num = i < 10 ? `0${i}` : `${i}`;
+    sections.push({ ...defaultProps, sectionNumber: `purple-${num}`, zoneName: 'Palco Esquina' });
+  }
+
+  // 3. Premier: premier-01 .. premier-06
+  for (let i = 1; i <= 6; i++) {
+    const num = i < 10 ? `0${i}` : `${i}`;
+    sections.push({ ...defaultProps, sectionNumber: `premier-${num}`, zoneName: 'Premier' });
+  }
+
+  // 4. Lateral Premier: orange-01 .. orange-10
+  for (let i = 1; i <= 10; i++) {
+    const num = i < 10 ? `0${i}` : `${i}`;
+    sections.push({ ...defaultProps, sectionNumber: `orange-${num}`, zoneName: 'Lateral Premier' });
+  }
+
+  // 5. Butaca Preferente: yellow-01 .. yellow-24
+  for (let i = 1; i <= 24; i++) {
+    const num = i < 10 ? `0${i}` : `${i}`;
+    sections.push({ ...defaultProps, sectionNumber: `yellow-${num}`, zoneName: 'Butaca Preferente' });
+  }
+
+  // 6. VIP / Local / Visitante: cyan-01 .. cyan-09, vip-01 .. vip-08, teal-01
+  for (let i = 1; i <= 9; i++) {
+    const num = i < 10 ? `0${i}` : `${i}`;
+    sections.push({ ...defaultProps, sectionNumber: `cyan-${num}`, zoneName: 'VIP / Local / Visitante' });
+  }
+  for (let i = 1; i <= 8; i++) {
+    const num = i < 10 ? `0${i}` : `${i}`;
+    sections.push({ ...defaultProps, sectionNumber: `vip-${num}`, zoneName: 'VIP / Local / Visitante' });
+  }
+  sections.push({ ...defaultProps, sectionNumber: 'teal-01', zoneName: 'VIP / Local / Visitante' });
+
+  // 7. Planta Baja: steel-01 .. steel-10
+  for (let i = 1; i <= 10; i++) {
+    const num = i < 10 ? `0${i}` : `${i}`;
+    sections.push({ ...defaultProps, sectionNumber: `steel-${num}`, zoneName: 'Planta Baja' });
+  }
+
+  // 8. Planta Alta y Suites: navy-01 .. navy-43
+  for (let i = 1; i <= 43; i++) {
+    const num = i < 10 ? `0${i}` : `${i}`;
+    sections.push({ ...defaultProps, sectionNumber: `navy-${num}`, zoneName: 'Planta Alta y Suites' });
+  }
+
+  // 9. Jardín / Esquinas: gray-01 .. gray-14
+  for (let i = 1; i <= 14; i++) {
+    const num = i < 10 ? `0${i}` : `${i}`;
+    sections.push({ ...defaultProps, sectionNumber: `gray-${num}`, zoneName: 'Jardín / Esquinas' });
+  }
+
+  return sections;
+}
+
+/**
  * Selecciona la función generadora de secciones según la sede
  */
 export function buildSectionsForVenue(venueId: string, eventType?: string): Omit<SeatSection, 'id'>[] {
+  if (isCharrosVenue(venueId, undefined, eventType)) {
+    return buildCharrosSectionsData(venueId);
+  }
   if (isEncantoVenue(venueId, undefined, eventType)) {
     return buildEncantoSectionsData(venueId);
+  }
+  if (isTomaterosVenue(venueId, undefined, eventType)) {
+    return buildTomaterosSectionsData(venueId);
   }
   return buildMariscalSectionsData(venueId);
 }
@@ -798,8 +1412,39 @@ export const seedMariscalSeatMap = seedSeatMapForVenue;
  * Filtra y sanitiza las secciones asegurando coherencia total con el estadio correspondiente.
  */
 export function sanitizeVenueSections(venueId: string, rawSections: SeatSection[], eventType?: string): SeatSection[] {
+  const isCharros = isCharrosVenue(venueId, undefined, eventType);
   const isEncanto = isEncantoVenue(venueId, undefined, eventType);
-  if (isEncanto) {
+  const isTomateros = isTomaterosVenue(venueId, undefined, eventType);
+
+  if (isCharros) {
+    const valid = rawSections
+      .filter((s) => {
+        const num = (s.sectionNumber || '').trim().toLowerCase();
+        return (
+          num.startsWith('magenta') ||
+          num.startsWith('purple') ||
+          num.startsWith('premier') ||
+          num.startsWith('orange') ||
+          num.startsWith('yellow') ||
+          num.startsWith('cyan') ||
+          num.startsWith('vip') ||
+          num.startsWith('teal') ||
+          num.startsWith('steel') ||
+          num.startsWith('navy') ||
+          num.startsWith('gray')
+        );
+      })
+      .map((s) => {
+        const officialZone = getCharrosSectionZone(s.sectionNumber);
+        if (officialZone) {
+          return { ...s, zoneName: officialZone };
+        }
+        return s;
+      });
+    if (valid.length > 0) return valid;
+    const master = buildCharrosSectionsData(venueId);
+    return master.map((d) => ({ id: `${venueId}_sec_${(d.sectionNumber || '').replace(/\s+/g, '_')}`, ...d }));
+  } else if (isEncanto) {
     const valid = rawSections.filter((s) => {
       const num = (s.sectionNumber || '').trim().toUpperCase();
       const zone = (s.zoneName || '').trim().toLowerCase();
@@ -823,7 +1468,32 @@ export function sanitizeVenueSections(venueId: string, rawSections: SeatSection[
     if (valid.length > 0) return valid;
     const master = buildEncantoSectionsData(venueId);
     return master.map((d) => ({ id: `${venueId}_sec_${(d.sectionNumber || '').replace(/\s+/g, '_')}`, ...d }));
+  } else if (isTomateros) {
+    const valid = rawSections
+      .filter((s) => {
+        const num = (s.sectionNumber || '').trim().toLowerCase();
+        return (
+          num.startsWith('suite') ||
+          num.startsWith('platea') ||
+          num.startsWith('num_home') ||
+          num.startsWith('num_bajo') ||
+          num.startsWith('num_medio') ||
+          num.startsWith('num_claro') ||
+          num.startsWith('jardin')
+        );
+      })
+      .map((s) => {
+        const officialZone = getTomaterosSectionZone(s.sectionNumber);
+        if (officialZone) {
+          return { ...s, zoneName: officialZone };
+        }
+        return s;
+      });
+    if (valid.length > 0) return valid;
+    const master = buildTomaterosSectionsData(venueId);
+    return master.map((d) => ({ id: `${venueId}_sec_${(d.sectionNumber || '').replace(/\s+/g, '_')}`, ...d }));
   } else {
+    // Teodoro Mariscal
     const valid = rawSections
       .filter((s) => {
         const num = (s.sectionNumber || '').trim().toUpperCase();
@@ -832,12 +1502,14 @@ export function sanitizeVenueSections(venueId: string, rawSections: SeatSection[
           !num.startsWith('PL-') &&
           !num.startsWith('TE-') &&
           !num.startsWith('GN-') &&
-          !num.startsWith('GS-')
+          !num.startsWith('GS-') &&
+          !num.startsWith('SUITE') &&
+          !num.startsWith('PLATEA') &&
+          !num.startsWith('JARDIN')
         );
       })
       .map((s) => {
-        const clean = (s.sectionNumber || '').trim().replace(/^sec(?:ci[oó]n)?[\s._#-]+/i, '');
-        const officialZone = MARISCAL_SECTION_ZONE_MAP[clean];
+        const officialZone = getMariscalSectionZone(s.sectionNumber);
         if (officialZone) {
           return { ...s, zoneName: officialZone };
         }
@@ -912,11 +1584,18 @@ export function subscribeSeatSections(
         callback(sanitized);
 
         // Sanación en segundo plano de cualquier discrepancia en Firestore
-        if (!isEncantoVenue(venueId)) {
+        if (isTomaterosVenue(venueId)) {
           snap.docs.forEach((docSnap) => {
             const data = docSnap.data();
-            const clean = (data.sectionNumber || '').trim().replace(/^sec(?:ci[oó]n)?[\s._#-]+/i, '');
-            const canonicalZone = MARISCAL_SECTION_ZONE_MAP[clean];
+            const canonicalZone = getTomaterosSectionZone(data.sectionNumber);
+            if (canonicalZone && data.zoneName !== canonicalZone) {
+              updateDoc(docSnap.ref, { zoneName: canonicalZone }).catch(() => {});
+            }
+          });
+        } else if (!isEncantoVenue(venueId)) {
+          snap.docs.forEach((docSnap) => {
+            const data = docSnap.data();
+            const canonicalZone = getMariscalSectionZone(data.sectionNumber);
             if (canonicalZone && data.zoneName !== canonicalZone) {
               updateDoc(docSnap.ref, { zoneName: canonicalZone }).catch(() => {});
             }
