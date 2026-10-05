@@ -7,6 +7,8 @@ import { cleanRowValue, cleanSeatValue, cleanSectionValue, formatDeliverySeat, i
 import { RunnerQrScannerModal } from './RunnerQrScannerModal';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
+import { inferVenueIdAndName } from '../../lib/venues';
+import { INITIAL_STANDS } from '../../lib/stands';
 import {
   Bike,
   MapPin,
@@ -72,17 +74,27 @@ export const RunnerOrdersQueue: React.FC<RunnerOrdersQueueProps> = ({ user }) =>
     } catch {}
   };
 
+  // Resolver la sede asignada del runner para aislamiento estricto
+  const { venueId: targetVenueId, venueName: targetVenueName } = inferVenueIdAndName(
+    user.venueId || user.browsingVenueId,
+    user.venueName || user.browsingVenueName
+  );
+
   useEffect(() => {
     // Escuchar órdenes de comida en tiempo real del negocio y sede asignados
     setLoading(true);
-    const targetVenueId = user.venueId || DEFAULT_VENUE_ID;
     const unsubscribe = listenToStandFoodOrders(
       user.standId || null,
       (liveOrders) => {
-        // Filtrar órdenes in-seat pertinentes para este runner
-        // Si el runner tiene standId asignado, solo de ese negocio; si no, de su sede
+        // Filtrar órdenes in-seat pertinentes para este runner de manera estricta
+        // Si el runner tiene standId asignado, solo de ese negocio; si no, exclusivamente de su sede
         const relevantOrders = liveOrders.filter((o) => {
-          const matchVenue = (o.venueId || DEFAULT_VENUE_ID) === targetVenueId;
+          let orderVenue = o.venueId;
+          if (!orderVenue) {
+            const standMatch = INITIAL_STANDS.find((s) => s.id === o.standId || s.name === o.standName);
+            orderVenue = standMatch?.venueId || DEFAULT_VENUE_ID;
+          }
+          const matchVenue = orderVenue === targetVenueId;
           const matchStand = user.standId ? o.standId === user.standId : true;
           return matchVenue && matchStand;
         });
@@ -106,7 +118,7 @@ export const RunnerOrdersQueue: React.FC<RunnerOrdersQueueProps> = ({ user }) =>
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [user.standId, user.venueId]);
+  }, [user.standId, targetVenueId]);
 
   const handleClaimOrder = async (orderId: string) => {
     setActionLoading(orderId);
@@ -524,7 +536,7 @@ export const RunnerOrdersQueue: React.FC<RunnerOrdersQueueProps> = ({ user }) =>
               <div>
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-black/40 text-amber-300 border border-white/20 font-sports mb-1">
                   <MapPin className="w-3 h-3 text-amber-400" />
-                  <span>Ubicación de Entrega a Butaca</span>
+                  <span>Ubicación de Entrega a Butaca • {targetVenueName}</span>
                 </div>
                 <h3 className="text-base sm:text-xl font-black font-sports uppercase tracking-wide flex items-center gap-2">
                   <span>Sección: {cleanSectionValue(mapModalOrder.section) || 'General'}</span>

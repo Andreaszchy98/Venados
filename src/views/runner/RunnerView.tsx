@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { UserProfile } from '../../types';
 import { updateRunnerStatus } from '../../lib/auth';
 import { RunnerOrdersQueue } from './RunnerOrdersQueue';
+import { inferVenueIdAndName } from '../../lib/venues';
 import {
   Bike,
   Store,
@@ -19,6 +20,18 @@ export const RunnerView: React.FC<RunnerViewProps> = ({ user }) => {
     user.runnerStatus || 'disponible'
   );
   const [updatingStatus, setUpdatingStatus] = useState(false);
+
+  // Resolver la sede asignada del Runner
+  const { venueId: currentVenueId, venueName: currentVenueName } = inferVenueIdAndName(
+    user.venueId || user.browsingVenueId,
+    user.venueName || user.browsingVenueName
+  );
+
+  const normalizedUser: UserProfile = {
+    ...user,
+    venueId: currentVenueId,
+    venueName: currentVenueName,
+  };
 
   const handleStatusChange = async (newStatus: 'disponible' | 'en_entrega' | 'inactivo') => {
     setUpdatingStatus(true);
@@ -42,10 +55,10 @@ export const RunnerView: React.FC<RunnerViewProps> = ({ user }) => {
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-blue-600/30 text-blue-300 border border-blue-500/40 font-sports">
               <Bike className="w-3.5 h-3.5" />
-              Despacho de Comandas a Butaca • Estadio Teodoro Mariscal
+              Despacho de Comandas a Butaca • {currentVenueName}
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
-              {user.displayName || 'Runner Venados'}
+              {user.displayName || 'Personal de Reparto'}
             </h1>
             <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs text-slate-300 font-medium">
               <span className="flex items-center gap-1.5 bg-slate-800/90 px-3 py-1.5 rounded-xl border border-amber-500/30 text-amber-300 font-bold">
@@ -106,7 +119,7 @@ export const RunnerView: React.FC<RunnerViewProps> = ({ user }) => {
       </div>
 
       {/* Cola de Comandas en Tiempo Real */}
-      <RunnerOrdersQueue user={user} />
+      <RunnerOrdersQueue user={normalizedUser} />
     </div>
   );
 };

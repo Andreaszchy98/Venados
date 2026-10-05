@@ -72,7 +72,15 @@ export function subscribeVenues(
       if (snapshot.empty) {
         combined = [...DEFAULT_VENUES];
       } else {
-        const venuesList = snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) as Venue[];
+        const venuesList = snapshot.docs.map((d) => {
+          const data = d.data() as Partial<Venue>;
+          const id = d.id;
+          let teamName = data.teamName;
+          if (id === DEFAULT_VENUE_ID || !teamName || teamName === 'Recinto' || (data.name && data.name.toLowerCase().includes('teodoro'))) {
+            teamName = 'Venados de Mazatlán';
+          }
+          return { id, ...data, teamName } as Venue;
+        });
         // Garantizar que DEFAULT_VENUES estén disponibles como opciones válidas si no existen en Firestore
         const merged = [...venuesList];
         for (const defVenue of DEFAULT_VENUES) {
@@ -253,6 +261,41 @@ export async function getVenueEvents(venueId?: string): Promise<VenueEvent[]> {
     handleFirestoreError(err, OperationType.LIST, EVENTS_COLLECTION);
     return [];
   }
+}
+
+export function inferVenueIdAndName(venueId?: string, venueName?: string): { venueId: string; venueName: string } {
+  const str = `${venueId || ''} ${venueName || ''}`.toLowerCase();
+  if (str.includes('charros') || str.includes('jalisco') || str.includes('zapopan') || venueId === 'venue-charros') {
+    return { venueId: 'venue-charros', venueName: 'Estadio Panamericano Charros de Jalisco' };
+  }
+  if (str.includes('encanto') || str.includes('dorados') || venueId === 'venue-encanto') {
+    return { venueId: 'venue-encanto', venueName: 'Estadio El Encanto' };
+  }
+  if (str.includes('tomateros') || str.includes('culiac') || venueId === 'venue-tomateros') {
+    return { venueId: 'venue-tomateros', venueName: 'Estadio Tomateros' };
+  }
+  return { venueId: 'venue-teodoro-mariscal', venueName: 'Estadio Teodoro Mariscal' };
+}
+
+export function resolveEventStadiumName(venueId?: string, venueName?: string, matchTitle?: string): string {
+  if (venueName && venueName !== 'Recinto' && venueName !== 'Recinto Deportivo' && !venueName.includes('undefined')) {
+    return venueName;
+  }
+  const venue = DEFAULT_VENUES.find((v) => v.id === venueId);
+  if (venue) {
+    return venue.name;
+  }
+  const str = `${venueId || ''} ${matchTitle || ''}`.toLowerCase();
+  if (str.includes('charros') || str.includes('jalisco') || str.includes('zapopan') || venueId === 'venue-charros') {
+    return 'Estadio Panamericano Charros de Jalisco';
+  }
+  if (str.includes('encanto') || str.includes('dorados') || venueId === 'venue-encanto') {
+    return 'Estadio El Encanto';
+  }
+  if (str.includes('tomateros') || str.includes('culiac') || venueId === 'venue-tomateros') {
+    return 'Estadio Tomateros';
+  }
+  return 'Estadio Teodoro Mariscal';
 }
 
 export {

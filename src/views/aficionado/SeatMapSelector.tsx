@@ -1032,8 +1032,16 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
 
             {currentSection && (
               <span
-                className={`px-2.5 py-1 rounded-xl text-xs font-bold border font-sports tracking-wider ${
-                  isEncanto
+                className={`px-3 py-1 rounded-xl text-xs font-bold border font-sports tracking-wider shadow-xs ${
+                  theme === 'light'
+                    ? isEncanto
+                      ? 'bg-amber-50 text-amber-900 border-amber-300'
+                      : isCharros
+                      ? 'bg-blue-50 text-blue-900 border-blue-300'
+                      : isTomateros
+                      ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
+                      : 'bg-red-50 text-red-900 border-red-300'
+                    : isEncanto
                     ? 'bg-amber-950/60 text-amber-300 border-amber-500/60'
                     : isCharros
                     ? 'bg-blue-950/60 text-blue-300 border-blue-500/60'
@@ -1042,7 +1050,7 @@ export const SeatMapSelector: React.FC<SeatMapSelectorProps> = ({
                     : 'bg-red-950/60 text-red-300 border-red-700/60'
                 }`}
               >
-                Sección activa: <strong className="font-black text-white">#{currentSection.sectionNumber}</strong> ({currentSection.zoneName})
+                Sección activa: <strong className={`font-black ${theme === 'light' ? 'text-slate-950' : 'text-white'}`}>#{currentSection.sectionNumber}</strong> ({currentSection.zoneName})
               </span>
             )}
           </div>

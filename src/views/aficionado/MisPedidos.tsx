@@ -434,7 +434,7 @@ export const MisPedidos: React.FC<MisPedidosProps> = ({ user, onOpenAuth }) => {
                         <span className="font-bold text-white truncate">{item.name}</span>
                         {item.size && (
                           <span className="text-[11px] text-slate-400 shrink-0 font-sans">
-                            • {t('orders.size', 'Talla')}: {item.size}
+                            • {t('orders.size', 'Talla')}: {item.size.replace(/^talla\s+/i, '')}
                           </span>
                         )}
                       </div>

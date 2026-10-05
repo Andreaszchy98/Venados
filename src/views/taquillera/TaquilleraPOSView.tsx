@@ -24,13 +24,14 @@ import {
 import { UserProfile, Ticket, VenueEvent } from '../../types';
 import { QRCodeDisplay } from '../../components/shared/QRCodeDisplay';
 import { createPosTicketBatch, PosTicketItemRequest } from '../../lib/tickets';
-import { DEFAULT_EVENT_ID, DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
+import { DEFAULT_EVENT_ID, DEFAULT_VENUE_ID, DEFAULT_VENUES } from '../../lib/defaultVenue';
 import { collection, query, where, getDocs, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { SeatMapSelector } from '../aficionado/SeatMapSelector';
 import { SeatPurchaseItem } from '../../lib/seatMap';
 import { useTheme } from '../../context/ThemeContext';
 import { DEFAULT_FALLBACK_EVENTS } from '../../lib/venueEvents';
+import { inferVenueIdAndName, resolveEventStadiumName } from '../../lib/venues';
 
 interface TaquilleraPOSViewProps {
   user: UserProfile;
@@ -38,33 +39,47 @@ interface TaquilleraPOSViewProps {
 
 const FALLBACK_POS_EVENTS = DEFAULT_FALLBACK_EVENTS
   .filter((e) => e.active !== false && e.ticketsAvailable !== false)
-  .map((e) => ({
-    id: e.id,
-    matchTitle: e.name,
-    opponent: e.opponent || '',
-    matchDate: e.date,
-    matchTime: e.time,
-    stadium: e.venueName || (e.venueId === 'venue-encanto' ? 'Estadio El Encanto' : 'Estadio Teodoro Mariscal'),
-    venueId: e.venueId,
-    status: e.name.includes('Inaugural') || e.name.includes('Inauguración') ? 'Serie Inaugural' : 'Disponible para Venta',
-    type: e.type,
-    active: true,
-    ticketsAvailable: true,
-  }))
+  .map((e) => {
+    const { venueId, venueName } = inferVenueIdAndName(e.venueId, e.venueName || e.name);
+    return {
+      id: e.id,
+      matchTitle: e.name,
+      opponent: e.opponent || '',
+      matchDate: e.date,
+      matchTime: e.time,
+      stadium: resolveEventStadiumName(venueId, e.venueName || venueName, e.name),
+      venueId,
+      status: e.name.includes('Inaugural') || e.name.includes('Inauguración') ? 'Serie Inaugural' : 'Disponible para Venta',
+      type: e.type,
+      active: true,
+      ticketsAvailable: true,
+    };
+  })
   .sort((a, b) => (a.matchDate || '').localeCompare(b.matchDate || '') || (a.matchTime || '').localeCompare(b.matchTime || ''));
 
 export const TaquilleraPOSView: React.FC<TaquilleraPOSViewProps> = ({ user }) => {
   const { theme } = useTheme();
 
+  // Resolver la sede exacta de la Taquillera (ej. 'venue-charros' -> 'Estadio Panamericano Charros de Jalisco')
+  const { venueId: currentVenueId, venueName: currentVenueName } = inferVenueIdAndName(
+    user.venueId || user.browsingVenueId,
+    user.venueName || user.browsingVenueName
+  );
+
   // Catálogo dinámico de eventos de venta de boletos cargados de Firestore
-  const [eventsCatalog, setEventsCatalog] = useState<any[]>(FALLBACK_POS_EVENTS);
+  const [eventsCatalog, setEventsCatalog] = useState<any[]>(() => {
+    const forVenue = FALLBACK_POS_EVENTS.filter((e) => e.venueId === currentVenueId);
+    return forVenue.length > 0 ? forVenue : FALLBACK_POS_EVENTS;
+  });
   const [loadingEventsCatalog, setLoadingEventsCatalog] = useState<boolean>(true);
-  const [selectedEventId, setSelectedEventId] = useState<string>(FALLBACK_POS_EVENTS[0]?.id || DEFAULT_EVENT_ID);
+  const [selectedEventId, setSelectedEventId] = useState<string>(() => {
+    const forVenue = FALLBACK_POS_EVENTS.filter((e) => e.venueId === currentVenueId);
+    return forVenue[0]?.id || DEFAULT_EVENT_ID;
+  });
   const [isEventDropdownOpen, setIsEventDropdownOpen] = useState<boolean>(false);
 
   // Escuchar eventos disponibles para venta en la base de datos en tiempo real y ordenados por fecha
   useEffect(() => {
-    const currentVenueId = user.venueId || DEFAULT_VENUE_ID;
     const q = query(
       collection(db, 'venueEvents'),
       limit(60)
@@ -75,14 +90,21 @@ export const TaquilleraPOSView: React.FC<TaquilleraPOSViewProps> = ({ user }) =>
       (snapshot) => {
         let loaded = snapshot.docs.map((d) => {
           const data = d.data();
+          const matchTitle = data.name || 'Evento Deportivo';
+          const { venueId: eventVenueId, venueName: eventVenueName } = inferVenueIdAndName(
+            data.venueId,
+            data.venueName || matchTitle
+          );
+          const resolvedStadium = resolveEventStadiumName(eventVenueId, data.venueName || eventVenueName, matchTitle);
+
           return {
             id: d.id,
-            matchTitle: data.name || 'Evento Deportivo',
+            matchTitle,
             opponent: data.opponent || '',
             matchDate: data.date || '2026-10-15',
             matchTime: data.time || '20:00 hrs',
-            stadium: data.venueName || (data.venueId === 'venue-encanto' ? 'Estadio El Encanto' : 'Estadio Teodoro Mariscal'),
-            venueId: data.venueId || currentVenueId,
+            stadium: resolvedStadium,
+            venueId: eventVenueId,
             status: data.status || 'Disponible para Venta',
             active: data.active !== false,
             ticketsAvailable: data.ticketsAvailable !== false,
@@ -90,9 +112,9 @@ export const TaquilleraPOSView: React.FC<TaquilleraPOSViewProps> = ({ user }) =>
           };
         }).filter(e => e.active && e.ticketsAvailable); // Solo eventos disponibles para venta
 
-        // Priorizar eventos de la sede del usuario si los hay, pero mostrar todos los disponibles
+        // En la Taquilla POS, filtrar estrictamente para el estadio al que pertenece la taquillera
         const venueEvents = loaded.filter(e => e.venueId === currentVenueId);
-        const finalEvents = venueEvents.length > 0 ? venueEvents : loaded;
+        const finalEvents = venueEvents.length > 0 ? venueEvents : loaded.filter(e => e.venueId === currentVenueId);
 
         // Ordenar cronológicamente por fecha de evento y hora (más próximos primero)
         finalEvents.sort((a, b) => (a.matchDate || '').localeCompare(b.matchDate || '') || (a.matchTime || '').localeCompare(b.matchTime || ''));

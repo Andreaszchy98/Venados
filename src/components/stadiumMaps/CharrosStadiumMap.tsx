@@ -3,6 +3,7 @@ import { SeatSection, VenueEvent } from '../../types';
 import { CHARROS_ZONES, CHARROS_SVG_ZONE_MAP, getZonePrice } from '../../lib/seatMap';
 import { useStadiumPanZoom, StadiumRegionPreset } from './useStadiumPanZoom';
 import { StadiumZoomToolbar } from './StadiumZoomToolbar';
+import { useTheme } from '../../context/ThemeContext';
 import { Info, Move } from 'lucide-react';
 
 const CHARROS_PRESETS: StadiumRegionPreset[] = [
@@ -12,6 +13,159 @@ const CHARROS_PRESETS: StadiumRegionPreset[] = [
   { id: 'third_base', label: 'Lateral 3ra Base (Izq)', shortLabel: '3ra Base', icon: '3️⃣', normX: 0.26, normY: 0.60, scale: 2.0 },
   { id: 'outfield', label: 'Jardines & Bleachers', shortLabel: 'Jardines', icon: '🌳', normX: 0.50, normY: 0.24, scale: 1.9 },
   { id: 'upper', label: 'Planta Alta & Suites', shortLabel: 'Planta Alta', icon: '🏢', normX: 0.50, normY: 0.86, scale: 1.85 },
+];
+
+export const CHARROS_BLOCK_LABELS = [
+  // Jardín / Esquinas (gray-01 a gray-14)
+  { id: 'gray-01', label: 'G1', pts: '266.0,544.5 280.5,565.5 281.0,568.5 256.5,586.5 253.5,587.0 237.5,563.5 237.5,561.5 263.5,544.5' },
+  { id: 'gray-02', label: 'G2', pts: '894.5,544.0 923.0,561.5 906.5,587.0 904.0,587.0 878.5,568.0' },
+  { id: 'gray-03', label: 'G3', pts: '247.5,518.0 260.5,538.5 234.5,555.5 232.5,555.5 215.0,531.0 215.0,529.0' },
+  { id: 'gray-04', label: 'G4', pts: '913.0,517.5 945.0,529.0 928.5,555.0 925.0,554.5 899.5,538.5' },
+  { id: 'gray-05', label: 'G5', pts: '210.0,478.0 247.5,482.0 246.0,501.5 207.5,502.0' },
+  { id: 'gray-06', label: 'G6', pts: '951.0,478.5 953.0,502.0 914.0,501.0 912.5,482.5 948.0,477.5' },
+  { id: 'gray-07', label: 'G7', pts: '215.0,435.5 253.0,442.0 248.5,474.5 211.0,470.0' },
+  { id: 'gray-08', label: 'G8', pts: '945.5,435.0 949.5,469.5 912.0,474.5 907.5,441.0' },
+  { id: 'gray-09', label: 'G9', pts: '940.0,390.0 944.5,427.5 906.5,433.0 901.5,394.5' },
+  { id: 'gray-10', label: 'G10', pts: '220.0,390.0 259.0,395.0 254.0,433.5 215.5,427.0' },
+  { id: 'gray-11', label: 'G11', pts: '226.0,344.5 264.0,352.5 259.5,387.0 221.5,382.0' },
+  { id: 'gray-12', label: 'G12', pts: '934.0,344.0 939.0,381.5 901.0,387.0 896.5,352.0' },
+  { id: 'gray-13', label: 'G13', pts: '229.5,312.0 232.0,311.5 267.0,321.0 268.0,324.0 265.0,344.0 227.5,337.0' },
+  { id: 'gray-14', label: 'G14', pts: '930.5,311.0 933.0,337.0 899.0,344.0 895.0,343.5 893.0,321.5' },
+
+  // Premier (premier-01 a premier-06)
+  { id: 'premier-01', label: 'PR1', pts: '759.5,553.5 762.5,557.0 762.5,560.0 746.0,583.5 741.0,585.5 734.0,583.0 731.0,579.5 731.5,573.5 747.0,553.5 751.5,550.0' },
+  { id: 'premier-02', label: 'PR2', pts: '399.0,553.0 408.5,549.5 426.5,572.0 427.5,577.5 422.5,584.0 416.5,585.0 408.0,577.5 396.0,561.0 395.5,557.0' },
+  { id: 'premier-03', label: 'PR3', pts: '782.5,519.5 788.0,525.0 786.5,531.0 770.5,550.5 765.5,550.5 757.5,543.0 759.5,537.0 774.5,518.5' },
+  { id: 'premier-04', label: 'PR4', pts: '380.5,517.0 384.0,517.0 389.5,522.0 400.5,539.0 400.0,545.0 393.0,551.0 389.5,551.0 370.5,527.0 371.0,524.0' },
+  { id: 'premier-05', label: 'PR5', pts: '814.5,490.0 810.5,499.0 798.0,515.5 791.5,517.5 782.5,511.5 784.0,505.5 799.0,487.0 806.0,487.0' },
+  { id: 'premier-06', label: 'PR6', pts: '348.0,488.0 359.0,486.0 362.5,489.0 375.5,506.0 376.0,511.0 372.5,515.5 364.5,517.5 358.5,512.5 345.5,493.5 345.5,490.5' },
+
+  // Lateral Base (magenta-01 a magenta-06)
+  { id: 'magenta-01', label: 'M1', pts: '907.0,502.0 900.0,501.5 836.0,483.5 833.5,464.5 839.0,462.5 889.5,455.0 901.0,454.5 903.0,459.5' },
+  { id: 'magenta-02', label: 'M2', pts: '253.5,500.0 258.0,458.0 259.5,454.5 312.0,461.0 327.0,465.0 326.0,477.5 323.5,483.0 261.0,500.0' },
+  { id: 'magenta-03', label: 'M3', pts: '894.5,397.0 900.0,437.0 899.5,445.0 838.5,454.5 832.0,454.0 827.0,419.5 827.0,407.0 886.5,397.0' },
+  { id: 'magenta-04', label: 'M4', pts: '266.0,397.5 273.5,397.0 333.0,407.0 333.5,415.5 328.0,454.0 315.0,453.5 261.0,445.0 260.5,437.0' },
+  { id: 'magenta-05', label: 'M5', pts: '885.5,326.5 893.5,386.5 888.5,388.5 825.5,398.0 823.5,393.0 823.0,381.0 881.0,328.5' },
+  { id: 'magenta-06', label: 'M6', pts: '275.0,326.0 278.0,327.0 336.0,379.0 337.0,387.5 334.5,397.5 300.0,393.0 267.5,386.5' },
+
+  // Palco Esquina (purple-01 a purple-02)
+  { id: 'purple-01', label: 'PE1', pts: '833.0,497.5 852.5,501.0 904.5,516.0 898.5,527.0 873.0,562.5 870.5,562.5 816.5,521.0 817.0,518.0 825.0,506.5' },
+  { id: 'purple-02', label: 'PE2', pts: '327.5,498.0 340.5,514.5 343.5,520.5 290.5,561.5 286.5,562.5 261.0,526.5 256.0,517.0 263.5,513.5 315.0,499.5' },
+
+  // Lateral Premier (orange-01 a orange-10)
+  { id: 'orange-01', label: 'LP1', pts: '440.0,616.5 446.5,618.0 456.5,626.5 450.5,637.5 443.0,645.5 433.5,641.5 425.0,634.0 428.0,628.5' },
+  { id: 'orange-02', label: 'LP2', pts: '741.0,603.0 745.5,604.5 759.5,615.5 759.5,619.0 744.0,629.5 741.0,629.0 728.0,614.0 730.5,608.5' },
+  { id: 'orange-03', label: 'LP3', pts: '417.0,599.5 427.5,605.5 431.0,610.5 419.0,626.5 415.0,628.0 398.5,617.5 396.5,614.0 412.5,600.5' },
+  { id: 'orange-04', label: 'LP4', pts: '582.5,458.0 591.0,464.5 593.0,474.0 586.0,484.0 575.5,485.5 569.5,483.0 567.0,480.0 565.0,474.5 565.5,467.0 569.5,461.0 577.0,458.0' },
+  { id: 'orange-05', label: 'LP5', pts: '812.5,455.0 815.5,456.5 816.5,459.5 817.5,477.5 809.5,479.0 806.5,478.0 803.5,473.5 803.0,457.5 806.0,455.5' },
+  { id: 'orange-06', label: 'LP6', pts: '357.0,455.0 359.0,458.5 357.0,473.0 354.0,476.5 346.5,478.5 344.0,475.0 346.0,456.5 350.0,453.5' },
+  { id: 'orange-07', label: 'LP7', pts: '810.0,423.5 812.0,427.0 813.5,442.5 810.5,446.0 804.0,447.0 801.5,445.5 800.0,442.0 799.0,425.5 803.0,423.5' },
+  { id: 'orange-08', label: 'LP8', pts: '360.0,423.5 362.0,425.0 362.0,441.0 359.0,445.0 350.5,444.5 348.0,441.5 350.0,425.0 353.0,423.0' },
+  { id: 'orange-09', label: 'LP9', pts: '806.0,392.0 808.0,396.0 809.0,411.0 806.0,414.0 798.5,414.0 796.0,399.0 801.0,394.0' },
+  { id: 'orange-10', label: 'LP10', pts: '355.0,391.5 361.0,393.0 365.5,399.5 365.5,409.0 362.5,414.0 357.5,414.0 352.5,411.0 353.0,397.5' },
+
+  // Butaca Preferente (yellow-01 a yellow-24)
+  { id: 'yellow-01', label: 'BP1', pts: '349.0,526.5 362.0,539.0 367.0,549.5 361.5,556.0 352.5,563.0 347.0,564.0 336.0,551.0 331.0,543.0 331.0,540.0 337.0,533.0' },
+  { id: 'yellow-02', label: 'BP2', pts: '812.0,527.0 823.0,534.5 828.5,540.5 827.0,546.5 817.0,561.0 811.0,564.0 808.0,563.5 797.0,556.0 793.5,549.5 798.5,539.0 808.0,528.5' },
+  { id: 'yellow-03', label: 'BP3', pts: '370.5,557.0 373.5,557.0 377.0,560.0 387.0,572.5 401.5,594.5 401.5,598.0 399.0,602.0 386.5,611.0 384.0,611.0 376.0,603.0 354.5,572.0 356.0,568.0' },
+  { id: 'yellow-04', label: 'BP4', pts: '791.0,558.5 803.5,567.5 806.0,571.5 794.0,590.5 779.0,608.5 773.5,613.0 760.0,604.5 755.5,599.0 756.0,595.5 782.0,561.0 785.5,558.0' },
+  { id: 'yellow-05', label: 'BP5', pts: '425.0,589.5 435.5,582.5 440.5,582.0 458.0,593.5 460.0,598.0 449.5,611.0 447.5,611.0 431.0,602.0 423.5,594.5' },
+  { id: 'yellow-06', label: 'BP6', pts: '721.5,584.5 733.5,595.0 732.0,600.5 714.5,611.5 706.5,614.5 696.5,604.0 696.0,600.0 716.5,585.0' },
+  { id: 'yellow-07', label: '7', pts: '366.0,626.0 371.0,633.5 383.0,625.0 377.5,618.0' },
+  { id: 'yellow-08', label: '8', pts: '781.5,618.0 776.0,625.0 788.0,633.5 793.0,626.0' },
+  { id: 'yellow-09', label: '9', pts: '359.5,617.5 365.0,625.0 376.5,616.5 371.5,609.0' },
+  { id: 'yellow-10', label: '10', pts: '787.5,609.0 782.5,616.5 794.0,625.0 799.5,617.5' },
+  { id: 'yellow-11', label: '11', pts: '352.5,608.0 358.0,615.0 369.5,607.0 364.5,599.5' },
+  { id: 'yellow-12', label: '12', pts: '794.5,599.5 789.5,607.0 801.0,615.0 806.5,608.0' },
+  { id: 'yellow-13', label: '13', pts: '346.5,599.0 351.5,606.5 363.5,598.0 358.0,590.5' },
+  { id: 'yellow-14', label: '14', pts: '801.0,590.5 795.5,598.0 807.5,606.5 812.5,599.0' },
+  { id: 'yellow-15', label: '15', pts: '339.5,590.0 344.5,597.0 356.5,588.5 351.0,581.5' },
+  { id: 'yellow-16', label: '16', pts: '808.0,581.5 802.5,588.5 814.5,597.0 819.5,590.0' },
+  { id: 'yellow-17', label: '17', pts: '333.0,580.5 338.0,588.0 350.0,579.5 344.5,572.0' },
+  { id: 'yellow-18', label: '18', pts: '814.5,572.0 809.0,579.5 821.0,588.0 826.0,580.5' },
+  { id: 'yellow-19', label: '19', pts: '326.0,571.0 331.0,578.0 343.0,569.5 337.5,562.5' },
+  { id: 'yellow-20', label: '20', pts: '821.5,562.5 816.0,569.5 828.0,578.0 833.0,571.0' },
+  { id: 'yellow-21', label: '21', pts: '319.5,562.0 324.5,569.5 336.5,561.0 331.0,553.5' },
+  { id: 'yellow-22', label: '22', pts: '828.0,553.5 822.5,561.0 834.5,569.5 839.5,562.0' },
+  { id: 'yellow-23', label: '23', pts: '312.5,552.5 318.0,560.0 330.0,551.5 324.5,544.5' },
+  { id: 'yellow-24', label: '24', pts: '834.5,544.5 829.0,551.5 841.0,560.0 846.5,552.5' },
+
+  // VIP / Local / Visitante (cyan, vip, teal)
+  { id: 'cyan-01', label: 'C1', pts: '615.0,732.0 617.5,737.5 618.5,759.5 609.5,762.0 586.5,762.0 585.0,755.5 585.5,734.5 587.0,733.0' },
+  { id: 'cyan-02', label: 'C2', pts: '540.5,734.0 543.0,731.5 575.0,734.0 574.5,761.0 572.0,762.5 554.5,762.5 539.0,760.0 538.0,753.0' },
+  { id: 'cyan-03', label: 'C3', pts: '644.0,729.0 646.0,732.5 648.5,750.0 648.0,756.5 644.0,758.5 632.5,759.0 629.0,754.0 628.0,733.0 632.0,730.0' },
+  { id: 'cyan-04', label: 'C4', pts: '513.0,728.5 526.0,729.5 529.5,732.5 527.5,756.0 525.0,758.5 514.5,758.5 508.5,756.0 508.0,750.0 510.5,733.0' },
+  { id: 'cyan-05', label: 'C5', pts: '671.0,652.5 679.0,664.0 680.5,671.0 671.5,677.5 664.5,679.0 655.0,667.0 653.5,662.5 665.0,653.5' },
+  { id: 'cyan-06', label: 'C6', pts: '492.5,651.0 504.5,659.0 504.5,664.0 494.5,677.5 489.5,677.5 481.5,672.0 478.0,666.0 486.5,654.5' },
+  { id: 'cyan-07', label: 'C7', pts: '694.5,636.5 704.5,648.0 705.0,654.0 695.0,661.0 690.5,661.5 687.5,659.5 683.0,652.5 680.0,645.0 690.0,637.0' },
+  { id: 'cyan-08', label: 'C8', pts: '464.5,635.0 472.0,637.0 479.5,643.0 479.5,647.0 467.5,660.5 460.5,658.0 453.0,651.5 454.5,647.0' },
+  { id: 'cyan-09', label: 'C9', pts: '719.5,619.5 731.0,632.5 731.0,636.5 722.0,643.5 717.0,644.5 708.0,635.5 705.5,627.0 713.0,621.5' },
+  { id: 'vip-01', label: 'V1', pts: '654.5,681.0 654.0,683.0 628.5,683.5 621.5,682.0 621.5,680.5 641.5,667.0 646.0,668.5' },
+  { id: 'vip-02', label: 'V2', pts: '505.0,678.0 514.0,666.5 517.0,665.5 535.0,676.5 539.5,682.0 534.0,683.5 505.0,683.0' },
+  { id: 'vip-03', label: 'V3', pts: '594.5,663.5 597.0,675.0 597.0,682.0 593.5,683.5 583.5,682.0 582.5,679.5 583.0,664.5' },
+  { id: 'vip-04', label: 'V4', pts: '576.0,664.0 576.5,681.5 573.5,683.0 562.5,682.0 561.5,679.0 564.5,664.5 568.5,663.0' },
+  { id: 'vip-05', label: 'V5', pts: '610.0,659.0 615.5,666.0 617.5,673.0 610.5,678.5 605.0,680.0 602.5,663.0 605.5,660.0' },
+  { id: 'vip-06', label: 'V6', pts: '549.0,657.5 553.0,658.0 557.5,661.5 556.0,673.0 554.0,678.0 548.0,676.0 542.0,671.5 542.0,668.5' },
+  { id: 'vip-07', label: 'V7', pts: '625.5,649.5 633.0,658.0 634.5,662.5 624.0,668.5 620.0,664.0 616.5,654.5 621.0,650.5' },
+  { id: 'vip-08', label: 'V8', pts: '536.5,648.0 543.0,653.0 543.0,655.5 537.5,665.0 533.5,666.5 527.0,663.0 525.0,659.5 534.5,648.0' },
+  { id: 'teal-01', label: 'VIP', pts: '664.5,693.0 663.0,700.0 502.0,700.5 498.5,698.5 498.5,691.0 502.5,689.5 663.0,690.0' },
+
+  // Planta Baja (steel-01 a steel-10)
+  { id: 'steel-01', label: 'PB1', pts: '690.5,721.0 695.0,741.0 695.5,751.5 681.0,755.0 659.5,757.5 655.5,740.5 655.0,727.0 657.0,725.5' },
+  { id: 'steel-02', label: 'PB2', pts: '468.0,720.5 497.5,724.5 502.0,728.5 497.5,757.0 473.0,754.0 462.5,751.0 463.5,738.5' },
+  { id: 'steel-03', label: 'PB3', pts: '732.5,712.0 736.0,721.5 739.0,742.0 710.5,749.0 705.0,749.0 700.5,733.0 699.0,719.5 705.0,716.5 729.0,711.5' },
+  { id: 'steel-04', label: 'PB4', pts: '426.5,711.5 459.0,718.0 459.0,725.5 453.0,749.0 437.5,746.5 419.5,741.0 419.0,737.0 423.5,717.5' },
+  { id: 'steel-05', label: 'PB5', pts: '772.0,701.0 774.5,704.5 780.5,728.0 777.5,730.5 767.0,734.0 748.0,738.0 740.5,710.0 742.0,708.5' },
+  { id: 'steel-06', label: 'PB6', pts: '386.5,700.5 391.5,700.5 418.0,709.0 412.5,734.5 410.0,738.0 382.5,731.0 378.0,727.0 381.0,713.5' },
+  { id: 'steel-07', label: 'PB7', pts: '816.0,686.5 818.5,689.5 825.0,710.5 799.5,722.5 788.5,724.0 783.5,711.0 781.0,698.5 784.5,696.0 807.0,688.0' },
+  { id: 'steel-08', label: 'PB8', pts: '343.0,685.0 355.5,688.0 377.5,697.0 375.0,710.5 370.0,724.0 360.5,723.0 333.0,711.0 333.0,708.0' },
+  { id: 'steel-09', label: 'PB9', pts: '857.5,668.0 867.5,685.0 868.0,689.5 843.0,703.5 833.5,706.5 824.5,686.5 824.0,682.0' },
+  { id: 'steel-10', label: 'PB10', pts: '303.5,668.0 329.5,678.0 335.0,681.5 324.5,707.5 316.5,705.0 292.5,691.5 294.0,685.0' },
+
+  // Planta Alta y Suites (navy-01 a navy-43)
+  { id: 'navy-01', label: '1', pts: '337.5,736.0 351.0,741.5 346.5,752.0 333.5,747.0' },
+  { id: 'navy-02', label: '2', pts: '355.0,743.5 368.5,748.5 368.0,753.0 365.0,759.0 359.0,758.0 351.0,754.0' },
+  { id: 'navy-03', label: '3', pts: '804.5,745.5 808.5,756.5 794.0,761.0 791.0,754.0 791.0,749.5 801.0,745.5' },
+  { id: 'navy-04', label: '4', pts: '372.5,750.0 386.5,755.0 383.5,766.0 369.5,761.5 370.0,756.0' },
+  { id: 'navy-05', label: '5', pts: '786.5,751.5 790.0,763.0 780.0,767.0 775.0,767.5 773.0,763.0 772.5,756.5 774.0,755.0' },
+  { id: 'navy-06', label: '6', pts: '390.5,757.0 394.0,757.0 405.5,761.0 403.0,771.5 399.0,772.0 387.5,768.0' },
+  { id: 'navy-07', label: '7', pts: '768.0,758.0 771.0,769.5 756.0,773.5 753.0,766.0 753.0,762.5' },
+  { id: 'navy-08', label: '8', pts: '335.0,762.0 359.0,771.5 359.0,775.0 348.0,801.0 344.0,800.0 324.5,787.0 326.0,781.0' },
+  { id: 'navy-09', label: '9', pts: '409.0,762.0 424.0,766.0 421.5,778.0 406.5,774.0' },
+  { id: 'navy-10', label: '10', pts: '749.0,763.5 751.5,775.5 735.5,779.5 733.5,767.5' },
+  { id: 'navy-11', label: '11', pts: '428.0,768.0 443.5,771.0 443.0,778.5 441.0,782.5 425.5,779.0' },
+  { id: 'navy-12', label: '12', pts: '729.0,769.0 731.0,780.5 716.0,784.0 714.0,779.0 713.5,772.0' },
+  { id: 'navy-13', label: '13', pts: '447.0,772.0 463.0,775.0 462.0,787.0 445.0,784.0' },
+  { id: 'navy-14', label: '14', pts: '710.0,773.0 712.0,785.0 695.5,788.0 694.0,783.0 694.5,776.0' },
+  { id: 'navy-15', label: '15', pts: '368.0,775.5 373.5,776.0 394.0,783.5 382.0,820.5 375.0,818.0 356.0,807.0 357.0,801.0' },
+  { id: 'navy-16', label: '16', pts: '467.5,776.5 484.0,779.0 482.5,791.0 466.0,788.0' },
+  { id: 'navy-17', label: '17', pts: '794.0,775.5 801.0,791.5 806.0,807.5 787.5,818.0 780.0,820.5 768.0,784.0 786.5,777.0' },
+  { id: 'navy-18', label: '18', pts: '689.5,777.0 691.0,789.0 674.5,791.0 673.5,779.5' },
+  { id: 'navy-19', label: '19', pts: '488.0,779.5 504.0,781.5 503.5,793.0 487.0,792.0' },
+  { id: 'navy-20', label: '20', pts: '670.0,781.0 671.0,792.0 654.5,794.0 653.5,782.5 664.5,780.5' },
+  { id: 'navy-21', label: '21', pts: '508.0,782.5 525.0,784.0 524.0,796.0 507.5,794.5' },
+  { id: 'navy-22', label: '22', pts: '649.0,783.0 650.0,795.0 633.0,796.0 632.5,784.0' },
+  { id: 'navy-23', label: '23', pts: '528.5,785.0 545.0,785.5 545.0,798.0 528.0,797.0' },
+  { id: 'navy-24', label: '24', pts: '629.0,785.0 629.0,797.0 612.0,797.5 612.0,786.0' },
+  { id: 'navy-25', label: '25', pts: '566.5,787.0 566.0,798.5 554.5,799.0 548.5,797.5 549.5,786.0' },
+  { id: 'navy-26', label: '26', pts: '608.0,786.0 608.5,798.0 591.0,799.0 591.0,787.0' },
+  { id: 'navy-27', label: '27', pts: '402.5,786.5 428.5,793.0 428.0,799.5 418.0,837.0 408.0,834.0 390.0,825.0 396.0,803.5' },
+  { id: 'navy-28', label: '28', pts: '587.0,787.0 586.5,799.0 570.0,799.0 570.0,787.0' },
+  { id: 'navy-29', label: '29', pts: '759.5,787.0 772.0,825.0 754.0,834.0 744.0,837.0 736.5,811.5 733.0,793.5 751.5,788.0' },
+  { id: 'navy-30', label: '30', pts: '438.0,795.5 464.5,801.0 456.0,851.0 426.5,841.0 431.0,818.5' },
+  { id: 'navy-31', label: '31', pts: '724.0,796.0 735.5,840.0 717.5,848.0 705.5,851.0 697.0,801.0' },
+  { id: 'navy-32', label: '32', pts: '473.5,802.5 498.5,806.0 500.0,807.5 493.5,860.5 475.0,857.0 464.5,853.5' },
+  { id: 'navy-33', label: '33', pts: '688.0,803.0 697.0,853.5 668.5,860.5 662.0,807.0 668.5,805.0' },
+  { id: 'navy-34', label: '34', pts: '509.0,807.5 530.0,809.0 535.5,811.0 532.0,867.0 520.5,866.0 502.0,862.0 507.0,816.0' },
+  { id: 'navy-35', label: '35', pts: '652.5,807.5 655.0,818.5 659.5,862.5 636.5,867.0 630.0,867.0 626.0,810.0' },
+  { id: 'navy-36', label: '36', pts: '544.0,811.0 576.0,811.5 576.0,870.5 541.0,868.0' },
+  { id: 'navy-37', label: '37', pts: '617.0,810.5 621.0,868.0 607.0,870.0 585.0,870.5 584.0,868.0 584.5,812.0' },
+  { id: 'navy-38', label: '38', pts: '269.0,727.0 273.0,728.0 293.0,740.5 286.5,757.0 276.5,750.5 262.5,737.0' },
+  { id: 'navy-39', label: '39', pts: '894.0,727.0 899.0,734.5 899.5,737.5 884.5,752.0 876.0,757.5 869.0,743.5 869.0,741.0 891.0,727.5' },
+  { id: 'navy-40', label: '40', pts: '300.5,745.5 326.5,757.5 326.5,760.5 317.5,781.0 308.0,775.5 293.5,764.0' },
+  { id: 'navy-41', label: '41', pts: '861.5,746.5 868.0,760.5 868.5,764.5 849.0,780.0 845.0,781.0 836.0,762.0 835.5,758.0 858.5,746.5' },
+  { id: 'navy-42', label: '42', pts: '827.5,762.5 838.0,785.5 838.0,788.0 814.0,802.5 802.5,772.0' },
+  { id: 'navy-43', label: '43', pts: '825.5,747.0 812.5,752.0 808.0,741.5 821.5,736.0' },
 ];
 
 export interface CharrosStadiumMapProps {
@@ -33,6 +187,7 @@ export const CharrosStadiumMap: React.FC<CharrosStadiumMapProps> = ({
   soldOutSectionsSet,
   highlightOnlyActiveSection = false,
 }) => {
+  const { theme } = useTheme();
   const [hoveredInfo, setHoveredInfo] = useState<{ id: string; zone: string } | null>(null);
   const [showZoneGuide, setShowZoneGuide] = useState<boolean>(false);
 
@@ -159,18 +314,22 @@ export const CharrosStadiumMap: React.FC<CharrosStadiumMapProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-2 px-1">
         <div className="flex items-center gap-2">
           {activeSectionNumber ? (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs font-black text-amber-500 shadow-sm">
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black shadow-xs border ${
+              theme === 'light'
+                ? 'bg-amber-50 border-amber-300 text-amber-900'
+                : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+            }`}>
               <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
               Sección: {activeSectionNumber}
             </span>
           ) : (
-            <span className="text-xs font-bold text-slate-400">
+            <span className={`text-xs font-bold ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
               Toca cualquier sección para ver butacas
             </span>
           )}
 
           {activeZoneMeta && (
-            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-lg border ${activeZoneMeta.badgeBg}`}>
+            <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-lg border ${activeZoneMeta.badgeBg}`}>
               {activeZoneMeta.name} • ${getZonePrice(activeZoneMeta.name, event)} MXN
             </span>
           )}
@@ -202,18 +361,26 @@ export const CharrosStadiumMap: React.FC<CharrosStadiumMapProps> = ({
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onDoubleClick={handleDoubleClick}
-        className={`relative w-full rounded-2xl bg-[#e9eef2] p-2 sm:p-4 border border-slate-300 shadow-xl overflow-hidden select-none touch-none ${
+        className={`relative w-full rounded-2xl p-2 sm:p-4 border shadow-xl overflow-hidden select-none touch-none transition-colors ${
+          theme === 'light'
+            ? 'bg-[#eef2f6] border-slate-300'
+            : 'bg-[#0F1626] border-slate-700'
+        } ${
           isDragging ? 'cursor-grabbing' : 'cursor-grab'
         }`}
         title="Arrastra para mover • Rueda o doble clic en cualquier zona para hacer zoom"
       >
         {/* Banner flotante con información al pasar el cursor */}
         {hoveredInfo && !isDragging && (
-          <div className="absolute top-4 left-4 z-20 pointer-events-none px-3 py-2 rounded-xl bg-slate-900/95 border border-slate-700 shadow-2xl backdrop-blur-md text-xs animate-in fade-in zoom-in-95 duration-100">
-            <div className="font-black text-amber-400">
+          <div className={`absolute top-4 left-4 z-20 pointer-events-none px-3 py-2 rounded-xl border shadow-2xl backdrop-blur-md text-xs animate-in fade-in zoom-in-95 duration-100 ${
+            theme === 'light'
+              ? 'bg-white/95 border-slate-300 text-slate-900 shadow-slate-400/30'
+              : 'bg-slate-900/95 border-slate-700 text-white'
+          }`}>
+            <div className={`font-black ${theme === 'light' ? 'text-amber-600' : 'text-amber-400'}`}>
               {hoveredInfo.id}
             </div>
-            <div className="text-slate-300 font-medium mt-0.5">
+            <div className={`font-medium mt-0.5 ${theme === 'light' ? 'text-slate-600' : 'text-slate-300'}`}>
               {(() => {
                 const zoneName = CHARROS_SVG_ZONE_MAP[hoveredInfo.zone] || hoveredInfo.zone;
                 const zoneMeta = CHARROS_ZONES[zoneName];
@@ -223,8 +390,8 @@ export const CharrosStadiumMap: React.FC<CharrosStadiumMapProps> = ({
                 const price = getZonePrice(zoneMeta.name, event);
                 return (
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-white">{zoneMeta.name}</span>
-                    <span className="text-amber-400 font-black">${price} MXN</span>
+                    <span className={`font-semibold ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>{zoneMeta.name}</span>
+                    <span className={`font-black ${theme === 'light' ? 'text-amber-600' : 'text-amber-400'}`}>${price} MXN</span>
                   </div>
                 );
               })()}
@@ -233,7 +400,11 @@ export const CharrosStadiumMap: React.FC<CharrosStadiumMapProps> = ({
         )}
 
         {/* Mini pista visual en la esquina inferior */}
-        <div className="absolute bottom-2.5 right-2.5 z-10 pointer-events-none px-2 py-1 rounded-lg bg-slate-900/70 border border-slate-700/60 backdrop-blur-xs text-[10px] font-medium text-slate-300">
+        <div className={`absolute bottom-2.5 right-2.5 z-10 pointer-events-none px-2 py-1 rounded-lg border backdrop-blur-xs text-[10px] font-bold ${
+          theme === 'light'
+            ? 'bg-white/85 border-slate-300 text-slate-700 shadow-xs'
+            : 'bg-slate-900/70 border-slate-700/60 text-slate-300'
+        }`}>
           Arrastra para mover • Zoom con rueda/pellizco
         </div>
 
@@ -453,6 +624,50 @@ export const CharrosStadiumMap: React.FC<CharrosStadiumMapProps> = ({
               <polygon id="marca-17" fill="#ffffff" points="579.5,365.5 586.0,372.0 579.5,378.5 573.0,372.0" />
               <polygon id="marca-18" fill="#ffffff" points="474.0,468.5 480.5,475.0 474.0,481.5 467.5,475.0" />
               <polygon id="marca-19" fill="#ffffff" points="684.0,468.5 690.5,475.0 684.0,481.5 677.5,475.0" />
+            </g>
+
+            {/* Capa de Numeración de Bloques con alto contraste para Estadio Charros */}
+            <g id="numeracion-bloques" pointerEvents="none" className="select-none font-sports">
+              {CHARROS_BLOCK_LABELS.map((item) => {
+                const pairs = item.pts.trim().split(/\s+/).map((p) => {
+                  const [x, y] = p.split(',').map(Number);
+                  return { x, y };
+                });
+                const sum = pairs.reduce((acc, c) => ({ x: acc.x + c.x, y: acc.y + c.y }), { x: 0, y: 0 });
+                const cx = sum.x / pairs.length;
+                const cy = sum.y / pairs.length;
+
+                const isShort = item.label.length <= 2;
+                const fontSize = item.id.startsWith('navy')
+                  ? '8.5'
+                  : isShort
+                    ? '11'
+                    : item.label.length === 3
+                      ? '9.5'
+                      : '8.5';
+
+                return (
+                  <text
+                    key={`charros-label-${item.id}`}
+                    x={cx}
+                    y={cy + 0.5}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fill="#ffffff"
+                    fontSize={fontSize}
+                    fontWeight="900"
+                    style={{
+                      paintOrder: 'stroke fill',
+                      stroke: '#0f172a',
+                      strokeWidth: '2.4px',
+                      strokeLinejoin: 'round',
+                      userSelect: 'none',
+                    }}
+                  >
+                    {item.label}
+                  </text>
+                );
+              })}
             </g>
           </svg>
         </div>

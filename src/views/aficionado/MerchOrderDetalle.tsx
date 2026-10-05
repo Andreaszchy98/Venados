@@ -406,7 +406,7 @@ TOTAL PAGADO:    $${order.total.toFixed(2)} MXN
                         <span className={`font-bold block ${theme === 'light' ? 'text-slate-950' : 'text-white'}`}>{title}</span>
                         {size && (
                           <span className={`text-[11px] font-mono ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
-                            Talla: {size}
+                            Talla: {size.replace(/^talla\s+/i, '')}
                           </span>
                         )}
                       </div>

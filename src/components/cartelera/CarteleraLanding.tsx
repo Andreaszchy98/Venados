@@ -47,6 +47,8 @@ interface CarteleraLandingProps {
   onSelectTab?: (tab: 'cartelera' | 'boletos' | 'tienda' | 'comida') => void;
   onTicketPurchased?: () => void;
   showBottomNav?: boolean;
+  selectedVenueId?: string;
+  onSelectVenue?: (venueId: string) => void;
 }
 
 export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
@@ -59,6 +61,8 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
   onSelectTab,
   onTicketPurchased,
   showBottomNav = true,
+  selectedVenueId: propSelectedVenueId,
+  onSelectVenue,
 }) => {
   const { theme } = useTheme();
   // Sedes disponibles
@@ -84,12 +88,26 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
 
   // Selector de Sede/Estadio puntual ('todos' o venueId específico)
   const [selectedVenueId, setSelectedVenueId] = useState<string>(() => {
+    if (propSelectedVenueId) return propSelectedVenueId;
+    if (user?.browsingVenueId) return user.browsingVenueId;
+    if (user?.venueId) return user.venueId;
     try {
-      return localStorage.getItem('vxp_selected_venue_id') || 'todos';
+      return localStorage.getItem('vxp_selected_venue_id') || DEFAULT_VENUE_ID;
     } catch {
-      return 'todos';
+      return DEFAULT_VENUE_ID;
     }
   });
+
+  // Sincronizar con propSelectedVenueId proveniente de AficionadoView
+  useEffect(() => {
+    if (propSelectedVenueId && propSelectedVenueId !== selectedVenueId) {
+      setSelectedVenueId(propSelectedVenueId);
+      const matchedVenue = venues.find((v) => v.id === propSelectedVenueId);
+      if (matchedVenue?.city) {
+        setSelectedCity(matchedVenue.city);
+      }
+    }
+  }, [propSelectedVenueId, venues]);
 
   // Control de apertura del menú desplegable unificado de ciudad y recinto
   const [isLocationOpen, setIsLocationOpen] = useState(false);
@@ -171,15 +189,22 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
     if (newCity !== 'todas') {
       const match = venues.filter((v) => (v.city || 'Mazatlán').toLowerCase() === newCity.toLowerCase());
       if (match.length === 1) {
-        setSelectedVenueId(match[0].id);
+        const targetVenueId = match[0].id;
+        setSelectedVenueId(targetVenueId);
         try {
-          localStorage.setItem('vxp_selected_venue_id', match[0].id);
+          localStorage.setItem('vxp_selected_venue_id', targetVenueId);
         } catch {}
-      } else if (selectedVenueId !== 'todos' && !match.some((v) => v.id === selectedVenueId)) {
-        setSelectedVenueId(match.length > 1 ? 'todos' : (match[0]?.id || 'todos'));
-        try {
-          localStorage.setItem('vxp_selected_venue_id', match.length > 1 ? 'todos' : (match[0]?.id || 'todos'));
-        } catch {}
+        onSelectVenue?.(targetVenueId);
+      } else if (match.length > 1) {
+        if (selectedVenueId === 'todos' || !match.some((v) => v.id === selectedVenueId)) {
+          setSelectedVenueId('todos');
+          if (match[0]?.id) {
+            try {
+              localStorage.setItem('vxp_selected_venue_id', match[0].id);
+            } catch {}
+            onSelectVenue?.(match[0].id);
+          }
+        }
       }
     }
   };
@@ -187,19 +212,29 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
   // Auto-seleccionar el único recinto si no hay más opciones en la ciudad
   useEffect(() => {
     if (venuesInCity.length === 1 && selectedVenueId === 'todos') {
-      setSelectedVenueId(venuesInCity[0].id);
+      const singleVenueId = venuesInCity[0].id;
+      setSelectedVenueId(singleVenueId);
       try {
-        localStorage.setItem('vxp_selected_venue_id', venuesInCity[0].id);
+        localStorage.setItem('vxp_selected_venue_id', singleVenueId);
       } catch {}
+      onSelectVenue?.(singleVenueId);
     }
-  }, [venuesInCity, selectedVenueId]);
+  }, [venuesInCity, selectedVenueId, onSelectVenue]);
 
   // Manejar cambio de sede dentro de la ciudad
   const handleSwitchVenue = (venueId: string) => {
     setSelectedVenueId(venueId);
     try {
-      localStorage.setItem('vxp_selected_venue_id', venueId);
+      if (venueId && venueId !== 'todos') {
+        localStorage.setItem('vxp_selected_venue_id', venueId);
+      }
     } catch {}
+    if (venueId && venueId !== 'todos') {
+      onSelectVenue?.(venueId);
+    } else if (venueId === 'todos' && venuesInCity.length > 0) {
+      // Si se selecciona 'todos', asegurar que la sede activa para Comida/Tienda sea la principal de la ciudad
+      onSelectVenue?.(venuesInCity[0].id);
+    }
   };
 
   // Resumen claro y sin truncar de ubicación para la pastilla selectora
@@ -385,6 +420,14 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
     }
   };
 
+  // Abrir selector de mapa de asientos sincronizando la sede del evento
+  const handleOpenMapEvent = (ev: VenueEvent) => {
+    setSelectedMapEvent(ev);
+    if (ev.venueId && ev.venueId !== selectedVenueId) {
+      handleSwitchVenue(ev.venueId);
+    }
+  };
+
   // Precio mínimo inicial
   const getMinPrice = (ev: VenueEvent) => {
     if (ev.priceTiers && ev.priceTiers.length > 0) {
@@ -399,7 +442,7 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
     if (initialEventId && allEvents.length > 0) {
       const match = allEvents.find((e) => e.id === initialEventId);
       if (match) {
-        setSelectedMapEvent(match);
+        handleOpenMapEvent(match);
         onClearInitialEvent?.();
       }
     }
@@ -444,179 +487,6 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
         </div>
       ) : (
         <>
-          {/* 1. SELECTOR COMBINADO DE CIUDAD Y SEDE EN UNA SOLA FILA */}
-          <div className="max-w-6xl mx-auto mb-3">
-        <div
-          id="barra-seleccion-ciudad"
-          className={`flex items-center justify-between gap-2 sm:gap-4 px-3 py-2 sm:px-4 sm:py-2.5 rounded-2xl border transition-colors ${
-            theme === 'light'
-              ? 'bg-white border-slate-200 shadow-xs'
-              : 'bg-[#101625] border-slate-800 shadow-sm'
-          }`}
-        >
-          {/* Selector Combinado Desplegable: Ciudad · Sede */}
-          <div className="relative min-w-0 flex-1 sm:flex-initial">
-            <button
-              id="combined-location-selector-btn"
-              type="button"
-              onClick={() => setIsLocationOpen((prev) => !prev)}
-              className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-98 max-w-full ${
-                theme === 'light'
-                  ? 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-900'
-                  : 'bg-[#182032] hover:bg-[#202B42] border-slate-700 text-slate-100'
-              }`}
-              title="Filtrar por ciudad y recinto"
-              aria-expanded={isLocationOpen}
-              aria-haspopup="listbox"
-            >
-              <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0" />
-              <span className="truncate max-w-[170px] min-[390px]:max-w-[220px] sm:max-w-sm">
-                {locationSummaryLabel}
-              </span>
-              <ChevronDown
-                className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${
-                  isLocationOpen ? 'rotate-180 text-red-500' : theme === 'light' ? 'text-slate-500' : 'text-slate-400'
-                }`}
-              />
-            </button>
-
-            {/* Menú Desplegable con Ciudad y Sedes */}
-            {isLocationOpen && (
-              <>
-                {/* Backdrop para cerrar al hacer clic afuera */}
-                <div
-                  className="fixed inset-0 z-40"
-                  onClick={() => setIsLocationOpen(false)}
-                />
-                <div
-                  role="listbox"
-                  className={`absolute left-0 top-full mt-2 w-72 sm:w-84 max-w-[calc(100vw-36px)] rounded-2xl border z-50 p-2.5 space-y-2 animate-in fade-in zoom-in-95 duration-150 ${
-                    theme === 'light'
-                      ? 'bg-white border-slate-200 shadow-xl text-slate-900'
-                      : 'bg-[#101625] border-slate-700 shadow-2xl text-slate-100'
-                  }`}
-                >
-                  {/* Selector rápido de Ciudad */}
-                  <div>
-                    <span className={`text-[10px] font-extrabold uppercase tracking-wider px-1 block mb-1.5 ${
-                      theme === 'light' ? 'text-slate-500' : 'text-slate-400'
-                    }`}>
-                      1. Selecciona Ciudad
-                    </span>
-                    <div className="flex flex-wrap gap-1">
-                      <button
-                        type="button"
-                        onClick={() => handleCityChange('todas')}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-                          selectedCity === 'todas'
-                            ? 'bg-red-600 text-white shadow-xs'
-                            : theme === 'light'
-                            ? 'bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200'
-                            : 'bg-[#182032] text-slate-300 hover:text-white border border-slate-700'
-                        }`}
-                      >
-                        Todas
-                      </button>
-                      {availableCities.map((c) => (
-                        <button
-                          key={c}
-                          type="button"
-                          onClick={() => handleCityChange(c)}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-                            selectedCity.toLowerCase() === c.toLowerCase()
-                              ? 'bg-red-600 text-white shadow-xs'
-                              : theme === 'light'
-                              ? 'bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200'
-                              : 'bg-[#182032] text-slate-300 hover:text-white border border-slate-700'
-                          }`}
-                        >
-                          {c}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Recintos de la Ciudad seleccionada */}
-                  <div className={`border-t pt-2 ${theme === 'light' ? 'border-slate-200' : 'border-slate-800'}`}>
-                    <span className={`text-[10px] font-extrabold uppercase tracking-wider px-1 block mb-1.5 ${
-                      theme === 'light' ? 'text-slate-500' : 'text-slate-400'
-                    }`}>
-                      2. SELECCIONA RECINTO ({selectedVenueHeaderLabel})
-                    </span>
-                    <div className="space-y-1 max-h-52 overflow-y-auto pr-0.5">
-                      {/* Solo mostrar 'Todos los recintos' si hay más de 1 recinto disponible en la lista */}
-                      {venuesInCity.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            handleSwitchVenue('todos');
-                            setIsLocationOpen(false);
-                          }}
-                          className={`w-full px-2.5 py-1.5 rounded-xl text-left text-xs font-bold flex items-center justify-between transition-colors cursor-pointer ${
-                            selectedVenueId === 'todos'
-                              ? theme === 'light'
-                                ? 'bg-red-50 text-red-700 border border-red-200'
-                                : 'bg-red-600/20 text-red-300 border border-red-500/50'
-                              : theme === 'light'
-                              ? 'hover:bg-slate-100 text-slate-700'
-                              : 'hover:bg-[#182032] text-slate-300'
-                          }`}
-                        >
-                          <span>Todos los recintos</span>
-                          {selectedVenueId === 'todos' && <Check className="w-3.5 h-3.5 text-red-500" />}
-                        </button>
-                      )}
-
-                      {venuesInCity.map((v) => {
-                        const isSel = selectedVenueId === v.id;
-                        return (
-                          <button
-                            key={v.id}
-                            type="button"
-                            onClick={() => {
-                              handleSwitchVenue(v.id);
-                              setIsLocationOpen(false);
-                            }}
-                            className={`w-full px-2.5 py-1.5 rounded-xl text-left text-xs flex items-center justify-between transition-colors cursor-pointer ${
-                              isSel
-                                ? theme === 'light'
-                                  ? 'bg-red-50 text-red-700 border border-red-200 font-bold'
-                                  : 'bg-red-600/20 text-red-300 border border-red-500/50 font-bold'
-                                : theme === 'light'
-                                ? 'hover:bg-slate-100 text-slate-700'
-                                : 'hover:bg-[#182032] text-slate-300'
-                            }`}
-                          >
-                            <span className="truncate">{v.name}</span>
-                            {isSel && <Check className="w-3.5 h-3.5 text-red-500 shrink-0" />}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Información de eventos (alineado y sin desfase) */}
-          <div className={`flex items-center gap-1.5 shrink-0 px-2.5 py-1 rounded-xl border text-xs ${
-            theme === 'light'
-              ? 'bg-slate-100 border-slate-200 text-slate-800'
-              : 'bg-[#0A0E17]/60 border-slate-800/80 text-white'
-          }`}>
-            <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
-            <span className={`font-extrabold ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>
-              {filteredEvents.length}
-            </span>
-            <span className={`font-medium whitespace-nowrap ${theme === 'light' ? 'text-slate-600' : 'text-slate-300'}`}>
-              {filteredEvents.length === 1 ? 'evento' : 'eventos'}
-            </span>
-            <span className={`text-[11px] hidden sm:inline ${theme === 'light' ? 'text-slate-500' : 'text-slate-500'}`}>en cartelera</span>
-          </div>
-        </div>
-      </div>
-
       {/* 2. FILA DE SELECCIÓN DE VISTA (CARTELERA VS MARCADORES FINALIZADOS) Y FILTROS */}
       <div className="max-w-6xl mx-auto mb-4 space-y-3">
         {/* Banner Publicitario Hero de Patrocinador Oficial */}
@@ -784,7 +654,7 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
 
                   {/* Contenedor de Imagen Promocional */}
                   <div
-                    onClick={() => setSelectedMapEvent(ev)}
+                    onClick={() => handleOpenMapEvent(ev)}
                     className="relative w-full bg-[#060911] overflow-hidden cursor-pointer flex items-center justify-center group/poster"
                   >
                     {/* Fondo difuminado adaptativo con los colores del flyer */}
@@ -825,7 +695,7 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
                     <div>
                       {/* Título del Encuentro */}
                       <h3
-                        onClick={() => setSelectedMapEvent(ev)}
+                        onClick={() => handleOpenMapEvent(ev)}
                         className={`text-xs sm:text-sm font-black line-clamp-2 leading-tight transition-colors cursor-pointer ${
                           theme === 'light'
                             ? 'text-slate-900 hover:text-red-600'
@@ -939,7 +809,7 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
                     }`}>
                       <button
                         type="button"
-                        onClick={() => setSelectedMapEvent(ev)}
+                        onClick={() => handleOpenMapEvent(ev)}
                         className="w-full py-2.5 px-3 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white rounded-xl font-sports font-bold text-xs flex items-center justify-center gap-2 shadow-sm shadow-red-950/20 transition-all cursor-pointer active:scale-98 uppercase tracking-wider"
                         title="Seleccionar butacas específicas en el mapa interactivo del estadio"
                       >
@@ -953,95 +823,6 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
             })}
           </div>
         )}
-
-        {/* TARJETAS PROMOCIONALES: ALIMENTOS EN BUTACA & TIENDA OFICIAL */}
-        <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Promoción de Alimentos en Butaca */}
-          <div
-            onClick={() => (onSelectStore ? onSelectStore('comida') : onOpenAuth('comida'))}
-            className={`group relative overflow-hidden rounded-3xl p-5 flex items-center justify-between gap-4 cursor-pointer transition-all duration-300 border shadow-md hover:shadow-xl ${
-              theme === 'light'
-                ? 'bg-[#FFFBEB] border-amber-300 hover:border-amber-400'
-                : 'bg-[#101625] border-slate-800 hover:border-amber-400/60'
-            }`}
-          >
-            <div className="space-y-1.5 z-10">
-              <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border inline-block ${
-                theme === 'light'
-                  ? '!text-amber-950 bg-amber-200/80 border-amber-400 font-black'
-                  : 'text-amber-300 bg-amber-400/20 border-amber-400/30'
-              }`}>
-                🍿 Alimentos & Bebidas
-              </span>
-              <h4 className={`text-base font-black tracking-tight ${
-                theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
-              }`}>
-                Comanda sin filas en Butaca
-              </h4>
-              <p className={`text-xs line-clamp-2 leading-relaxed ${
-                theme === 'light' ? '!text-[#334155] text-slate-700' : 'text-slate-200'
-              }`}>
-                Pide hot dogs, nachos, esquites y bebidas frías con entrega directa a tu asiento.
-              </p>
-              <div className={`text-xs font-black flex items-center gap-1 pt-1 group-hover:translate-x-1 transition-transform ${
-                theme === 'light' ? '!text-amber-900 text-amber-900' : 'text-amber-300'
-              }`}>
-                <span>Ver menú de concesiones</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </div>
-            </div>
-            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 border transition-transform group-hover:scale-105 ${
-              theme === 'light'
-                ? 'bg-amber-200/90 border-amber-400 text-amber-950 shadow-sm'
-                : 'bg-amber-500/20 border-amber-500/40 text-amber-300'
-            }`}>
-              <Utensils className="w-8 h-8" />
-            </div>
-          </div>
-
-          {/* Promoción de Tienda Oficial */}
-          <div
-            onClick={() => (onSelectStore ? onSelectStore('tienda') : onOpenAuth('tienda'))}
-            className={`group relative overflow-hidden rounded-3xl p-5 flex items-center justify-between gap-4 cursor-pointer transition-all duration-300 border shadow-md hover:shadow-xl ${
-              theme === 'light'
-                ? 'bg-[#FFF1F2] border-rose-300 hover:border-rose-400'
-                : 'bg-[#151320] border-slate-800 hover:border-red-500/80'
-            }`}
-          >
-            <div className="space-y-1.5 z-10">
-              <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border inline-block ${
-                theme === 'light'
-                  ? '!text-rose-950 bg-rose-200/80 border-rose-400 font-black'
-                  : 'text-red-200 bg-red-800/50 border-red-500/40'
-              }`}>
-                🛍️ Tienda Oficial
-              </span>
-              <h4 className={`text-base font-black tracking-tight ${
-                theme === 'light' ? '!text-[#0F172A] text-slate-900' : 'text-white'
-              }`}>
-                Jerseys y Gorras Oficiales
-              </h4>
-              <p className={`text-xs line-clamp-2 leading-relaxed ${
-                theme === 'light' ? '!text-[#334155] text-slate-700' : 'text-slate-200'
-              }`}>
-                Uniformes originales, souvenirs y gorras con envíos y recolección rápida.
-              </p>
-              <div className={`text-xs font-black flex items-center gap-1 pt-1 group-hover:translate-x-1 transition-transform ${
-                theme === 'light' ? '!text-rose-900 text-rose-900' : 'text-red-300'
-              }`}>
-                <span>Ir a la tienda oficial</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </div>
-            </div>
-            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 border transition-transform group-hover:scale-105 ${
-              theme === 'light'
-                ? 'bg-rose-200/90 border-rose-400 text-rose-950 shadow-sm'
-                : 'bg-red-600/25 border-red-500/40 text-red-300'
-            }`}>
-              <ShoppingBag className="w-8 h-8" />
-            </div>
-          </div>
-        </div>
 
         {/* Banners Inline Grid de Patrocinadores Oficiales */}
         <InlineAdGrid
@@ -1233,7 +1014,9 @@ export const CarteleraLanding: React.FC<CarteleraLandingProps> = ({
                   onClick={() => {
                     const ev = synopsisEvent;
                     setSynopsisEvent(null);
-                    setSelectedMapEvent(ev);
+                    if (ev) {
+                      handleOpenMapEvent(ev);
+                    }
                   }}
                   className="w-full py-3.5 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-red-950/50 cursor-pointer transition-all active:scale-98 uppercase tracking-wider font-sports"
                 >

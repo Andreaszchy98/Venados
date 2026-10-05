@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   StadiumStand,
   MenuItem,
@@ -25,6 +25,7 @@ import {
 import { normalizeGoogleDriveImageUrl } from '../../lib/imageUtils';
 import { DEFAULT_VENUE_ID } from '../../lib/defaultVenue';
 import { getVenueById } from '../../lib/venues';
+import { getStadiumStoreProfile } from '../../lib/stadiumStoreProfiles';
 import { useTheme } from '../../context/ThemeContext';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import { CardPaymentModal } from '../../components/shared/CardPaymentModal';
@@ -77,42 +78,37 @@ interface StandCartItem {
 
 type CartsByStand = Record<string, StandCartItem[]>;
 
-const CARTS_STORAGE_KEY = 'vxp_food_carts_by_stand';
+const getFoodCartsStorageKey = (venueId?: string) => `vxp_food_carts_${venueId || DEFAULT_VENUE_ID}`;
 const SELECTED_STAND_KEY = 'vxp_food_selected_stand_id';
 
-const loadCartsFromStorage = (): CartsByStand => {
+const loadCartsFromStorage = (venueId: string): CartsByStand => {
   try {
-    const raw = localStorage.getItem(CARTS_STORAGE_KEY) || sessionStorage.getItem(CARTS_STORAGE_KEY);
+    const key = getFoodCartsStorageKey(venueId);
+    const raw = localStorage.getItem(key) || sessionStorage.getItem(key);
     if (raw) {
       return JSON.parse(raw);
     }
-    // Migración retrocompatible del carrito plano previo
-    const legacy = sessionStorage.getItem('vxp_food_cart');
-    if (legacy) {
-      const parsedLegacy = JSON.parse(legacy);
-      if (Array.isArray(parsedLegacy) && parsedLegacy.length > 0) {
-        const standId = parsedLegacy[0]?.item?.standId || 'legacy';
-        return { [standId]: parsedLegacy };
-      }
-    }
   } catch (e) {
-    console.warn('Error cargando carritos guardados por negocio:', e);
+    console.warn('Error cargando carritos guardados por negocio y sede:', e);
   }
   return {};
 };
 
-const saveCartsToStorage = (carts: CartsByStand) => {
+const saveCartsToStorage = (venueId: string, carts: CartsByStand) => {
   try {
+    const key = getFoodCartsStorageKey(venueId);
     const serialized = JSON.stringify(carts);
-    localStorage.setItem(CARTS_STORAGE_KEY, serialized);
-    sessionStorage.setItem(CARTS_STORAGE_KEY, serialized);
+    localStorage.setItem(key, serialized);
+    sessionStorage.setItem(key, serialized);
   } catch (e) {
-    console.warn('Error guardando carritos en storage:', e);
+    console.warn('Error guardando carritos en storage por sede:', e);
   }
 };
 
 export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGoToTickets, onRequireAuth }) => {
   const { theme } = useTheme();
+  const activeVenueId = user.browsingVenueId || user.venueId || DEFAULT_VENUE_ID;
+
   const [stands, setStands] = useState<StadiumStand[]>([]);
   const [selectedStand, setSelectedStand] = useState<StadiumStand | null>(null);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -126,8 +122,27 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
     price?: number;
   } | null>(null);
   
-  // Carrito persistente indexado por standId
-  const [cartsByStand, setCartsByStand] = useState<CartsByStand>(loadCartsFromStorage);
+  // Perfil de marca del estadio para aplicar el tema
+  const storeProfile = useMemo(() => {
+    return getStadiumStoreProfile(activeVenueId);
+  }, [activeVenueId]);
+
+  // Carrito persistente indexado por standId y estrictamente aislado por sede deportiva
+  const [cartsByStand, setCartsByStand] = useState<CartsByStand>(() => loadCartsFromStorage(activeVenueId));
+  const currentLoadedVenueRef = useRef<string>(activeVenueId);
+
+  // Al cambiar de sede/estadio, recargar el carrito de comanda correspondiente a esa sede sin contaminar
+  useEffect(() => {
+    currentLoadedVenueRef.current = activeVenueId;
+    const venueCarts = loadCartsFromStorage(activeVenueId);
+    setCartsByStand(venueCarts);
+  }, [activeVenueId]);
+
+  // Guardar en almacenamiento cada vez que cambien los carritos de la sede activa
+  useEffect(() => {
+    if (currentLoadedVenueRef.current !== activeVenueId) return;
+    saveCartsToStorage(activeVenueId, cartsByStand);
+  }, [cartsByStand, activeVenueId]);
 
   // Carrito activo correspondiente al negocio actualmente seleccionado
   const cart = useMemo(() => {
@@ -140,15 +155,16 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
   // Sincronizar carrito activo con sessionStorage para compatibilidad con redirecciones
   useEffect(() => {
     try {
+      const key = `vxp_food_cart_${activeVenueId}`;
       if (cart.length > 0) {
-        sessionStorage.setItem('vxp_food_cart', JSON.stringify(cart));
+        sessionStorage.setItem(key, JSON.stringify(cart));
       } else {
-        sessionStorage.removeItem('vxp_food_cart');
+        sessionStorage.removeItem(key);
       }
     } catch (e) {
       console.warn('Error sincronizando carrito temporal:', e);
     }
-  }, [cart]);
+  }, [cart, activeVenueId]);
 
   const handleSelectStand = (stand: StadiumStand) => {
     setSelectedStand(stand);
@@ -392,7 +408,7 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
         updatedStandCart = [...standCart, { item, quantity: 1, standId, standName, standLocation }];
       }
       const updated = { ...prev, [standId]: updatedStandCart };
-      saveCartsToStorage(updated);
+      saveCartsToStorage(activeVenueId, updated);
       return updated;
     });
   };
@@ -414,7 +430,7 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
       } else {
         updated[standId] = updatedStandCart;
       }
-      saveCartsToStorage(updated);
+      saveCartsToStorage(activeVenueId, updated);
       return updated;
     });
   };
@@ -423,14 +439,14 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
     setCartsByStand((prev) => {
       const updated = { ...prev };
       delete updated[standId];
-      saveCartsToStorage(updated);
+      saveCartsToStorage(activeVenueId, updated);
       return updated;
     });
   };
 
   const clearAllCarts = () => {
     setCartsByStand({});
-    saveCartsToStorage({});
+    saveCartsToStorage(activeVenueId, {});
   };
 
   // Comandas consolidadas agrupadas por puesto o negocio
@@ -447,16 +463,20 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
     for (const standId of Object.keys(cartsByStand)) {
       const items: StandCartItem[] = cartsByStand[standId] || [];
       if (items.length > 0) {
+        // Asegurar que solo entren puestos que pertenezcan a la sede activa para no mezclar carritos
+        const standInfo = stands.find((s) => s.id === standId);
+        if (standInfo && standInfo.venueId !== activeVenueId) {
+          continue;
+        }
         const subtotal = items.reduce((sum, c) => sum + c.item.price * c.quantity, 0);
         const count = items.reduce((sum, c) => sum + c.quantity, 0);
-        const standInfo = stands.find((s) => s.id === standId);
         const standName = items[0]?.standName || standInfo?.name || 'Puesto Oficial';
         const standLocation = items[0]?.standLocation || standInfo?.location || '';
         list.push({ standId, standName, standLocation, items, subtotal, count });
       }
     }
     return list;
-  }, [cartsByStand, stands]);
+  }, [cartsByStand, stands, activeVenueId]);
 
   // Totales consolidados de todos los negocios en la comanda única
   const total = useMemo(() => {
@@ -583,10 +603,11 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
         }
       }
 
-      // Vaciar todos los carritos tras éxito
+      // Vaciar todos los carritos tras éxito de la sede activa
       setCartsByStand({});
-      saveCartsToStorage({});
+      saveCartsToStorage(activeVenueId, {});
       try {
+        sessionStorage.removeItem(`vxp_food_cart_${activeVenueId}`);
         sessionStorage.removeItem('vxp_food_cart');
       } catch {}
 
@@ -1243,30 +1264,42 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
         </div>
       )}
 
-      {/* Barra flotante móvil para continuar con el pedido sin scrollear */}
+      {/* Barra flotante para continuar con el pedido adaptada al tema del estadio y modo claro/oscuro */}
       {totalCount > 0 && (
-        <div className="lg:hidden fixed bottom-20 left-3 right-3 z-30 animate-in slide-in-from-bottom-4 duration-200 font-sports">
-          <div className={`p-3 rounded-2xl border shadow-2xl flex items-center justify-between gap-3 ${
+        <div className="fixed bottom-20 md:bottom-6 left-3 right-3 max-w-xl mx-auto z-40 animate-in slide-in-from-bottom-4 duration-200 font-sports">
+          <div className={`p-3 rounded-2xl border shadow-2xl flex items-center justify-between gap-3 transition-all backdrop-blur-xl ${
             theme === 'light'
-              ? 'bg-slate-900 text-white border-slate-800'
-              : 'bg-[#101728] text-white border-slate-700'
+              ? 'bg-white/95 text-slate-900 border-slate-200 shadow-slate-900/15'
+              : 'bg-[#0F172A]/95 text-white border-slate-700/80 shadow-black/70'
           }`}>
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-xl bg-red-600 flex items-center justify-center font-black text-xs text-white shrink-0">
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shrink-0 shadow-sm transition-colors ${
+                activeVenueId === 'venue-encanto'
+                  ? 'bg-amber-500 text-black shadow-amber-500/30'
+                  : activeVenueId === 'venue-tomateros'
+                  ? 'bg-rose-900 text-white shadow-rose-900/30'
+                  : activeVenueId === 'venue-charros'
+                  ? 'bg-blue-600 text-white shadow-blue-600/30'
+                  : 'bg-red-600 text-white shadow-red-600/30'
+              }`}>
                 {totalCount}
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] uppercase font-bold text-slate-400 truncate">
+                <p className={`text-[10px] uppercase font-bold truncate ${
+                  theme === 'light' ? 'text-slate-600 font-extrabold' : 'text-slate-400'
+                }`}>
                   Comanda General • {totalStandsCount} {totalStandsCount === 1 ? 'negocio' : 'negocios'}
                 </p>
-                <p className="text-sm font-black font-scoreboard text-emerald-400">
+                <p className={`text-sm font-black font-scoreboard ${
+                  theme === 'light' ? 'text-emerald-700' : 'text-emerald-400'
+                }`}>
                   ${total.toLocaleString('es-MX')} MXN
                 </p>
               </div>
             </div>
             <button
               onClick={handleOpenCheckout}
-              className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95 transition-transform"
+              className={`px-4 py-2.5 ${storeProfile.buttonClass} text-xs font-black uppercase tracking-wider rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95 transition-transform shrink-0`}
             >
               <span>Comprar Todo</span>
               <ArrowRight className="w-3.5 h-3.5" />

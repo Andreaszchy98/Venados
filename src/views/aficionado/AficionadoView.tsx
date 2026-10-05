@@ -78,6 +78,10 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
             if (prev && safeList.some((v) => v.id === prev)) {
               return prev;
             }
+            const savedLocal = localStorage.getItem('vxp_selected_venue_id');
+            if (savedLocal && safeList.some((v) => v.id === savedLocal)) {
+              return savedLocal;
+            }
             const preferred = user.browsingVenueId || user.venueId;
             return preferred && safeList.some((v) => v.id === preferred)
               ? preferred
@@ -92,9 +96,23 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
     );
 
     return () => unsubscribe();
-  }, [user.browsingVenueId, user.venueId]);
+  }, []);
 
-  // Manejar cambio de sede desde el selector principal (Guarda browsingVenueId seguro para aficionado)
+  // Sincronizar cuando la sede cambie desde el panel de "Mi Cuenta y Ajustes" del Header
+  useEffect(() => {
+    const onVenueChanged = (e: any) => {
+      const newVId = e.detail;
+      if (newVId && newVId !== selectedVenueId) {
+        setSelectedVenueId(newVId);
+      }
+    };
+    window.addEventListener('vxp_venue_changed', onVenueChanged);
+    return () => {
+      window.removeEventListener('vxp_venue_changed', onVenueChanged);
+    };
+  }, [selectedVenueId]);
+
+  // Manejar cambio de sede desde cualquier selector
   const handleSelectVenue = (newVenueId: string) => {
     setSelectedVenueId(newVenueId);
     try {
@@ -102,6 +120,16 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
     } catch {}
 
     const chosen = venues.find((v) => v.id === newVenueId);
+    if (chosen?.city) {
+      try {
+        localStorage.setItem('vxp_selected_city', chosen.city);
+      } catch {}
+    }
+
+    try {
+      window.dispatchEvent(new CustomEvent('vxp_venue_changed', { detail: newVenueId }));
+    } catch {}
+
     if (user.uid) {
       try {
         updateDoc(doc(db, 'users', user.uid), {
@@ -143,59 +171,6 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
     <div className={`space-y-4 pb-20 transition-colors ${
       theme === 'light' ? 'text-slate-900' : 'text-slate-100'
     }`}>
-      {/* Header Único y Compacto (48px–56px): Usuario, sede y controles en una sola fila sin subtítulos pesados */}
-      {activeTab !== 'cartelera' && (
-        <div className={`h-12 sm:h-14 px-3 sm:px-4 rounded-2xl border flex items-center justify-between gap-3 shadow-xs transition-colors ${
-          theme === 'light' ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#0F1626] border-slate-800 text-white'
-        }`}>
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-            <span className={`text-xs sm:text-sm font-black truncate font-sports uppercase tracking-wider ${
-              theme === 'light' ? 'text-slate-900' : 'text-white'
-            }`}>
-              {t('aficionado.hello', 'Hola,')} {user.displayName || 'Aficionado'}
-            </span>
-          </div>
-
-          {/* Selector de Estadio compacto */}
-          <div className="relative inline-flex items-center shrink-0">
-            <label htmlFor="client-venue-selector-header" className="sr-only">
-              Seleccionar estadio
-            </label>
-            <div className={`flex items-center gap-1.5 pl-2.5 pr-2 py-1 border rounded-xl transition-all group cursor-pointer ${
-              theme === 'light'
-                ? 'bg-slate-50 hover:bg-slate-100 border-slate-300 text-slate-900'
-                : 'bg-[#101625] hover:bg-[#182032] border-slate-700 text-slate-200'
-            }`}>
-              <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0" />
-              <select
-                id="client-venue-selector-header"
-                value={selectedVenueId}
-                onChange={(e) => handleSelectVenue(e.target.value)}
-                disabled={loadingVenues || venues.length === 0}
-                className={`bg-transparent text-[11px] sm:text-xs font-bold pr-4 focus:outline-none cursor-pointer appearance-none truncate max-w-[160px] sm:max-w-none ${
-                  theme === 'light' ? 'text-slate-900' : 'text-slate-200'
-                }`}
-                title="Cambiar estadio visualizado"
-              >
-                {venues.map((venue) => (
-                  <option
-                    key={venue.id}
-                    value={venue.id}
-                    className={theme === 'light' ? 'bg-white text-slate-900' : 'bg-[#101625] text-white font-medium'}
-                  >
-                    {venue.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className={`w-3.5 h-3.5 absolute right-2 pointer-events-none transition-colors ${
-                theme === 'light' ? 'text-slate-500 group-hover:text-slate-800' : 'text-slate-400 group-hover:text-slate-200'
-              }`} />
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Visor de Marcador en Vivo / Resumen si hay un evento seleccionado */}
       {scoreboardEventId ? (
         <MarcadorEnVivo
@@ -213,6 +188,8 @@ export const AficionadoView: React.FC<AficionadoViewProps> = ({
           {activeTab === 'cartelera' && (
             <CarteleraLanding
               user={effectiveUser}
+              selectedVenueId={selectedVenueId}
+              onSelectVenue={handleSelectVenue}
               initialEventId={selectedEventId}
               onClearInitialEvent={() => {
                 setSelectedEventId(null);

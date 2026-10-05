@@ -22,7 +22,9 @@ import { ensureDefaultVenueExists } from './lib/defaultVenue';
 import { AutoDOMTranslator } from './components/shared/AutoDOMTranslator';
 import { StripeSuccessModal } from './components/stripe/StripeSuccessModal';
 import { StripeDemoCheckoutModal } from './components/stripe/StripeDemoCheckoutModal';
+import { FirstVisitVenueGuideModal } from './components/shared/FirstVisitVenueGuideModal';
 import { extractClaimTokenFromUrl } from './lib/tickets';
+import { inferVenueIdAndName } from './lib/venues';
 import { AlertCircle, X } from 'lucide-react';
 
 function MainLayout() {
@@ -98,13 +100,22 @@ function MainLayout() {
     return userProfile.role;
   }, [userProfile, activeView]);
 
-  // Perfil simulado para entregar al componente renderizado
+  // Perfil simulado para entregar al componente renderizado con sede garantizada
   const activeUserProfile = useMemo(() => {
     if (!userProfile) return null;
+    const { venueId: resolvedVenueId, venueName: resolvedVenueName } = inferVenueIdAndName(
+      userProfile.venueId || userProfile.browsingVenueId || localStorage.getItem('vxp_selected_venue_id') || undefined,
+      userProfile.venueName || userProfile.browsingVenueName || undefined
+    );
+    const base: UserProfile = {
+      ...userProfile,
+      venueId: userProfile.venueId || resolvedVenueId,
+      venueName: userProfile.venueName || resolvedVenueName,
+    };
     if (effectiveRole && effectiveRole !== userProfile.role) {
-      return { ...userProfile, role: effectiveRole };
+      return { ...base, role: effectiveRole };
     }
-    return userProfile;
+    return base;
   }, [userProfile, effectiveRole]);
 
   // Estados para Stripe Checkout (Éxito, Cancelado y Simulación Demo)
@@ -214,13 +225,13 @@ function MainLayout() {
                 if (data.language && data.language !== language) {
                   setLanguage(data.language);
                 }
-                let safeVenueId = data.venueId;
-                let safeVenueName = data.venueName;
+                let rawVenueId = data.venueId;
+                let rawVenueName = data.venueName;
 
                 // Si Firestore aún tuviese la sede inexistente Estadio Chevron, auto-sanitizar inmediatamente
                 if (data.venueId === 'venue-chevron' || data.venueName === 'Estadio Chevron' || data.browsingVenueId === 'venue-chevron') {
-                  safeVenueId = 'venue-teodoro-mariscal';
-                  safeVenueName = 'Estadio Teodoro Mariscal';
+                  rawVenueId = 'venue-teodoro-mariscal';
+                  rawVenueName = 'Estadio Teodoro Mariscal';
                   updateDoc(userDocRef, {
                     venueId: 'venue-teodoro-mariscal',
                     venueName: 'Estadio Teodoro Mariscal',
@@ -228,6 +239,20 @@ function MainLayout() {
                     browsingVenueName: 'Estadio Teodoro Mariscal',
                     updatedAt: new Date().toISOString(),
                   }).catch(() => {});
+                }
+
+                const { venueId: safeVenueId, venueName: safeVenueName } = inferVenueIdAndName(
+                  rawVenueId || data.browsingVenueId,
+                  rawVenueName || data.browsingVenueName
+                );
+
+                // Para usuarios que no son aficionados, restringir estrictamente su sede a la asignada en base de datos
+                if (data.role && data.role !== 'aficionado') {
+                  const assignedVenue = safeVenueId || 'venue-teodoro-mariscal';
+                  try {
+                    localStorage.setItem('vxp_selected_venue_id', assignedVenue);
+                  } catch {}
+                  window.dispatchEvent(new CustomEvent('vxp_venue_changed', { detail: assignedVenue }));
                 }
 
                 setUserProfile({
@@ -454,6 +479,9 @@ function MainLayout() {
           }}
         />
       )}
+
+      {/* Pop-up de Guía de Selección de Sede e Icono de Ajustes para Primeras Visitas (solo para aficionados e invitados) */}
+      <FirstVisitVenueGuideModal userRole={userProfile?.role} />
 
       {/* Pie de página discreto con soporte de traducción */}
       <footer className={`mt-auto border-t py-4 px-6 text-center text-xs transition-colors ${

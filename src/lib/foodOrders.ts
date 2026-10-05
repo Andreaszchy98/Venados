@@ -15,6 +15,7 @@ import { FoodOrder, FoodOrderStatus } from '../types';
 import { handleFirestoreError, OperationType, sanitizeFirestoreData } from './errorHandler';
 import { recordSaleTransaction } from './sales';
 import { DEFAULT_VENUE_ID, DEFAULT_EVENT_ID } from './defaultVenue';
+import { INITIAL_STANDS } from './stands';
 
 const COLLECTION_NAME = 'foodOrders';
 
@@ -141,7 +142,9 @@ export function listenToStandFoodOrders(
 ): () => void {
   try {
     let q = query(collection(db, COLLECTION_NAME));
-    if (standId) {
+    if (standId && venueId) {
+      q = query(collection(db, COLLECTION_NAME), where('venueId', '==', venueId), where('standId', '==', standId));
+    } else if (standId) {
       q = query(collection(db, COLLECTION_NAME), where('standId', '==', standId));
     } else if (venueId) {
       q = query(collection(db, COLLECTION_NAME), where('venueId', '==', venueId));
@@ -155,14 +158,25 @@ export function listenToStandFoodOrders(
           ...d.data(),
         })) as FoodOrder[];
 
-        // Aislamiento estricto obligatorio:
-        // 1. Si se especificó standId, filtrar exclusivamente por ese negocio
+        // Aislamiento estricto obligatorio por sede deportiva:
+        if (venueId) {
+          orders = orders.filter((o) => {
+            if (o.venueId) {
+              return o.venueId === venueId;
+            }
+            // Si la orden no tiene venueId grabado, verificar si el puesto pertenece a esta sede
+            const standMatch = INITIAL_STANDS.find((s) => s.id === o.standId || s.name === o.standName);
+            if (standMatch) {
+              return standMatch.venueId === venueId;
+            }
+            // Si no hay puesto coincidente, no asociar a otra sede distinta a la predeterminada
+            return venueId === DEFAULT_VENUE_ID;
+          });
+        }
+
+        // Si se especificó standId, filtrar exclusivamente por ese negocio
         if (standId) {
           orders = orders.filter((o) => o.standId === standId);
-        }
-        // 2. Si se especificó venueId, filtrar exclusivamente por esa sede
-        if (venueId) {
-          orders = orders.filter((o) => (o.venueId || DEFAULT_VENUE_ID) === venueId);
         }
 
         orders.sort(

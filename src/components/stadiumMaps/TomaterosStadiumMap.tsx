@@ -3,6 +3,7 @@ import { SeatSection, VenueEvent } from '../../types';
 import { TOMATEROS_ZONES, TOMATEROS_SVG_ZONE_MAP, getZonePrice } from '../../lib/seatMap';
 import { useStadiumPanZoom, StadiumRegionPreset } from './useStadiumPanZoom';
 import { StadiumZoomToolbar } from './StadiumZoomToolbar';
+import { useTheme } from '../../context/ThemeContext';
 import { Info, Move, Sparkles } from 'lucide-react';
 
 const TOMATEROS_PRESETS: StadiumRegionPreset[] = [
@@ -33,6 +34,7 @@ export const TomaterosStadiumMap: React.FC<TomaterosStadiumMapProps> = ({
   soldOutSectionsSet,
   highlightOnlyActiveSection = false,
 }) => {
+  const { theme } = useTheme();
   const [hoveredInfo, setHoveredInfo] = useState<{ id: string; zone: string } | null>(null);
   const [showZoneGuide, setShowZoneGuide] = useState<boolean>(false);
 
@@ -153,18 +155,22 @@ export const TomaterosStadiumMap: React.FC<TomaterosStadiumMapProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-2 px-1">
         <div className="flex items-center gap-2">
           {activeSectionNumber ? (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs font-black text-amber-500 shadow-sm">
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black shadow-xs border ${
+              theme === 'light'
+                ? 'bg-amber-50 border-amber-300 text-amber-900'
+                : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+            }`}>
               <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
               Sección: {activeSectionNumber}
             </span>
           ) : (
-            <span className="text-xs font-bold text-slate-400">
+            <span className={`text-xs font-bold ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
               Toca cualquier sección para ver butacas
             </span>
           )}
 
           {activeZoneMeta && (
-            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-lg border ${activeZoneMeta.badgeBg}`}>
+            <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-lg border ${activeZoneMeta.badgeBg}`}>
               {activeZoneMeta.name} • ${getZonePrice(activeZoneMeta.name, event)} MXN
             </span>
           )}
@@ -196,18 +202,26 @@ export const TomaterosStadiumMap: React.FC<TomaterosStadiumMapProps> = ({
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onDoubleClick={handleDoubleClick}
-        className={`relative w-full rounded-2xl bg-white p-2 sm:p-4 border border-slate-200 shadow-xl overflow-hidden select-none touch-none ${
+        className={`relative w-full rounded-2xl p-2 sm:p-4 border shadow-xl overflow-hidden select-none touch-none transition-colors ${
+          theme === 'light'
+            ? 'bg-[#eef2f6] border-slate-300'
+            : 'bg-[#0F1626] border-slate-700'
+        } ${
           isDragging ? 'cursor-grabbing' : 'cursor-grab'
         }`}
         title="Arrastra para mover • Rueda o doble clic en cualquier zona para hacer zoom"
       >
         {/* Banner flotante con información al pasar el cursor */}
         {hoveredInfo && !isDragging && (
-          <div className="absolute top-4 left-4 z-20 pointer-events-none px-3 py-2 rounded-xl bg-slate-900/95 border border-slate-700 shadow-2xl backdrop-blur-md text-xs animate-in fade-in zoom-in-95 duration-100">
-            <div className="font-black text-amber-400">
+          <div className={`absolute top-4 left-4 z-20 pointer-events-none px-3 py-2 rounded-xl border shadow-2xl backdrop-blur-md text-xs animate-in fade-in zoom-in-95 duration-100 ${
+            theme === 'light'
+              ? 'bg-white/95 border-slate-300 text-slate-900 shadow-slate-400/30'
+              : 'bg-slate-900/95 border-slate-700 text-white'
+          }`}>
+            <div className={`font-black ${theme === 'light' ? 'text-amber-600' : 'text-amber-400'}`}>
               {hoveredInfo.id}
             </div>
-            <div className="text-slate-300 font-medium mt-0.5">
+            <div className={`font-medium mt-0.5 ${theme === 'light' ? 'text-slate-600' : 'text-slate-300'}`}>
               {(() => {
                 const zoneName = TOMATEROS_SVG_ZONE_MAP[hoveredInfo.zone] || hoveredInfo.zone;
                 const zoneMeta = TOMATEROS_ZONES[zoneName];
@@ -217,8 +231,8 @@ export const TomaterosStadiumMap: React.FC<TomaterosStadiumMapProps> = ({
                 const price = getZonePrice(zoneMeta.name, event);
                 return (
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-white">{zoneMeta.name}</span>
-                    <span className="text-amber-400 font-black">${price} MXN</span>
+                    <span className={`font-semibold ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>{zoneMeta.name}</span>
+                    <span className={`font-black ${theme === 'light' ? 'text-amber-600' : 'text-amber-400'}`}>${price} MXN</span>
                   </div>
                 );
               })()}
@@ -227,7 +241,11 @@ export const TomaterosStadiumMap: React.FC<TomaterosStadiumMapProps> = ({
         )}
 
         {/* Mini pista visual en la esquina inferior */}
-        <div className="absolute bottom-2.5 right-2.5 z-10 pointer-events-none px-2 py-1 rounded-lg bg-slate-900/70 border border-slate-700/60 backdrop-blur-xs text-[10px] font-medium text-slate-300">
+        <div className={`absolute bottom-2.5 right-2.5 z-10 pointer-events-none px-2 py-1 rounded-lg border backdrop-blur-xs text-[10px] font-bold ${
+          theme === 'light'
+            ? 'bg-white/85 border-slate-300 text-slate-700 shadow-xs'
+            : 'bg-slate-900/70 border-slate-700/60 text-slate-300'
+        }`}>
           Arrastra para mover • Zoom con rueda/pellizco
         </div>
 
@@ -319,6 +337,96 @@ export const TomaterosStadiumMap: React.FC<TomaterosStadiumMapProps> = ({
               <polygon id="num_claro-4" className="blk" data-zone="num_claro" fill="#4d9dd0" points="405.5,175.8 405.0,191.8 405.5,192.2 452.2,193.8 452.8,193.2 453.8,168.8 453.5,167.5 452.8,167.0 438.2,166.2 415.0,166.2"/>
               <polygon id="num_claro-5" className="blk" data-zone="num_claro" fill="#4d9dd0" points="404.8,198.8 404.0,221.5 404.5,222.2 444.2,223.5 451.8,223.2 452.8,200.2 452.2,199.5 419.0,198.0 405.5,198.2"/>
               <polygon id="num_claro-6" className="blk" data-zone="num_claro" fill="#4d9dd0" points="404.0,228.5 403.8,242.2 404.5,243.0 424.8,251.0 449.8,262.2 450.8,262.0 451.8,237.0 451.5,229.0 417.5,228.0 404.5,228.0"/>
+            </g>
+
+            {/* Capa de Numeración de Bloques con alto contraste */}
+            <g id="numeracion-bloques" pointerEvents="none" className="select-none font-sports">
+              {[
+                { id: 'jardin-1', label: 'J1', pts: '81.0,110.2 68.5,123.0 68.5,124.0 85.2,141.2 86.5,141.2 99.0,129.0 99.0,128.0 81.5,110.2' },
+                { id: 'jardin-2', label: 'J2', pts: '99.0,93.2 86.2,106.5 103.2,124.2 104.2,124.2 116.5,112.0 116.5,111.0 100.5,94.2' },
+                { id: 'jardin-3', label: 'J3', pts: '116.0,76.5 104.0,88.5 104.0,89.8 119.2,105.8 121.5,107.5 134.0,95.0 134.0,94.0 117.0,76.5' },
+                { id: 'jardin-4', label: 'J4', pts: '134.0,59.2 121.8,70.8 121.2,72.0 134.0,85.5 138.5,89.8 139.5,90.0 152.0,78.0 152.0,77.2 136.5,61.2' },
+                { id: 'jardin-5', label: 'J5', pts: '151.8,42.0 139.0,54.2 139.0,55.2 156.2,73.2 157.0,73.2 168.5,62.5 170.0,60.2 152.5,42.0' },
+                { id: 'jardin-6', label: 'J6', pts: '169.0,25.0 156.8,37.2 156.8,38.0 168.8,50.8 174.0,55.8 175.2,55.8 187.5,43.2 170.0,25.0' },
+                { id: 'jardin-7', label: 'J7', pts: '187.0,8.0 174.8,20.2 174.8,21.0 191.8,38.8 192.8,38.8 205.2,26.8 205.2,25.5 188.0,8.0' },
+                { id: 'jardin-8', label: 'J8', pts: '328.2,11.0 327.5,11.0 310.0,28.5 310.0,29.2 322.5,42.0 323.2,42.0 340.5,25.2 340.5,24.0' },
+                { id: 'jardin-9', label: 'J9', pts: '345.8,29.0 344.8,29.0 327.2,46.2 328.5,48.8 339.5,60.0 340.2,60.0 357.8,42.5 357.5,41.5' },
+                { id: 'jardin-10', label: 'J10', pts: '362.8,46.5 361.8,46.5 344.5,64.0 344.5,64.8 356.5,77.5 357.2,77.5 375.2,59.8' },
+                { id: 'jardin-11', label: 'J11', pts: '380.0,64.2 378.8,64.2 361.5,81.5 361.5,82.2 373.2,95.2 374.8,95.0 391.8,78.0 391.8,76.8 390.5,75.0' },
+                { id: 'jardin-12', label: 'J12', pts: '397.2,82.0 396.2,82.0 378.5,99.2 378.8,100.2 391.0,112.8 392.2,112.5 409.2,95.5 409.2,94.8' },
+                { id: 'jardin-13', label: 'J13', pts: '414.5,100.0 413.0,100.2 396.0,117.0 396.2,118.8 408.0,130.5 408.8,130.5 426.2,113.5 426.2,112.8' },
+                { id: 'jardin-14', label: 'J14', pts: '431.2,117.2 430.2,117.5 413.0,135.0 424.5,148.2 425.5,148.2 442.8,131.2 442.8,129.8 441.8,128.0' },
+                { id: 'suite-1', label: 'S1', pts: '329.5,435.2 320.2,425.5 315.8,429.2 311.5,431.2 294.5,430.5 293.8,434.0 293.8,444.0 320.2,444.5 329.5,436.0' },
+                { id: 'suite-2', label: 'S2', pts: '217.2,422.8 217.5,443.0 263.2,443.5 286.2,444.2 286.5,424.2 286.0,423.5' },
+                { id: 'suite-3', label: 'S3', pts: '173.2,433.5 173.5,435.2 180.8,442.2 209.0,442.5 209.5,442.0 209.2,429.2 190.2,429.2 186.5,428.2 181.8,425.0' },
+                { id: 'platea-1', label: 'P1', pts: '448.0,302.8 447.0,302.8 434.2,314.8 434.5,315.8 443.0,324.5 444.2,324.2 456.5,312.5 456.5,311.8' },
+                { id: 'platea-2', label: 'P2', pts: '429.8,320.0 428.2,320.2 416.2,332.2 417.5,334.2 425.0,342.2 426.0,342.2 438.5,330.2 438.5,329.2' },
+                { id: 'platea-3', label: 'P3', pts: '411.2,337.2 407.5,340.2 398.0,349.8 407.2,359.8 420.2,348.0 420.2,346.8 419.2,345.2' },
+                { id: 'platea-4', label: 'P4', pts: '393.5,354.8 392.8,354.8 380.0,367.0 380.2,368.2 388.5,377.2 389.5,377.2 402.5,365.2 401.2,362.8' },
+                { id: 'platea-5', label: 'P5', pts: '375.5,372.5 361.8,385.0 361.8,386.0 370.2,394.8 371.2,394.8 384.2,382.5 383.2,380.5' },
+                { id: 'platea-6', label: 'P6', pts: '357.2,390.2 356.5,390.2 343.5,402.8 352.5,412.8 354.5,411.5 366.0,400.2' },
+                { id: 'platea-7', label: 'P7', pts: '339.0,408.0 337.2,408.5 325.2,420.5 325.2,421.2 334.0,430.2 334.8,430.2 347.8,418.0 347.5,416.8' },
+                { id: 'platea-8', label: 'P8', pts: '169.2,410.5 168.2,410.5 159.2,419.5 159.2,420.2 168.0,429.0 171.2,426.5 177.5,420.2 177.5,419.2' },
+                { id: 'platea-9', label: 'P9', pts: '154.2,396.5 145.5,405.2 145.5,406.2 154.2,414.5 155.2,414.5 163.5,405.0' },
+                { id: 'platea-10', label: 'P10', pts: '141.2,382.2 138.5,384.2 131.5,391.2 139.8,400.2 141.0,400.0 149.8,391.5' },
+                { id: 'platea-11', label: 'P11', pts: '127.5,368.0 126.2,368.5 117.8,376.8 117.8,377.5 126.5,386.5 127.2,386.5 135.8,377.5 135.8,376.8' },
+                { id: 'platea-12', label: 'P12', pts: '113.8,353.8 113.0,353.8 104.0,362.5 104.5,364.0 112.2,372.2 113.0,372.2 122.0,363.2 121.2,361.5' },
+                { id: 'platea-13', label: 'P13', pts: '99.8,339.5 90.2,348.5 90.2,349.5 98.5,358.2 108.2,349.5 108.2,348.5' },
+                { id: 'platea-14', label: 'P14', pts: '86.2,325.8 85.2,325.8 76.2,334.5 76.2,335.2 84.5,343.8 85.8,343.5 94.5,335.0' },
+                { id: 'platea-15', label: 'P15', pts: '72.0,311.0 71.2,311.0 62.0,320.2 62.0,321.0 70.8,330.0 71.5,330.0 80.8,321.0 80.5,319.5' },
+                { id: 'platea-16', label: 'P16', pts: '466.8,284.5 465.8,284.5 452.2,297.2 452.2,298.0 461.0,307.5 461.8,307.5 475.2,294.5 474.8,292.8' },
+                { id: 'num_home-1', label: 'H1', pts: '271.2,361.2 270.8,361.8 270.5,384.0 269.5,406.0 300.8,407.0 300.0,404.0 283.2,362.0 282.8,361.5' },
+                { id: 'num_home-2', label: 'H2', pts: '242.8,360.2 241.5,380.0 241.5,405.8 262.8,406.2 264.2,361.5 258.8,360.8' },
+                { id: 'num_home-3', label: 'H3', pts: '235.0,360.5 220.2,360.2 219.5,360.8 200.8,405.0 234.2,405.2 235.2,366.8' },
+                { id: 'num_bajo-1', label: 'B1', pts: '343.5,305.2 328.5,320.2 328.5,321.0 354.5,348.2 360.2,353.5 376.2,337.8 376.2,337.2 344.5,305.2' },
+                { id: 'num_bajo-2', label: 'B2', pts: '322.8,325.2 307.5,341.5 339.0,373.8 339.8,373.8 355.0,358.0 323.5,325.2' },
+                { id: 'num_bajo-3', label: 'B3', pts: '302.2,345.8 289.2,358.5 289.2,359.5 307.2,404.5 308.0,404.8 334.2,378.8 334.2,378.0 308.5,351.5' },
+                { id: 'num_bajo-4', label: 'B4', pts: '205.2,348.2 204.5,348.2 172.5,380.2 172.5,381.2 193.0,402.2 194.0,402.2 213.5,358.5 213.5,356.8' },
+                { id: 'num_bajo-5', label: 'B5', pts: '189.0,332.0 187.5,332.2 156.2,363.5 156.2,364.2 166.8,375.5 167.8,375.5 200.0,343.8' },
+                { id: 'num_bajo-6', label: 'B6', pts: '173.0,315.5 170.8,316.2 140.2,346.8 140.2,347.5 151.2,359.0 152.0,359.0 183.8,327.2 183.5,326.2' },
+                { id: 'num_medio-1', label: 'M1', pts: '364.2,285.2 349.5,299.8 349.5,300.8 380.8,332.8 381.8,332.8 396.5,318.5 396.5,317.5 380.2,300.2 365.0,285.2' },
+                { id: 'num_medio-2', label: 'M2', pts: '157.2,299.2 156.2,299.2 124.2,330.8 124.2,331.5 134.5,342.2 135.5,342.2 167.2,310.5 165.2,307.2' },
+                { id: 'num_medio-3', label: 'M3', pts: '141.0,282.5 140.2,282.5 108.2,314.2 108.2,315.0 119.2,326.0 151.5,294.5 151.5,293.8 150.0,291.8' },
+                { id: 'num_medio-4', label: 'M4', pts: '135.2,276.8 129.8,271.0 129.0,271.0 84.0,289.2 83.8,290.0 103.0,309.2 103.8,309.2 135.2,277.8' },
+                { id: 'num_medio-5', label: 'M5', pts: '390.8,259.5 390.8,260.5 421.8,293.5 424.0,292.2 448.0,268.8 448.0,268.2 438.2,263.5 403.0,248.5 401.2,249.5' },
+                { id: 'num_medio-6', label: 'M6', pts: '385.0,265.0 370.0,279.8 370.0,280.5 401.5,313.0 402.2,313.0 416.5,299.2 416.8,297.8 386.5,265.8' },
+                { id: 'num_claro-1', label: 'C1', pts: '124.2,244.0 119.8,244.0 75.8,250.2 75.2,250.8 79.8,283.8 81.2,283.8 126.2,266.0 126.8,265.5 126.8,263.0' },
+                { id: 'num_claro-2', label: 'C2', pts: '119.0,209.2 70.8,216.8 70.2,217.2 70.2,219.0 74.2,245.0 122.5,238.0 123.0,237.5 123.0,235.5' },
+                { id: 'num_claro-3', label: 'C3', pts: '117.5,197.2 117.0,196.0 94.8,172.5 89.2,173.8 66.2,176.8 64.2,177.5 68.8,209.8 69.8,211.0 117.5,204.0 118.0,203.5' },
+                { id: 'num_claro-4', label: 'C4', pts: '405.5,175.8 405.0,191.8 405.5,192.2 452.2,193.8 452.8,193.2 453.8,168.8 453.5,167.5 452.8,167.0 438.2,166.2 415.0,166.2' },
+                { id: 'num_claro-5', label: 'C5', pts: '404.8,198.8 404.0,221.5 404.5,222.2 444.2,223.5 451.8,223.2 452.8,200.2 452.2,199.5 419.0,198.0 405.5,198.2' },
+                { id: 'num_claro-6', label: 'C6', pts: '404.0,228.5 403.8,242.2 404.5,243.0 424.8,251.0 449.8,262.2 450.8,262.0 451.8,237.0 451.5,229.0 417.5,228.0 404.5,228.0' },
+              ].map((item) => {
+                const pairs = item.pts.trim().split(/\s+/).map((p) => {
+                  const [x, y] = p.split(',').map(Number);
+                  return { x, y };
+                });
+                const sum = pairs.reduce((acc, c) => ({ x: acc.x + c.x, y: acc.y + c.y }), { x: 0, y: 0 });
+                const cx = sum.x / pairs.length;
+                const cy = sum.y / pairs.length;
+
+                return (
+                  <text
+                    key={`label-${item.id}`}
+                    x={cx}
+                    y={cy + 0.5}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fill="#ffffff"
+                    fontSize="6.2"
+                    fontWeight="900"
+                    style={{
+                      paintOrder: 'stroke fill',
+                      stroke: '#0f172a',
+                      strokeWidth: '1.4px',
+                      strokeLinejoin: 'round',
+                      userSelect: 'none',
+                    }}
+                  >
+                    {item.label}
+                  </text>
+                );
+              })}
             </g>
           </svg>
         </div>

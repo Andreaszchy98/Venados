@@ -3,6 +3,7 @@ import { SeatSection, VenueEvent } from '../../types';
 import { ENCANTO_ZONES, getZonePrice } from '../../lib/seatMap';
 import { useStadiumPanZoom, StadiumRegionPreset } from './useStadiumPanZoom';
 import { StadiumZoomToolbar } from './StadiumZoomToolbar';
+import { useTheme } from '../../context/ThemeContext';
 import { Sparkles } from 'lucide-react';
 
 const ENCANTO_PRESETS: StadiumRegionPreset[] = [
@@ -30,6 +31,7 @@ const EncantoStadiumMapComponent = React.memo<EncantoStadiumMapProps>(({
   event,
   soldOutSectionsSet,
 }) => {
+  const { theme } = useTheme();
   const [hoveredSection, setHoveredSection] = useState<string | null>(null);
   const [showZoneGuide, setShowZoneGuide] = useState<boolean>(false);
 
@@ -135,24 +137,40 @@ const EncantoStadiumMapComponent = React.memo<EncantoStadiumMapProps>(({
   return (
     <div className="space-y-2.5">
       {/* Indicador de estadio y hover flotante */}
-      <div className="flex flex-wrap items-center justify-between gap-2 pb-1 text-xs border-b border-slate-800/80 px-1">
+      <div className={`flex flex-wrap items-center justify-between gap-2 pb-1 text-xs border-b px-1 ${
+        theme === 'light' ? 'border-slate-200' : 'border-slate-800/80'
+      }`}>
         <div className="flex items-center gap-2">
           <span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
-          <span className="font-bold text-slate-200">Plano Oficial: Estadio El Encanto</span>
-          <span className="text-[10px] px-2 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-800/40 font-bold">
+          <span className={`font-bold ${theme === 'light' ? 'text-slate-900' : 'text-slate-200'}`}>
+            Plano Oficial: Estadio El Encanto
+          </span>
+          <span className={`text-[10px] px-2 py-0.5 rounded font-bold border ${
+            theme === 'light'
+              ? 'bg-amber-100 text-amber-900 border-amber-300'
+              : 'bg-amber-950/80 text-amber-300 border-amber-800/40'
+          }`}>
             Dorados de Sinaloa
           </span>
           {activeZoneMeta && (
-            <span className="text-[11px] font-bold px-2 py-0.5 rounded-lg border bg-amber-500/10 border-amber-500/30 text-amber-400">
+            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-lg border ${
+              theme === 'light'
+                ? 'bg-amber-50 border-amber-300 text-amber-900'
+                : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+            }`}>
               {activeZoneMeta.name} • ${getZonePrice(activeZoneMeta.name, event)} MXN
             </span>
           )}
         </div>
         {hoveredSection && (
-          <div className="flex items-center gap-2 bg-slate-900 px-3 py-1 rounded-lg border border-slate-700 text-xs text-amber-300 font-semibold animate-in fade-in">
+          <div className={`flex items-center gap-2 px-3 py-1 rounded-lg border text-xs font-semibold animate-in fade-in ${
+            theme === 'light'
+              ? 'bg-white border-slate-300 text-slate-900 shadow-sm'
+              : 'bg-slate-900 border-slate-700 text-amber-300'
+          }`}>
             <span>Sección: {hoveredSection}</span>
-            <span className="text-slate-400">•</span>
-            <span className="text-slate-300">
+            <span className={theme === 'light' ? 'text-slate-400' : 'text-slate-500'}>•</span>
+            <span className={theme === 'light' ? 'text-slate-600' : 'text-slate-300'}>
               {sections.find((s) => s.sectionNumber === hoveredSection)?.zoneName || 'Zona Oficial'}
             </span>
           </div>
@@ -183,7 +201,11 @@ const EncantoStadiumMapComponent = React.memo<EncantoStadiumMapProps>(({
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onDoubleClick={handleDoubleClick}
-        className={`relative w-full overflow-hidden rounded-2xl bg-slate-950 p-2 sm:p-4 border border-slate-800 shadow-2xl select-none touch-none ${
+        className={`relative w-full overflow-hidden rounded-2xl p-2 sm:p-4 border shadow-xl select-none touch-none transition-colors ${
+          theme === 'light'
+            ? 'bg-[#eef2f6] border-slate-300'
+            : 'bg-slate-950 border-slate-800'
+        } ${
           isDragging ? 'cursor-grabbing' : 'cursor-grab'
         }`}
         title="Arrastra para moverte • Rueda o doble clic en cualquier zona para hacer zoom"

@@ -3,6 +3,7 @@ import { SeatSection, VenueEvent } from '../../types';
 import { MARISCAL_ZONES, getZonePrice } from '../../lib/seatMap';
 import { useStadiumPanZoom, StadiumRegionPreset } from './useStadiumPanZoom';
 import { StadiumZoomToolbar } from './StadiumZoomToolbar';
+import { useTheme } from '../../context/ThemeContext';
 import { Info, Sparkles, Move } from 'lucide-react';
 
 const MARISCAL_PRESETS: StadiumRegionPreset[] = [
@@ -260,6 +261,7 @@ const TeodoroMariscalStadiumMapComponent = React.memo<TeodoroMariscalStadiumMapP
   soldOutSectionsSet,
   highlightOnlyActiveSection = false,
 }) => {
+  const { theme } = useTheme();
   const [hoveredSection, setHoveredSection] = useState<string | null>(null);
   const [showZoneGuide, setShowZoneGuide] = useState<boolean>(false);
 
@@ -345,18 +347,22 @@ const TeodoroMariscalStadiumMapComponent = React.memo<TeodoroMariscalStadiumMapP
       <div className="flex flex-wrap items-center justify-between gap-2 px-1">
         <div className="flex items-center gap-2">
           {activeSectionNumber ? (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs font-black text-amber-500 shadow-sm">
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black shadow-xs border ${
+              theme === 'light'
+                ? 'bg-amber-50 border-amber-300 text-amber-900'
+                : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+            }`}>
               <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
               Sección #{activeSectionNumber} elegida
             </span>
           ) : (
-            <span className="text-xs font-bold text-slate-400">
+            <span className={`text-xs font-bold ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
               Toca cualquier bloque del mapa para elegir asientos
             </span>
           )}
 
           {activeZoneMeta && (
-            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-lg border ${activeZoneMeta.badgeBg}`}>
+            <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-lg border ${activeZoneMeta.badgeBg}`}>
               {activeZoneMeta.name} • ${getZonePrice(activeZoneMeta.name, event)} MXN
             </span>
           )}
@@ -388,16 +394,28 @@ const TeodoroMariscalStadiumMapComponent = React.memo<TeodoroMariscalStadiumMapP
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onDoubleClick={handleDoubleClick}
-        className={`relative w-full aspect-square max-h-[720px] bg-[#0A0E17] rounded-3xl overflow-hidden border border-slate-800/80 shadow-2xl flex flex-col items-center justify-center p-1 sm:p-3 select-none touch-none ${
+        className={`relative w-full aspect-square max-h-[720px] rounded-3xl overflow-hidden border shadow-2xl flex flex-col items-center justify-center p-1 sm:p-3 select-none touch-none transition-colors ${
+          theme === 'light'
+            ? 'bg-[#eef2f6] border-slate-300'
+            : 'bg-[#0A0E17] border-slate-800/80'
+        } ${
           isDragging ? 'cursor-grabbing' : 'cursor-grab'
         }`}
         title="Arrastra para moverte • Rueda o doble clic en cualquier zona para hacer zoom"
       >
-        {/* Fondo sutil con luces de estadio nocturno */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,_rgba(30,41,59,0.5)_0%,_rgba(10,14,23,0.95)_75%,_#050811_100%)] pointer-events-none" />
+        {/* Fondo sutil con luces según el tema */}
+        {theme === 'light' ? (
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,_rgba(241,245,249,0.8)_0%,_rgba(226,232,240,0.95)_75%,_#cbd5e1_100%)] pointer-events-none" />
+        ) : (
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,_rgba(30,41,59,0.5)_0%,_rgba(10,14,23,0.95)_75%,_#050811_100%)] pointer-events-none" />
+        )}
         <div className="absolute top-0 left-1/4 w-80 h-80 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute top-0 right-1/4 w-80 h-80 bg-red-500/5 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 inset-x-0 h-44 bg-[radial-gradient(ellipse_at_bottom,_rgba(15,23,42,0.6)_0%,_transparent_70%)] pointer-events-none" />
+        <div className={`absolute bottom-0 inset-x-0 h-44 pointer-events-none ${
+          theme === 'light'
+            ? 'bg-[radial-gradient(ellipse_at_bottom,_rgba(203,213,225,0.6)_0%,_transparent_70%)]'
+            : 'bg-[radial-gradient(ellipse_at_bottom,_rgba(15,23,42,0.6)_0%,_transparent_70%)]'
+        }`} />
 
         {/* SVG exacto a la imagen del póster */}
         <div className="w-full h-full flex items-center justify-center overflow-hidden">

@@ -109,20 +109,30 @@ export async function ensureDefaultVenueExists(): Promise<void> {
       const venueSnap = await getDoc(venueRef);
       if (!venueSnap.exists()) {
         await setDoc(venueRef, v);
-      } else if (v.id === 'venue-encanto') {
+      } else {
         const curData = venueSnap.data();
-        if (
-          curData.teamName !== 'Dorados de Sinaloa' ||
-          curData.storeName?.includes('Mazatlán') ||
-          curData.storePromoSubtitle?.includes('Cañoneros') ||
-          curData.storePromoSubtitle?.includes('Liga MX')
-        ) {
-          await updateDoc(venueRef, {
-            teamName: 'Dorados de Sinaloa',
-            storeName: 'Tienda Oficial Dorados de Sinaloa',
-            storePromoTitle: 'Tienda Oficial Dorados de Sinaloa',
-            storePromoSubtitle: 'Jerseys oficiales Dorado y Negro del Gran Pez, gorras y souvenirs de Dorados',
-          });
+        if (v.id === DEFAULT_VENUE_ID) {
+          if (curData.teamName !== 'Venados de Mazatlán' || curData.name !== 'Estadio Teodoro Mariscal') {
+            await updateDoc(venueRef, {
+              teamName: 'Venados de Mazatlán',
+              name: 'Estadio Teodoro Mariscal',
+              storeName: 'Tienda Oficial Venados Store',
+            });
+          }
+        } else if (v.id === 'venue-encanto') {
+          if (
+            curData.teamName !== 'Dorados de Sinaloa' ||
+            curData.storeName?.includes('Mazatlán') ||
+            curData.storePromoSubtitle?.includes('Cañoneros') ||
+            curData.storePromoSubtitle?.includes('Liga MX')
+          ) {
+            await updateDoc(venueRef, {
+              teamName: 'Dorados de Sinaloa',
+              storeName: 'Tienda Oficial Dorados de Sinaloa',
+              storePromoTitle: 'Tienda Oficial Dorados de Sinaloa',
+              storePromoSubtitle: 'Jerseys oficiales Dorado y Negro del Gran Pez, gorras y souvenirs de Dorados',
+            });
+          }
         }
       }
     }
