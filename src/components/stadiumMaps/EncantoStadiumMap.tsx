@@ -84,6 +84,16 @@ const EncantoStadiumMapComponent = React.memo<EncantoStadiumMapProps>(({
     const price = getZonePrice(zoneName, event);
     const isSoldOut = soldOutSectionsSet ? (soldOutSectionsSet.has(secNumber) || soldOutSectionsSet.has(secNumber.toLowerCase())) : false;
 
+    // Contraste óptico inteligente para que la numeración sea 100% clara en cualquier color de zona
+    const isBrightZone =
+      zoneName === 'General Sur' ||
+      zoneName === 'Cabecera Superior' ||
+      meta.fillColor === '#EAB308' ||
+      meta.fillColor === '#84CC16' ||
+      meta.fillColor === '#FBBF24';
+    const textColor = isBrightZone ? '#090D16' : '#FFFFFF';
+    const textStroke = isBrightZone ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)';
+
     return (
       <g
         key={secNumber}
@@ -102,25 +112,28 @@ const EncantoStadiumMapComponent = React.memo<EncantoStadiumMapProps>(({
           height={height}
           rx={rx}
           fill={isSoldOut ? '#1E293B' : meta.fillColor}
-          stroke={selected ? '#FBBF24' : hovered ? '#FFFFFF' : isSoldOut ? '#334155' : meta.strokeColor}
-          strokeWidth={selected ? 3 : hovered ? 2 : 1}
-          opacity={isSoldOut ? 0.35 : dimmed ? 0.3 : hovered ? 1 : 0.92}
+          stroke={selected ? '#F59E0B' : hovered ? '#FFFFFF' : isSoldOut ? '#334155' : meta.strokeColor}
+          strokeWidth={selected ? 3 : hovered ? 2 : 1.2}
+          opacity={isSoldOut ? 0.35 : dimmed ? 0.3 : hovered ? 1 : 0.95}
           className="transition-all"
-          filter={selected ? 'drop-shadow(0 0 6px rgba(251, 191, 36, 0.75))' : undefined}
+          filter={selected ? 'drop-shadow(0 0 6px rgba(245, 158, 11, 0.8))' : undefined}
         />
         <text
           x={x + width / 2}
-          y={y + height / 2 + 3.5}
+          y={y + height / 2 + 4}
           textAnchor="middle"
-          fontSize={width < 32 || height < 18 ? 8 : 10}
-          fontWeight={selected ? '900' : '700'}
-          fill={meta.colorHex === '#0F172A' || meta.colorHex === '#16A34A' ? '#FFFFFF' : '#FFFFFF'}
+          fontSize={width < 34 || height < 20 ? 9.5 : width < 52 ? 11 : 12}
+          fontWeight="900"
+          fill={textColor}
+          stroke={textStroke}
+          strokeWidth="0.4"
+          style={{ paintOrder: 'stroke fill', letterSpacing: '0.3px' }}
           pointerEvents="none"
-          className="select-none"
+          className="select-none font-mono"
         >
           {label || secNumber}
         </text>
-        <title>{`${secNumber} (${zoneName}) - $${price} MXN - Acceso: ${meta.gate}`}</title>
+        <title>{`${secNumber} (${zoneName}) - $${price} MXN`}</title>
       </g>
     );
   };
@@ -203,8 +216,8 @@ const EncantoStadiumMapComponent = React.memo<EncantoStadiumMapProps>(({
         onDoubleClick={handleDoubleClick}
         className={`relative w-full overflow-hidden rounded-2xl p-2 sm:p-4 border shadow-xl select-none touch-none transition-colors ${
           theme === 'light'
-            ? 'bg-[#eef2f6] border-slate-300'
-            : 'bg-slate-950 border-slate-800'
+            ? 'bg-white border-slate-200'
+            : 'bg-[#0B1120] border-slate-800'
         } ${
           isDragging ? 'cursor-grabbing' : 'cursor-grab'
         }`}
@@ -233,62 +246,17 @@ const EncantoStadiumMapComponent = React.memo<EncantoStadiumMapProps>(({
           </filter>
         </defs>
 
-        {/* CONTORNO EXTERIOR DEL ESTADIO */}
+        {/* CONTORNO EXTERIOR DEL ESTADIO (FONDO CLARO Y LIMPIO) */}
         <rect
           x="35"
           y="25"
           width="870"
           height="590"
           rx="50"
-          fill="#0B1120"
-          stroke="#1E293B"
-          strokeWidth="3"
+          fill={theme === 'light' ? '#F8FAFC' : '#111827'}
+          stroke={theme === 'light' ? '#E2E8F0' : '#1E293B'}
+          strokeWidth="2.5"
         />
-
-        {/* ========================================================= */}
-        {/* PUERTAS DE ACCESO OFICIALES (Círculos Dorado y Negro Dorados) */}
-        {/* ========================================================= */}
-        {/* Puerta 5: Superior Izquierda (Cabecera Superior) */}
-        <g className="cursor-pointer">
-          <circle cx="120" cy="55" r="18" fill="#09090B" stroke="#F59E0B" strokeWidth="2.5" />
-          <text x="120" y="61" textAnchor="middle" fill="#FBBF24" fontSize="13" fontWeight="900">5</text>
-          <text x="120" y="85" textAnchor="middle" fill="#FDE68A" fontSize="9" fontWeight="700">Puerta 5</text>
-          <title>Puerta 5: Acceso a Cabecera Superior</title>
-        </g>
-
-        {/* Puertas 3 y 4: Superior Centro (Palcos, Sky Boxes, Lounge, Norte) */}
-        <g className="cursor-pointer">
-          <circle cx="440" cy="40" r="18" fill="#09090B" stroke="#F59E0B" strokeWidth="2.5" />
-          <text x="440" y="46" textAnchor="middle" fill="#FBBF24" fontSize="13" fontWeight="900">4</text>
-          <circle cx="490" cy="40" r="18" fill="#09090B" stroke="#F59E0B" strokeWidth="2.5" />
-          <text x="490" y="46" textAnchor="middle" fill="#FBBF24" fontSize="13" fontWeight="900">3</text>
-          <text x="465" y="66" textAnchor="middle" fill="#FDE68A" fontSize="9" fontWeight="700">Puertas 3 y 4</text>
-          <title>Puertas 3 y 4: Acceso a General Norte, Palcos, Sky Boxes y Zona Lounge</title>
-        </g>
-
-        {/* Puerta 2: Superior Derecha (Oriente Superior) */}
-        <g className="cursor-pointer">
-          <circle cx="810" cy="55" r="18" fill="#09090B" stroke="#F59E0B" strokeWidth="2.5" />
-          <text x="810" y="61" textAnchor="middle" fill="#FBBF24" fontSize="13" fontWeight="900">2</text>
-          <text x="810" y="85" textAnchor="middle" fill="#FDE68A" fontSize="9" fontWeight="700">Puerta 2</text>
-          <title>Puerta 2: Acceso a Oriente Superior</title>
-        </g>
-
-        {/* Puerta 1: Extremo Derecho Centro (General Sur, Tiro de Esquina, Centrales y Laterales) */}
-        <g className="cursor-pointer">
-          <circle cx="865" cy="320" r="20" fill="#09090B" stroke="#F59E0B" strokeWidth="2.5" />
-          <text x="865" y="326" textAnchor="middle" fill="#FBBF24" fontSize="14" fontWeight="900">1</text>
-          <text x="865" y="352" textAnchor="middle" fill="#FDE68A" fontSize="9" fontWeight="700">Puerta 1</text>
-          <title>Puerta 1: Acceso a General Sur, Tiro de Esquina, Poniente Central/Lateral y Oriente Central/Lateral</title>
-        </g>
-
-        {/* Puerta 6: Inferior Izquierda (Poniente Superior) */}
-        <g className="cursor-pointer">
-          <circle cx="120" cy="580" r="18" fill="#09090B" stroke="#F59E0B" strokeWidth="2.5" />
-          <text x="120" y="586" textAnchor="middle" fill="#FBBF24" fontSize="13" fontWeight="900">6</text>
-          <text x="120" y="608" textAnchor="middle" fill="#FDE68A" fontSize="9" fontWeight="700">Puerta 6</text>
-          <title>Puerta 6: Acceso a Poniente Superior</title>
-        </g>
 
         {/* ========================================================= */}
         {/* TERRENO DE JUEGO (CANCHA DE FÚTBOL PROFESIONAL)          */}
@@ -517,7 +485,7 @@ const EncantoStadiumMapComponent = React.memo<EncantoStadiumMapProps>(({
           >
             PALCOS 1 AL 22
           </text>
-          <title>Palcos 1 al 22 (Poniente) - Puertas 3 y 4</title>
+          <title>Palcos 1 al 22 (Poniente)</title>
         </g>
 
         {/* ========================================================= */}
@@ -588,7 +556,7 @@ const EncantoStadiumMapComponent = React.memo<EncantoStadiumMapProps>(({
           >
             PALCOS 23 AL 42
           </text>
-          <title>Palcos 23 al 42 (Oriente) - Puertas 3 y 4</title>
+          <title>Palcos 23 al 42 (Oriente)</title>
         </g>
 
         {/* ========================================================= */}
@@ -636,7 +604,7 @@ const EncantoStadiumMapComponent = React.memo<EncantoStadiumMapProps>(({
           >
             ZONA LOUNGE
           </text>
-          <title>Zona Lounge (Cabecera Norte) - Puertas 3 y 4</title>
+          <title>Zona Lounge (Cabecera Norte)</title>
         </g>
 
         {/* General Norte (Gris: GN-1 a GN-6) */}
@@ -678,16 +646,16 @@ const EncantoStadiumMapComponent = React.memo<EncantoStadiumMapProps>(({
         {renderSectionBlock('SB-4', 'Sky Boxes', 715, 510, 48, 36, 'SB-4')}
 
         {/* LEYENDAS CARDINALES */}
-        <text x="460" y="575" textAnchor="middle" fill="#64748B" fontSize="10" fontWeight="900" letterSpacing="3">
+        <text x="460" y="575" textAnchor="middle" fill={theme === 'light' ? '#334155' : '#94A3B8'} fontSize="11" fontWeight="900" letterSpacing="3">
           TRIBUNA PONIENTE
         </text>
-        <text x="460" y="70" textAnchor="middle" fill="#64748B" fontSize="10" fontWeight="900" letterSpacing="3">
+        <text x="460" y="68" textAnchor="middle" fill={theme === 'light' ? '#334155' : '#94A3B8'} fontSize="11" fontWeight="900" letterSpacing="3">
           TRIBUNA ORIENTE
         </text>
-        <text x="75" y="320" textAnchor="middle" fill="#64748B" fontSize="10" fontWeight="900" letterSpacing="3" transform="rotate(-90 75 320)">
+        <text x="72" y="320" textAnchor="middle" fill={theme === 'light' ? '#334155' : '#94A3B8'} fontSize="11" fontWeight="900" letterSpacing="3" transform="rotate(-90 72 320)">
           CABECERA NORTE
         </text>
-        <text x="785" y="320" textAnchor="middle" fill="#64748B" fontSize="10" fontWeight="900" letterSpacing="3" transform="rotate(90 785 320)">
+        <text x="788" y="320" textAnchor="middle" fill={theme === 'light' ? '#334155' : '#94A3B8'} fontSize="11" fontWeight="900" letterSpacing="3" transform="rotate(90 788 320)">
           CABECERA SUR
         </text>
       </svg>

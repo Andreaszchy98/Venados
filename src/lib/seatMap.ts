@@ -544,9 +544,13 @@ export const CHARROS_SECTION_ZONE_MAP: Record<string, string> = {
   ...Object.fromEntries(Array.from({ length: 2 }, (_, i) => [`purple-0${i + 1}`, 'Palco Esquina'])),
   ...Object.fromEntries(Array.from({ length: 2 }, (_, i) => [`purple-${i + 1}`, 'Palco Esquina'])),
 
-  // premier: Premier (6 bloques)
-  ...Object.fromEntries(Array.from({ length: 6 }, (_, i) => [`premier-0${i + 1}`, 'Premier'])),
-  ...Object.fromEntries(Array.from({ length: 6 }, (_, i) => [`premier-${i + 1}`, 'Premier'])),
+  // premier: Premier (8 bloques: premier-01 a premier-08)
+  ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`premier-0${i + 1}`, 'Premier'])),
+  ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`premier-${i + 1}`, 'Premier'])),
+  'yellow-05': 'Premier',
+  'yellow-5': 'Premier',
+  'yellow-06': 'Premier',
+  'yellow-6': 'Premier',
 
   // orange: Lateral Premier (10 bloques)
   ...Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`orange-0${i + 1}`, 'Lateral Premier'])),
@@ -558,9 +562,11 @@ export const CHARROS_SECTION_ZONE_MAP: Record<string, string> = {
   ...Object.fromEntries(Array.from({ length: 15 }, (_, i) => [`yellow-${i + 10}`, 'Butaca Preferente'])),
   ...Object.fromEntries(Array.from({ length: 24 }, (_, i) => [`yellow-${i + 1}`, 'Butaca Preferente'])),
 
-  // cyan / vip / teal: VIP / Local / Visitante
-  ...Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`cyan-0${i + 1}`, 'VIP / Local / Visitante'])),
-  ...Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`cyan-${i + 1}`, 'VIP / Local / Visitante'])),
+  // cyan / vip / teal: VIP / Local / Visitante (cyan-01 .. cyan-08)
+  ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`cyan-0${i + 1}`, 'VIP / Local / Visitante'])),
+  ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`cyan-${i + 1}`, 'VIP / Local / Visitante'])),
+  'cyan-09': 'Lateral Premier',
+  'cyan-9': 'Lateral Premier',
   ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`vip-0${i + 1}`, 'VIP / Local / Visitante'])),
   ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`vip-${i + 1}`, 'VIP / Local / Visitante'])),
   'teal-01': 'VIP / Local / Visitante',
@@ -1302,8 +1308,8 @@ export function buildCharrosSectionsData(venueId: string = 'venue-charros'): Omi
     sections.push({ ...defaultProps, sectionNumber: `purple-${num}`, zoneName: 'Palco Esquina' });
   }
 
-  // 3. Premier: premier-01 .. premier-06
-  for (let i = 1; i <= 6; i++) {
+  // 3. Premier: premier-01 .. premier-08
+  for (let i = 1; i <= 8; i++) {
     const num = i < 10 ? `0${i}` : `${i}`;
     sections.push({ ...defaultProps, sectionNumber: `premier-${num}`, zoneName: 'Premier' });
   }
@@ -1314,14 +1320,15 @@ export function buildCharrosSectionsData(venueId: string = 'venue-charros'): Omi
     sections.push({ ...defaultProps, sectionNumber: `orange-${num}`, zoneName: 'Lateral Premier' });
   }
 
-  // 5. Butaca Preferente: yellow-01 .. yellow-24
+  // 5. Butaca Preferente: yellow-01 .. yellow-04, yellow-07 .. yellow-24
   for (let i = 1; i <= 24; i++) {
+    if (i === 5 || i === 6) continue;
     const num = i < 10 ? `0${i}` : `${i}`;
     sections.push({ ...defaultProps, sectionNumber: `yellow-${num}`, zoneName: 'Butaca Preferente' });
   }
 
-  // 6. VIP / Local / Visitante: cyan-01 .. cyan-09, vip-01 .. vip-08, teal-01
-  for (let i = 1; i <= 9; i++) {
+  // 6. VIP / Local / Visitante: cyan-01 .. cyan-08, vip-01 .. vip-08, teal-01
+  for (let i = 1; i <= 8; i++) {
     const num = i < 10 ? `0${i}` : `${i}`;
     sections.push({ ...defaultProps, sectionNumber: `cyan-${num}`, zoneName: 'VIP / Local / Visitante' });
   }

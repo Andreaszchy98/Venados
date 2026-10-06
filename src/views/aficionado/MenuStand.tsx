@@ -1273,15 +1273,7 @@ export const MenuStand: React.FC<MenuStandProps> = ({ user, onOrderSuccess, onGo
               : 'bg-[#0F172A]/95 text-white border-slate-700/80 shadow-black/70'
           }`}>
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shrink-0 shadow-sm transition-colors ${
-                activeVenueId === 'venue-encanto'
-                  ? 'bg-amber-500 text-black shadow-amber-500/30'
-                  : activeVenueId === 'venue-tomateros'
-                  ? 'bg-rose-900 text-white shadow-rose-900/30'
-                  : activeVenueId === 'venue-charros'
-                  ? 'bg-blue-600 text-white shadow-blue-600/30'
-                  : 'bg-red-600 text-white shadow-red-600/30'
-              }`}>
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shrink-0 shadow-sm transition-colors ${storeProfile.floatingBadgeClass || 'bg-red-600 text-white shadow-red-600/30'}`}>
                 {totalCount}
               </div>
               <div className="min-w-0">
